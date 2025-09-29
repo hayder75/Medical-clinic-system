@@ -1,0 +1,17 @@
+const express = require('express');
+const router = express.Router();
+const pharmacyBillingController = require('../controllers/pharmacyBillingController');
+
+// Get pharmacy invoices (billing queue)
+router.get('/invoices', pharmacyBillingController.getPharmacyInvoices);
+
+// Process pharmacy payment
+router.post('/payment', pharmacyBillingController.processPharmacyPayment);
+
+// Dispense medication
+router.post('/dispense', pharmacyBillingController.dispenseMedication);
+
+// Get dispensed medicines
+router.get('/dispensed', pharmacyBillingController.getDispensedMedicines);
+
+module.exports = router;

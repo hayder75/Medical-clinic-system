@@ -1,0 +1,741 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(uuid())
+  fullname      String
+  username      String   @unique
+  password      String
+  email         String   @unique
+  phone         String?
+  role          Role
+  specialties   String[] // JSON array, e.g., ["General", "Dentist"]
+  licenseNumber String?
+  availability  Boolean  @default(true)
+  consultationFee Float? // Added for doctor's fee
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  assignments   Assignment[]
+  orders        MedicationOrder[]
+  dispenseLogs  DispenseLog[]
+  auditLogs     AuditLog[]
+  appointments  Appointment[] @relation("DoctorAppointments")
+  labOrders     LabOrder[]
+  radiologyOrders RadiologyOrder[]
+  batchOrders   BatchOrder[]     // batch orders created by this doctor
+  visits        Visit[]
+  nurseAdministrations NurseAdministration[]
+}
+
+model Service {
+  id          String      @id @default(uuid())
+  code        String      @unique
+  name        String
+  category    ServiceCategory
+  price       Float
+  description String?
+  isActive    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  billingServices     BillingService[]
+  investigationTypes  InvestigationType[]
+  inventoryItems      Inventory[]
+  batchOrderServices  BatchOrderService[]
+}
+
+model Insurance {
+  id          String   @id @default(uuid())
+  name        String
+  code        String   @unique
+  contactInfo String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  patients    Patient[]
+  billings    Billing[]
+  billPayments BillPayment[]
+}
+
+model BillingService {
+  id        String  @id @default(uuid())
+  billingId String
+  billing   Billing @relation(fields: [billingId], references: [id])
+  serviceId String
+  service   Service @relation(fields: [serviceId], references: [id])
+  quantity  Int     @default(1)
+  unitPrice Float
+  totalPrice Float
+  createdAt DateTime @default(now())
+
+  @@unique([billingId, serviceId])
+}
+
+model Patient {
+  id              String   @id // PAT-YYYY-NN or temp for emergency
+  name            String
+  dob             DateTime?
+  gender          Gender?
+  type            PatientType
+  mobile          String?
+  email           String?
+  address         String?
+  emergencyContact String?
+  bloodType       BloodType?
+  maritalStatus   MaritalStatus?
+  status          PatientStatus @default(Active)
+  insuranceId     String?
+  insurance       Insurance? @relation(fields: [insuranceId], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  vitals          VitalSign[]
+  assignments     Assignment[]
+  orders          MedicationOrder[]
+  labOrders       LabOrder[]
+  radiologyOrders RadiologyOrder[]
+  batchOrders     BatchOrder[]     // batch orders for this patient
+  bills           Billing[]
+  payments        BillPayment[]
+  dispenseLogs    DispenseLog[]
+  history         MedicalHistory[]
+  appointments    Appointment[]
+  files           File[]
+  dentalRecords   DentalRecord[]
+  visits          Visit[]
+  pharmacyInvoices PharmacyInvoice[]
+}
+
+model Visit {
+  id             Int       @id @default(autoincrement())
+  visitUid       String    @unique                // e.g., VISIT-20250926-0001
+  patientId      String
+  patient        Patient   @relation(fields: [patientId], references: [id])
+  createdById    String?      // e.g., receptionist or receptionist user id
+  createdBy      User?     @relation(fields: [createdById], references: [id])
+  date           DateTime  @default(now())        // creation timestamp
+  status         VisitStatus @default(WAITING_FOR_TRIAGE)
+  queueType      QueueType @default(CONSULTATION) // CONSULTATION or RESULTS_REVIEW
+  notes          String?
+  diagnosis      String?
+  diagnosisDetails String?  // Rich text diagnosis details
+  instructions   String?    // Patient instructions
+  assignmentId   Int?      // optional link to Assignment if used
+  vitals         VitalSign[]      // vitals for this visit
+  labOrders      LabOrder[]
+  batchOrders    BatchOrder[]     // batch orders for this visit
+  radiologyOrders RadiologyOrder[]
+  medicationOrders MedicationOrder[]
+  bills           Billing[]
+  pharmacyInvoices PharmacyInvoice[]
+  completedAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model VitalSign {
+  id                      Int      @id @default(autoincrement())
+  patientId               String
+  patient                 Patient  @relation(fields: [patientId], references: [id])
+  visitId                 Int?
+  visit                   Visit?   @relation(fields: [visitId], references: [id])
+  bloodPressure           String?
+  temperature             Float?
+  tempUnit                TempUnit @default(C)
+  heartRate               Int?
+  respirationRate         Int?
+  height                  Float?
+  weight                  Float?
+  bmi                     Float?   // Auto-calculated
+  oxygenSaturation        Int?
+  condition               String?
+  notes                   String?
+  painScoreRest           Int?
+  painScoreMovement       Int?
+  sedationScore           Int?
+  gcsEyes                 Int?
+  gcsVerbal               Int?
+  gcsMotor                Int?
+  bloodPressureSystolic   Int?
+  bloodPressureDiastolic  Int?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+}
+
+model Appointment {
+  id            Int      @id @default(autoincrement())
+  patientId     String
+  patient       Patient  @relation(fields: [patientId], references: [id])
+  doctorId      String
+  doctor        User     @relation(fields: [doctorId], references: [id], name: "DoctorAppointments")
+  date          DateTime
+  time          String?
+  type          AppointmentType @default(CONSULTATION)
+  status        AppointmentStatus @default(PENDING)
+  duration      String?  // e.g., "30 minutes"
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Billing {
+  id            String      @id @default(uuid())
+  patientId     String
+  patient       Patient     @relation(fields: [patientId], references: [id])
+  visitId       Int?
+  visit         Visit?      @relation(fields: [visitId], references: [id])
+  insuranceId   String?
+  insurance     Insurance?  @relation(fields: [insuranceId], references: [id])
+  services      BillingService[]
+  payments      BillPayment[]
+  totalAmount   Float
+  status        BillingStatus @default(PENDING)
+  notes         String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+model BillPayment {
+  id                String      @id @default(uuid())
+  billingId         String
+  billing           Billing     @relation(fields: [billingId], references: [id])
+  patientId         String
+  patient           Patient     @relation(fields: [patientId], references: [id])
+  amount            Float
+  type              PaymentType
+  bankName          String?
+  transNumber       String?
+  insuranceId       String?
+  insurance         Insurance?  @relation(fields: [insuranceId], references: [id])
+  notes             String?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+}
+
+model PharmacyInvoice {
+  id                String      @id @default(uuid())
+  patientId         String
+  patient           Patient     @relation(fields: [patientId], references: [id])
+  visitId           Int?
+  visit             Visit?      @relation(fields: [visitId], references: [id])
+  totalAmount       Float
+  status            BillingStatus @default(PENDING)
+  notes             String?
+  processedBy       String?     // User ID who processed the payment
+  processedAt       DateTime?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  dispensedMedicines DispensedMedicine[]
+}
+
+model DispensedMedicine {
+  id                Int      @id @default(autoincrement())
+  pharmacyInvoiceId String
+  pharmacyInvoice   PharmacyInvoice @relation(fields: [pharmacyInvoiceId], references: [id])
+  medicationOrderId Int
+  medicationOrder   MedicationOrder @relation(fields: [medicationOrderId], references: [id])
+  status            DispensedStatus
+  quantity          Int?
+  notes             String?
+  dispensedAt       DateTime @default(now())
+  dispensedBy       String?  // User ID who dispensed
+}
+
+model MedicationOrder {
+  id            Int      @id @default(autoincrement())
+  visitId       Int
+  visit         Visit    @relation(fields: [visitId], references: [id])
+  patientId     String
+  patient       Patient  @relation(fields: [patientId], references: [id])
+  doctorId      String
+  doctor        User     @relation(fields: [doctorId], references: [id])
+  name          String
+  dosageForm    String
+  strength      String
+  quantity      Int
+  frequency     String
+  duration      String
+  instructions  String
+  additionalNotes String?
+  category      MedicineCategory?
+  status        OrderStatus @default(UNPAID)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  dispenseLogs  DispenseLog[]
+  continuousInfusion ContinuousInfusion?
+  dispensedMedicines DispensedMedicine[]
+}
+
+model DispenseLog {
+  id            Int      @id @default(autoincrement())
+  orderId       Int
+  order         MedicationOrder @relation(fields: [orderId], references: [id])
+  patientId     String
+  patient       Patient  @relation(fields: [patientId], references: [id])
+  pharmacyId    String
+  pharmacy      User     @relation(fields: [pharmacyId], references: [id])
+  quantity      Int
+  notes         String?
+  createdAt     DateTime @default(now())
+}
+
+model LabOrder {
+  id            Int      @id @default(autoincrement())
+  visitId       Int
+  visit         Visit    @relation(fields: [visitId], references: [id])
+  patientId     String
+  patient       Patient  @relation(fields: [patientId], references: [id])
+  doctorId      String
+  doctor        User     @relation(fields: [doctorId], references: [id])
+  typeId        Int
+  type          InvestigationType @relation(fields: [typeId], references: [id])
+  instructions  String?
+  result        String?
+  additionalNotes String?
+  attachments   File[]   @relation("LabOrderFiles")
+  status        OrderStatus @default(UNPAID)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // New per-test results
+  labResults    LabResult[]
+}
+
+model RadiologyOrder {
+  id            Int      @id @default(autoincrement())
+  visitId       Int
+  visit         Visit    @relation(fields: [visitId], references: [id])
+  patientId     String
+  patient       Patient  @relation(fields: [patientId], references: [id])
+  doctorId      String
+  doctor        User     @relation(fields: [doctorId], references: [id])
+  typeId        Int
+  type          InvestigationType @relation(fields: [typeId], references: [id])
+  instructions  String?
+  result        String?
+  attachments   File[]   @relation("RadiologyOrderFiles")
+  status        OrderStatus @default(UNPAID)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // New per-test results
+  radiologyResults RadiologyResult[]
+}
+
+model MedicalHistory {
+  id            Int      @id @default(autoincrement())
+  patientId     String
+  patient       Patient  @relation(fields: [patientId], references: [id])
+  details       String   // JSON for vitals, diagnosis, orders, results, meds
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model File {
+  id            Int      @id @default(autoincrement())
+  patientId     String
+  patient       Patient  @relation(fields: [patientId], references: [id])
+  path          String
+  type          String
+  accessLog     String[] // JSON array of access events
+  labOrderId    Int?
+  labOrder      LabOrder? @relation("LabOrderFiles", fields: [labOrderId], references: [id])
+  radiologyOrderId Int?
+  radiologyOrder RadiologyOrder? @relation("RadiologyOrderFiles", fields: [radiologyOrderId], references: [id])
+  batchOrderId  Int?
+  batchOrder    BatchOrder? @relation("BatchOrderFiles", fields: [batchOrderId], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model DentalRecord {
+  id            Int      @id @default(autoincrement())
+  patientId     String
+  patient       Patient  @relation(fields: [patientId], references: [id])
+  toothId       Int?
+  tooth         Tooth?   @relation(fields: [toothId], references: [id])
+  conditions    String[] // JSON array
+  surfaces      String[] // JSON array
+  eruptionStart Int?     // Months
+  eruptionEnd   Int?     // Months
+  rootCompletion Int?    // Years
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Tooth {
+  id            Int      @id @default(autoincrement())
+  number        Int      // e.g., 11 for tooth 11
+  eruptionStart Int?     // Months
+  eruptionEnd   Int?     // Months
+  rootCompletion Int?    // Years
+  dentalRecords DentalRecord[]
+}
+
+model InvestigationType {
+  id            Int      @id @default(autoincrement())
+  name          String
+  price         Float
+  category      InvestigationCategory
+  serviceId     String?
+  service       Service? @relation(fields: [serviceId], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  labOrders     LabOrder[]
+  radiologyOrders RadiologyOrder[]
+  batchOrderServices BatchOrderService[]
+  labResults    LabResult[]
+  radiologyResults RadiologyResult[]
+}
+
+model Department {
+  id            Int      @id @default(autoincrement())
+  name          String
+  description   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model AuditLog {
+  id            Int      @id @default(autoincrement())
+  userId        String?
+  user          User?    @relation(fields: [userId], references: [id])
+  action        String
+  entity        String
+  entityId      Int
+  details       String   // JSON of changes
+  ip            String?
+  userAgent     String?
+  createdAt     DateTime @default(now())
+}
+
+model Inventory {
+  id            Int      @id @default(autoincrement())
+  name          String
+  quantity      Int
+  category      MedicineCategory?
+  dosageForm    String?
+  strength      String?
+  expiryDate    DateTime?
+  supplier      String?
+  price         Float?
+  serviceId     String?
+  service       Service? @relation(fields: [serviceId], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Assignment {
+  id            Int      @id @default(autoincrement())
+  patientId     String
+  patient       Patient  @relation(fields: [patientId], references: [id])
+  doctorId      String
+  doctor        User     @relation(fields: [doctorId], references: [id])
+  status        String   @default("Pending")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model ContinuousInfusion {
+  id                Int      @id @default(autoincrement())
+  medicationOrderId Int      @unique
+  medicationOrder   MedicationOrder @relation(fields: [medicationOrderId], references: [id])
+  startDate         DateTime
+  endDate           DateTime
+  dailyDose         String   // e.g., "5ml over 24h"
+  frequency         String?  // e.g., "Every 24h"
+  days              Int
+  status            OrderStatus @default(UNPAID)
+  nurseTasks        NurseAdministration[]
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model NurseAdministration {
+  id                    Int      @id @default(autoincrement())
+  continuousInfusionId  Int
+  continuousInfusion    ContinuousInfusion @relation(fields: [continuousInfusionId], references: [id])
+  administeredById      String?
+  administeredBy        User?    @relation(fields: [administeredById], references: [id])
+  administeredAt        DateTime?
+  scheduledFor          DateTime // the day this dose is scheduled
+  notes                 String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  completed             Boolean  @default(false)
+}
+
+enum Role {
+  ADMIN
+  OWNER
+  BILLING_OFFICER
+  PHARMACY_BILLING_OFFICER
+  CARE_COORDINATOR
+  CMO
+  CLINICAL_RESEARCH_COORDINATOR
+  DIETITIAN
+  DOCTOR
+  HOSPITAL_MANAGER
+  HR_OFFICER
+  IT_SUPPORT
+  LAB_TECHNICIAN
+  MEDICAL_RECORDS_OFFICER
+  NURSE
+  PATIENT
+  PHARMACY_OFFICER
+  PHARMACIST
+  RADIOLOGIST
+  RECEPTIONIST
+  SECURITY_STAFF
+  SOCIAL_WORKER
+}
+
+enum PatientType {
+  REGULAR
+  VIP
+  EMERGENCY
+  INSURANCE
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum BloodType {
+  A_PLUS
+  A_MINUS
+  B_PLUS
+  B_MINUS
+  AB_PLUS
+  AB_MINUS
+  O_PLUS
+  O_MINUS
+  UNKNOWN
+}
+
+enum MaritalStatus {
+  SINGLE
+  MARRIED
+  DIVORCED
+  WIDOWED
+}
+
+enum TempUnit {
+  C
+  F
+}
+
+enum PatientStatus {
+  Active
+  Inactive
+  Completed
+}
+
+enum AppointmentType {
+  CONSULTATION
+  FOLLOW_UP
+}
+
+enum AppointmentStatus {
+  PENDING
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+enum BillingStatus {
+  PENDING
+  PAID
+  PENDING_INSURANCE
+  INSURANCE_CLAIMED
+  EMERGENCY_PENDING
+  REJECTED
+  REFUNDED
+}
+
+enum PaymentType {
+  CASH
+  BANK
+  INSURANCE
+  CHARITY
+}
+
+enum MedicineCategory {
+  TABLETS
+  CAPSULES
+  INJECTIONS
+  SYRUPS
+  OINTMENTS
+  DROPS
+  INHALERS
+  PATCHES
+  INFUSIONS
+}
+
+enum ServiceCategory {
+  CONSULTATION
+  LAB
+  RADIOLOGY
+  MEDICATION
+  PROCEDURE
+  OTHER
+}
+
+enum InvestigationCategory {
+  LAB
+  RADIOLOGY
+}
+
+enum OrderStatus {
+  UNPAID
+  PAID
+  BLOCKED_BY_BILL
+  QUEUED    // placed in lab/radio/pharmacy queue
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  VERIFIED    // completed and verified by dept
+}
+
+enum DispensedStatus {
+  DISPENSED
+  NOT_AVAILABLE
+  PARTIAL_DISPENSED
+}
+
+enum VisitStatus {
+  WAITING_FOR_TRIAGE
+  TRIAGED
+  WAITING_FOR_DOCTOR
+  IN_DOCTOR_QUEUE
+  UNDER_DOCTOR_REVIEW
+  SENT_TO_LAB
+  SENT_TO_RADIOLOGY
+  SENT_TO_BOTH
+  RETURNED_WITH_RESULTS
+  AWAITING_LAB_RESULTS
+  AWAITING_RADIOLOGY_RESULTS
+  AWAITING_RESULTS_REVIEW
+  COMPLETED
+  CANCELLED
+}
+
+enum BatchOrderType {
+  LAB
+  RADIOLOGY
+  MIXED
+}
+
+enum QueueType {
+  CONSULTATION
+  RESULTS_REVIEW
+}
+
+model BatchOrder {
+  id            Int             @id @default(autoincrement())
+  visitId       Int
+  visit         Visit           @relation(fields: [visitId], references: [id])
+  patientId     String
+  patient       Patient         @relation(fields: [patientId], references: [id])
+  doctorId      String
+  doctor        User            @relation(fields: [doctorId], references: [id])
+  type          BatchOrderType
+  status        OrderStatus     @default(UNPAID)
+  instructions  String?
+  result        String?         // Combined results for all services
+  additionalNotes String?       // Additional notes for the batch
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  // Services in this batch
+  services      BatchOrderService[]
+  attachments   File[]          @relation("BatchOrderFiles")
+  
+  // Per-test results for radiology
+  radiologyResults RadiologyResult[]
+}
+
+model BatchOrderService {
+  id              Int             @id @default(autoincrement())
+  batchOrderId    Int
+  batchOrder      BatchOrder      @relation(fields: [batchOrderId], references: [id])
+  serviceId       String
+  service         Service         @relation(fields: [serviceId], references: [id])
+  investigationTypeId Int?
+  investigationType InvestigationType? @relation(fields: [investigationTypeId], references: [id])
+  instructions    String?         // Specific instructions for this service
+  result          String?         // Individual result for this service
+  status          OrderStatus     @default(UNPAID)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@unique([batchOrderId, serviceId])
+}
+
+// New models for per-test file uploads
+model LabResult {
+  id              String   @id @default(uuid())
+  orderId         Int
+  order           LabOrder @relation(fields: [orderId], references: [id])
+  testTypeId      Int
+  testType        InvestigationType @relation(fields: [testTypeId], references: [id])
+  resultText      String?
+  additionalNotes String?
+  status          OrderStatus @default(UNPAID)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  attachments     LabResultFile[]
+}
+
+model LabResultFile {
+  id         String     @id @default(uuid())
+  resultId   String
+  result     LabResult  @relation(fields: [resultId], references: [id])
+  fileUrl    String
+  fileName   String?
+  fileType   String?
+  uploadedAt DateTime   @default(now())
+  uploadedBy String?    // User ID who uploaded
+}
+
+model RadiologyResult {
+  id              String   @id @default(uuid())
+  orderId         Int?     // Optional for individual radiology orders
+  order           RadiologyOrder? @relation(fields: [orderId], references: [id])
+  batchOrderId    Int?     // Optional for batch orders
+  batchOrder      BatchOrder? @relation(fields: [batchOrderId], references: [id])
+  testTypeId      Int
+  testType        InvestigationType @relation(fields: [testTypeId], references: [id])
+  resultText      String?
+  additionalNotes String?
+  status          OrderStatus @default(UNPAID)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  attachments     RadiologyResultFile[]
+}
+
+model RadiologyResultFile {
+  id         String           @id @default(uuid())
+  resultId   String
+  result     RadiologyResult  @relation(fields: [resultId], references: [id])
+  fileUrl    String
+  fileName   String?
+  fileType   String?
+  uploadedAt DateTime         @default(now())
+  uploadedBy String?          // User ID who uploaded
+}
