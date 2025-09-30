@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Stethoscope, User, Clock, FileText, TestTube, Scan, Pill, CheckCircle, Eye, Printer, History, ChevronDown, ChevronRight } from 'lucide-react';
+import { Stethoscope, User, Clock, FileText, TestTube, Scan, Pill, CheckCircle, Eye, Printer, History, ChevronDown, ChevronRight, Plus } from 'lucide-react';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
 
@@ -10,34 +10,55 @@ const PatientQueue = () => {
   const [showPatientForm, setShowPatientForm] = useState(false);
   const [expandedSections, setExpandedSections] = useState({
     vitals: true,
-    diagnosis: false,
-    orders: false,
-    results: false,
-    medications: false,
-    appointments: false
+    chiefComplaint: true,
+    history: false,
+    physicalExam: false,
+    assessment: false,
+    orders: false
   });
   const [formData, setFormData] = useState({
-    diagnosis: '',
-    diagnosisDetails: '',
-    instructions: '',
-    labOrders: [],
-    radiologyOrders: [],
-    medicationOrders: []
+    // Chief Complaint & History
+    chiefComplaint: '',
+    historyOfPresentIllness: '',
+    onsetOfSymptoms: '',
+    durationOfSymptoms: '',
+    severityOfSymptoms: '',
+    associatedSymptoms: '',
+    relievingFactors: '',
+    aggravatingFactors: '',
+    
+    // Past Medical History
+    pastMedicalHistory: '',
+    currentMedications: '',
+    knownAllergies: '',
+    familyHistory: '',
+    socialHistory: '',
+    
+    
+    // Physical Examination
+    generalAppearance: '',
+    vitalSigns: '',
+    headAndNeck: '',
+    cardiovascularExam: '',
+    respiratoryExam: '',
+    abdominalExam: '',
+    extremities: '',
+    neurologicalExam: '',
+    
+      // Assessment & Plan
+      primaryDiagnosis: '',
+      secondaryDiagnosis: '',
+      differentialDiagnosis: ''
   });
-  const [newLabOrder, setNewLabOrder] = useState({
-    typeId: '',
-    instructions: ''
-  });
-  const [newRadiologyOrder, setNewRadiologyOrder] = useState({
-    typeId: '',
-    instructions: ''
-  });
-  const [selectedLabTests, setSelectedLabTests] = useState([]); // Multiple lab test selection
-  const [selectedRadiologyTests, setSelectedRadiologyTests] = useState([]); // Multiple radiology test selection
-  const [labInstructions, setLabInstructions] = useState(''); // Instructions for all lab tests
-  const [radiologyInstructions, setRadiologyInstructions] = useState(''); // Instructions for all radiology tests
-  const [labOrdered, setLabOrdered] = useState(false); // Track if lab orders have been placed
-  const [radiologyOrdered, setRadiologyOrdered] = useState(false); // Track if radiology orders have been placed
+  const [selectedLabTests, setSelectedLabTests] = useState([]);
+  const [selectedRadiologyTests, setSelectedRadiologyTests] = useState([]);
+  const [labInstructions, setLabInstructions] = useState('');
+  const [radiologyInstructions, setRadiologyInstructions] = useState('');
+  const [labOrdered, setLabOrdered] = useState(false);
+  const [radiologyOrdered, setRadiologyOrdered] = useState(false);
+  const [alreadyOrderedLabTests, setAlreadyOrderedLabTests] = useState([]);
+  const [alreadyOrderedRadiologyTests, setAlreadyOrderedRadiologyTests] = useState([]);
+  const [orderStatus, setOrderStatus] = useState(null);
   
   // Lab test options
   const labTestOptions = [
@@ -63,16 +84,6 @@ const PatientQueue = () => {
     { id: 34, name: 'ECG', price: 150 }
   ];
 
-  const [newMedicationOrder, setNewMedicationOrder] = useState({
-    name: '',
-    dosageForm: '',
-    strength: '',
-    quantity: '',
-    frequency: '',
-    duration: '',
-    instructions: ''
-  });
-
   useEffect(() => {
     fetchVisits();
   }, []);
@@ -81,7 +92,7 @@ const PatientQueue = () => {
     try {
       setLoading(true);
       const response = await api.get('/doctors/queue');
-      setVisits(response.data.queue || []); // Fix: extract queue array from response
+      setVisits(response.data.queue || []);
     } catch (error) {
       toast.error('Failed to fetch patient queue');
       console.error('Error fetching visits:', error);
@@ -90,18 +101,78 @@ const PatientQueue = () => {
     }
   };
 
-  const handlePatientSelect = (visit) => {
+  const handlePatientSelect = async (visit) => {
     setSelectedVisit(visit);
     setShowPatientForm(true);
+    
     // Reset form data for new patient
     setFormData({
-      diagnosis: visit.diagnosis || '',
-      diagnosisDetails: visit.diagnosisDetails || '',
-      instructions: visit.instructions || '',
-      labOrders: visit.labOrders || [],
-      radiologyOrders: visit.radiologyOrders || [],
-      medicationOrders: visit.medicationOrders || []
+      // Chief Complaint & History
+      chiefComplaint: '',
+      historyOfPresentIllness: '',
+      onsetOfSymptoms: '',
+      durationOfSymptoms: '',
+      severityOfSymptoms: '',
+      associatedSymptoms: '',
+      relievingFactors: '',
+      aggravatingFactors: '',
+      
+      // Past Medical History
+      pastMedicalHistory: '',
+      currentMedications: '',
+      knownAllergies: '',
+      familyHistory: '',
+      socialHistory: '',
+      
+      // Physical Examination
+      generalAppearance: '',
+      vitalSigns: '',
+      headAndNeck: '',
+      cardiovascularExam: '',
+      respiratoryExam: '',
+      abdominalExam: '',
+      extremities: '',
+      neurologicalExam: '',
+      
+      // Assessment & Plan
+      primaryDiagnosis: '',
+      secondaryDiagnosis: '',
+      differentialDiagnosis: ''
     });
+    
+    // Fetch vitals data from nurse
+    try {
+      const response = await api.get(`/doctors/vitals/${visit.id}`);
+      const vitalsData = response.data.vitals;
+      
+      // Auto-populate Chief Complaint & History and Physical Examination from nurse data
+      setFormData(prev => ({
+        ...prev,
+        // Chief Complaint & History from nurse
+        chiefComplaint: vitalsData.chiefComplaint || '',
+        historyOfPresentIllness: vitalsData.historyOfPresentIllness || '',
+        onsetOfSymptoms: vitalsData.onsetOfSymptoms || '',
+        durationOfSymptoms: vitalsData.durationOfSymptoms || '',
+        severityOfSymptoms: vitalsData.severityOfSymptoms || '',
+        associatedSymptoms: vitalsData.associatedSymptoms || '',
+        relievingFactors: vitalsData.relievingFactors || '',
+        aggravatingFactors: vitalsData.aggravatingFactors || '',
+        
+        // Physical Examination from nurse
+        generalAppearance: vitalsData.generalAppearance || '',
+        vitalSigns: vitalsData.bloodPressure ? `BP: ${vitalsData.bloodPressure}, HR: ${vitalsData.heartRate}, Temp: ${vitalsData.temperature}°C, O2: ${vitalsData.oxygenSaturation}%` : '',
+        headAndNeck: vitalsData.headAndNeck || '',
+        cardiovascularExam: vitalsData.cardiovascularExam || '',
+        respiratoryExam: vitalsData.respiratoryExam || '',
+        abdominalExam: vitalsData.abdominalExam || '',
+        extremities: vitalsData.extremities || '',
+        neurologicalExam: vitalsData.neurologicalExam || ''
+      }));
+    } catch (error) {
+      console.error('Error fetching vitals data:', error);
+      // Continue with empty form if vitals fetch fails
+    }
+    
     // Reset order states
     setLabOrdered(false);
     setRadiologyOrdered(false);
@@ -109,6 +180,25 @@ const PatientQueue = () => {
     setSelectedRadiologyTests([]);
     setLabInstructions('');
     setRadiologyInstructions('');
+    
+    // Fetch order status for this visit
+    fetchOrderStatus(visit.id);
+  };
+
+  const fetchOrderStatus = async (visitId) => {
+    try {
+      const response = await api.get(`/doctors/order-status/${visitId}`);
+      const orderData = response.data;
+      
+      setAlreadyOrderedLabTests(orderData.orderedLabTypes || []);
+      setAlreadyOrderedRadiologyTests(orderData.orderedRadiologyTypes || []);
+      setOrderStatus(orderData);
+    } catch (error) {
+      console.error('Error fetching order status:', error);
+      setAlreadyOrderedLabTests([]);
+      setAlreadyOrderedRadiologyTests([]);
+      setOrderStatus(null);
+    }
   };
 
   const toggleSection = (section) => {
@@ -144,72 +234,6 @@ const PatientQueue = () => {
     toast.success('History view coming soon');
   };
 
-  const handleAddLabOrder = async (e) => {
-    e.preventDefault(); // Prevent form submission
-    e.stopPropagation(); // Stop event bubbling
-    
-    if (!newLabOrder.typeId) {
-      toast.error('Please select a lab test type');
-      return;
-    }
-
-    try {
-      const orderPayload = {
-        visitId: selectedVisit.id,
-        patientId: selectedVisit.patient.id,
-        typeId: parseInt(newLabOrder.typeId), // Convert to number
-        instructions: newLabOrder.instructions || ''
-      };
-
-      await api.post('/doctors/lab-orders', orderPayload);
-      toast.success('Lab order added successfully');
-      
-      // Reset form
-      setNewLabOrder({ typeId: '', instructions: '' });
-      
-      // Refresh the visit data
-      fetchVisits();
-    } catch (error) {
-      toast.error(error.response?.data?.error || 'Failed to create lab order');
-    }
-  };
-
-  const handleAddMultipleLabOrders = async (e) => {
-    e.preventDefault(); // Prevent form submission
-    e.stopPropagation(); // Stop event bubbling
-    
-    if (selectedLabTests.length === 0) {
-      toast.error('Please select at least one lab test');
-      return;
-    }
-
-    try {
-      const orders = selectedLabTests.map(testId => ({
-        typeId: testId,
-        instructions: labInstructions || ''
-      }));
-
-      const orderPayload = {
-        visitId: selectedVisit.id,
-        patientId: selectedVisit.patient.id,
-        orders
-      };
-
-      await api.post('/doctors/lab-orders/multiple', orderPayload);
-      toast.success(`${selectedLabTests.length} lab order(s) added successfully`);
-      
-      // Reset form and set ordered state
-      setSelectedLabTests([]);
-      setLabInstructions('');
-      setLabOrdered(true);
-      
-      // Refresh the visit data
-      fetchVisits();
-    } catch (error) {
-      toast.error(error.response?.data?.error || 'Failed to create lab orders');
-    }
-  };
-
   const handleLabTestToggle = (testId) => {
     setSelectedLabTests(prev => 
       prev.includes(testId) 
@@ -226,132 +250,76 @@ const PatientQueue = () => {
     );
   };
 
-  const handleAddMultipleRadiologyOrders = async (e) => {
-    e.preventDefault(); // Prevent form submission
-    e.stopPropagation(); // Stop event bubbling
-    
-    if (selectedRadiologyTests.length === 0) {
-      toast.error('Please select at least one radiology test');
+  const handleSubmitOrders = async () => {
+    if (selectedLabTests.length === 0 && selectedRadiologyTests.length === 0) {
+      toast.error('Please select at least one lab or radiology test.');
       return;
     }
 
     try {
-      const orders = selectedRadiologyTests.map(testId => ({
-        typeId: testId,
-        instructions: radiologyInstructions || ''
-      }));
+      // Submit lab orders if any
+      if (selectedLabTests.length > 0) {
+        const labOrders = selectedLabTests.map(testId => ({
+          typeId: testId,
+          instructions: labInstructions
+        }));
 
-      const orderPayload = {
-        visitId: selectedVisit.id,
-        patientId: selectedVisit.patient.id,
-        orders
-      };
-
-      await api.post('/doctors/radiology-orders/multiple', orderPayload);
-      toast.success(`${selectedRadiologyTests.length} radiology order(s) added successfully`);
-      
-      // Reset form and set ordered state
-      setSelectedRadiologyTests([]);
-      setRadiologyInstructions('');
-      setRadiologyOrdered(true);
-      
-      // Refresh the visit data
-      fetchVisits();
-    } catch (error) {
-      toast.error(error.response?.data?.error || 'Failed to create radiology orders');
-    }
-  };
-
-  const handleAddRadiologyOrder = async (e) => {
-    e.preventDefault(); // Prevent form submission
-    e.stopPropagation(); // Stop event bubbling
-    
-    if (!newRadiologyOrder.typeId) {
-      toast.error('Please select a radiology procedure');
-      return;
-    }
-
-    try {
-      const orderPayload = {
-        visitId: selectedVisit.id,
-        patientId: selectedVisit.patient.id,
-        typeId: parseInt(newRadiologyOrder.typeId), // Convert to number
-        instructions: newRadiologyOrder.instructions || ''
-      };
-
-      await api.post('/doctors/radiology-orders', orderPayload);
-      toast.success('Radiology order added successfully');
-      
-      // Reset form
-      setNewRadiologyOrder({ typeId: '', instructions: '' });
-      
-      // Refresh the visit data
-      fetchVisits();
-    } catch (error) {
-      toast.error(error.response?.data?.error || 'Failed to create radiology order');
-    }
-  };
-
-  const handleAddMedicationOrder = async (e) => {
-    e.preventDefault(); // Prevent form submission
-    e.stopPropagation(); // Stop event bubbling
-    
-    if (!newMedicationOrder.name || !newMedicationOrder.dosageForm || !newMedicationOrder.strength) {
-      toast.error('Please fill in all required medication fields');
-      return;
-    }
-
-    // Check if medication ordering is allowed based on investigation completion
-    const hasLabOrders = selectedVisit.labOrders && selectedVisit.labOrders.length > 0;
-    const hasRadiologyOrders = selectedVisit.radiologyOrders && selectedVisit.radiologyOrders.length > 0;
-    
-    if (hasLabOrders || hasRadiologyOrders) {
-      // Check if all investigations are completed
-      const allLabCompleted = !hasLabOrders || selectedVisit.labOrders.every(order => 
-        order.status === 'COMPLETED' || order.batchOrder?.status === 'COMPLETED'
-      );
-      const allRadiologyCompleted = !hasRadiologyOrders || selectedVisit.radiologyOrders.every(order => 
-        order.status === 'COMPLETED' || order.batchOrder?.status === 'COMPLETED'
-      );
-      
-      if (!allLabCompleted || !allRadiologyCompleted) {
-        toast.error('Cannot order medication until all pending lab and radiology results are submitted.');
-        return;
+        await api.post('/doctors/lab-orders/multiple', {
+          visitId: selectedVisit.id,
+          patientId: selectedVisit.patient.id,
+          orders: labOrders
+        });
+        
+        setLabOrdered(true);
+        toast.success(`${selectedLabTests.length} lab order(s) placed successfully`);
       }
-    }
 
-    try {
-      const orderPayload = {
-        visitId: selectedVisit.id,
-        patientId: selectedVisit.patient.id,
-        name: newMedicationOrder.name,
-        dosageForm: newMedicationOrder.dosageForm,
-        strength: newMedicationOrder.strength,
-        quantity: parseInt(newMedicationOrder.quantity) || 0,
-        frequency: newMedicationOrder.frequency,
-        duration: newMedicationOrder.duration,
-        instructions: newMedicationOrder.instructions
-      };
+      // Submit radiology orders if any
+      if (selectedRadiologyTests.length > 0) {
+        const radiologyOrders = selectedRadiologyTests.map(testId => ({
+          typeId: testId,
+          instructions: radiologyInstructions
+        }));
 
-      await api.post('/doctors/medication-orders', orderPayload);
-      toast.success('Medication order added successfully');
-      
-      // Reset form
-      setNewMedicationOrder({
-        name: '',
-        dosageForm: '',
-        strength: '',
-        quantity: '',
-        frequency: '',
-        duration: '',
-        instructions: ''
-      });
+        await api.post('/doctors/radiology-orders/multiple', {
+          visitId: selectedVisit.id,
+          patientId: selectedVisit.patient.id,
+          orders: radiologyOrders
+        });
+        
+        setRadiologyOrdered(true);
+        toast.success(`${selectedRadiologyTests.length} radiology order(s) placed successfully`);
+      }
+
+      // Reset selections
+      setSelectedLabTests([]);
+      setSelectedRadiologyTests([]);
+      setLabInstructions('');
+      setRadiologyInstructions('');
       
       // Refresh the visit data
       fetchVisits();
-    } catch (error) {
-      toast.error(error.response?.data?.error || 'Failed to create medication order');
-    }
+      } catch (error) {
+        console.error('Error placing orders:', error);
+        
+        if (error.response?.data?.duplicates) {
+          // Show specific error for duplicate orders
+          toast.error(
+            <div>
+              <p className="font-medium">Some tests have already been ordered:</p>
+              <ul className="list-disc list-inside mt-1">
+                {error.response.data.duplicates.map((test, index) => (
+                  <li key={index} className="text-sm">{test}</li>
+                ))}
+              </ul>
+              <p className="text-sm mt-1">Please remove them and try again.</p>
+            </div>,
+            { duration: 6000 }
+          );
+        } else {
+          toast.error(error.response?.data?.error || 'Failed to place orders.');
+        }
+      }
   };
 
   const getPriorityColor = (condition) => {
@@ -379,6 +347,18 @@ const PatientQueue = () => {
         return 'badge-success';
       default:
         return 'badge-secondary';
+    }
+  };
+
+  const getOrderStatusColor = (status) => {
+    switch (status) {
+      case 'UNPAID': return 'bg-red-100 text-red-800';
+      case 'PAID': return 'bg-yellow-100 text-yellow-800';
+      case 'QUEUED': return 'bg-blue-100 text-blue-800';
+      case 'IN_PROGRESS': return 'bg-orange-100 text-orange-800';
+      case 'COMPLETED': return 'bg-green-100 text-green-800';
+      case 'CANCELLED': return 'bg-gray-100 text-gray-800';
+      default: return 'bg-gray-100 text-gray-800';
     }
   };
 
@@ -581,48 +561,325 @@ const PatientQueue = () => {
               )}
             </div>
 
-            {/* Diagnosis Section */}
+            {/* Chief Complaint Section */}
             <div className="card">
               <div 
                 className="flex items-center justify-between cursor-pointer"
-                onClick={() => toggleSection('diagnosis')}
+                onClick={() => toggleSection('chiefComplaint')}
               >
                 <h3 className="text-lg font-semibold text-gray-900 flex items-center">
                   <FileText className="h-5 w-5 mr-2" />
-                  Diagnosis & Treatment
+                  Chief Complaint & History
                 </h3>
-                {expandedSections.diagnosis ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
+                {expandedSections.chiefComplaint ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
               </div>
-              {expandedSections.diagnosis && (
+              {expandedSections.chiefComplaint && (
                 <div className="mt-4 space-y-4">
                   <div>
-                    <label className="label">Primary Diagnosis</label>
+                    <label className="label">Chief Complaint *</label>
                     <input
                       type="text"
                       className="input"
-                      value={formData.diagnosis}
-                      onChange={(e) => setFormData({...formData, diagnosis: e.target.value})}
-                      placeholder="Enter primary diagnosis"
+                      value={formData.chiefComplaint}
+                      onChange={(e) => setFormData({...formData, chiefComplaint: e.target.value})}
+                      placeholder="Primary reason for visit (e.g., chest pain, headache, fever)"
                     />
                   </div>
                   <div>
-                    <label className="label">Diagnosis Details</label>
+                    <label className="label">History of Present Illness *</label>
                     <textarea
                       className="input"
                       rows="4"
-                      value={formData.diagnosisDetails}
-                      onChange={(e) => setFormData({...formData, diagnosisDetails: e.target.value})}
-                      placeholder="Detailed diagnosis notes..."
+                      value={formData.historyOfPresentIllness}
+                      onChange={(e) => setFormData({...formData, historyOfPresentIllness: e.target.value})}
+                      placeholder="Detailed description of current symptoms, when they started, how they've progressed"
                     />
                   </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="label">Onset of Symptoms</label>
+                      <input
+                        type="text"
+                        className="input"
+                        value={formData.onsetOfSymptoms}
+                        onChange={(e) => setFormData({...formData, onsetOfSymptoms: e.target.value})}
+                        placeholder="e.g., Sudden, Gradual, After trauma"
+                      />
+                    </div>
+                    <div>
+                      <label className="label">Duration</label>
+                      <input
+                        type="text"
+                        className="input"
+                        value={formData.durationOfSymptoms}
+                        onChange={(e) => setFormData({...formData, durationOfSymptoms: e.target.value})}
+                        placeholder="e.g., 2 hours, 3 days, 1 week"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="label">Severity (1-10 scale)</label>
+                      <input
+                        type="text"
+                        className="input"
+                        value={formData.severityOfSymptoms}
+                        onChange={(e) => setFormData({...formData, severityOfSymptoms: e.target.value})}
+                        placeholder="e.g., 7/10, Moderate, Severe"
+                      />
+                    </div>
+                    <div>
+                      <label className="label">Associated Symptoms</label>
+                      <input
+                        type="text"
+                        className="input"
+                        value={formData.associatedSymptoms}
+                        onChange={(e) => setFormData({...formData, associatedSymptoms: e.target.value})}
+                        placeholder="e.g., nausea, dizziness, shortness of breath"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="label">Relieving Factors</label>
+                      <input
+                        type="text"
+                        className="input"
+                        value={formData.relievingFactors}
+                        onChange={(e) => setFormData({...formData, relievingFactors: e.target.value})}
+                        placeholder="e.g., rest, medication, position"
+                      />
+                    </div>
+                    <div>
+                      <label className="label">Aggravating Factors</label>
+                      <input
+                        type="text"
+                        className="input"
+                        value={formData.aggravatingFactors}
+                        onChange={(e) => setFormData({...formData, aggravatingFactors: e.target.value})}
+                        placeholder="e.g., movement, stress, certain foods"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Medical History Section */}
+            <div className="card">
+              <div 
+                className="flex items-center justify-between cursor-pointer"
+                onClick={() => toggleSection('history')}
+              >
+                <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                  <User className="h-5 w-5 mr-2" />
+                  Medical History
+                </h3>
+                {expandedSections.history ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
+              </div>
+              {expandedSections.history && (
+                <div className="mt-4 space-y-4">
                   <div>
-                    <label className="label">Patient Instructions</label>
+                    <label className="label">Past Medical History</label>
                     <textarea
                       className="input"
                       rows="3"
-                      value={formData.instructions}
-                      onChange={(e) => setFormData({...formData, instructions: e.target.value})}
-                      placeholder="Instructions for patient..."
+                      value={formData.pastMedicalHistory}
+                      onChange={(e) => setFormData({...formData, pastMedicalHistory: e.target.value})}
+                      placeholder="Previous illnesses, surgeries, hospitalizations, chronic conditions"
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Current Medications</label>
+                    <textarea
+                      className="input"
+                      rows="3"
+                      value={formData.currentMedications}
+                      onChange={(e) => setFormData({...formData, currentMedications: e.target.value})}
+                      placeholder="List all current medications with dosages and frequency"
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Known Allergies</label>
+                    <input
+                      type="text"
+                      className="input"
+                      value={formData.knownAllergies}
+                      onChange={(e) => setFormData({...formData, knownAllergies: e.target.value})}
+                      placeholder="Drug allergies, food allergies, environmental allergies"
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Family History</label>
+                    <textarea
+                      className="input"
+                      rows="3"
+                      value={formData.familyHistory}
+                      onChange={(e) => setFormData({...formData, familyHistory: e.target.value})}
+                      placeholder="Relevant family medical history (diabetes, heart disease, cancer, etc.)"
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Social History</label>
+                    <textarea
+                      className="input"
+                      rows="3"
+                      value={formData.socialHistory}
+                      onChange={(e) => setFormData({...formData, socialHistory: e.target.value})}
+                      placeholder="Smoking, alcohol, drug use, occupation, exercise habits, living situation"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+
+            {/* Physical Examination Section */}
+            <div className="card">
+              <div 
+                className="flex items-center justify-between cursor-pointer"
+                onClick={() => toggleSection('physicalExam')}
+              >
+                <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                  <Stethoscope className="h-5 w-5 mr-2" />
+                  Physical Examination
+                </h3>
+                {expandedSections.physicalExam ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
+              </div>
+              {expandedSections.physicalExam && (
+                <div className="mt-4 space-y-4">
+                  <div>
+                    <label className="label">General Appearance</label>
+                    <input
+                      type="text"
+                      className="input"
+                      value={formData.generalAppearance}
+                      onChange={(e) => setFormData({...formData, generalAppearance: e.target.value})}
+                      placeholder="Overall appearance, distress level, alertness, cooperation"
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Vital Signs</label>
+                    <input
+                      type="text"
+                      className="input"
+                      value={formData.vitalSigns}
+                      onChange={(e) => setFormData({...formData, vitalSigns: e.target.value})}
+                      placeholder="BP, HR, RR, Temp, O2 Sat (if different from recorded vitals)"
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="label">Head & Neck</label>
+                      <textarea
+                        className="input"
+                        rows="3"
+                        value={formData.headAndNeck}
+                        onChange={(e) => setFormData({...formData, headAndNeck: e.target.value})}
+                        placeholder="Eyes, ears, nose, throat, lymph nodes"
+                      />
+                    </div>
+                    <div>
+                      <label className="label">Cardiovascular</label>
+                      <textarea
+                        className="input"
+                        rows="3"
+                        value={formData.cardiovascularExam}
+                        onChange={(e) => setFormData({...formData, cardiovascularExam: e.target.value})}
+                        placeholder="Heart sounds, murmurs, pulses, JVD"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="label">Respiratory</label>
+                      <textarea
+                        className="input"
+                        rows="3"
+                        value={formData.respiratoryExam}
+                        onChange={(e) => setFormData({...formData, respiratoryExam: e.target.value})}
+                        placeholder="Lung sounds, chest expansion, percussion"
+                      />
+                    </div>
+                    <div>
+                      <label className="label">Abdomen</label>
+                      <textarea
+                        className="input"
+                        rows="3"
+                        value={formData.abdominalExam}
+                        onChange={(e) => setFormData({...formData, abdominalExam: e.target.value})}
+                        placeholder="Inspection, palpation, percussion, auscultation"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="label">Extremities</label>
+                      <textarea
+                        className="input"
+                        rows="3"
+                        value={formData.extremities}
+                        onChange={(e) => setFormData({...formData, extremities: e.target.value})}
+                        placeholder="Edema, pulses, range of motion, deformities"
+                      />
+                    </div>
+                    <div>
+                      <label className="label">Neurological</label>
+                      <textarea
+                        className="input"
+                        rows="3"
+                        value={formData.neurologicalExam}
+                        onChange={(e) => setFormData({...formData, neurologicalExam: e.target.value})}
+                        placeholder="Mental status, cranial nerves, motor, sensory, reflexes"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Assessment & Plan Section */}
+            <div className="card">
+              <div 
+                className="flex items-center justify-between cursor-pointer"
+                onClick={() => toggleSection('assessment')}
+              >
+                <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                  <FileText className="h-5 w-5 mr-2" />
+                  Assessment & Plan
+                </h3>
+                {expandedSections.assessment ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
+              </div>
+              {expandedSections.assessment && (
+                <div className="mt-4 space-y-4">
+                  <div>
+                    <label className="label">Primary Diagnosis *</label>
+                    <input
+                      type="text"
+                      className="input"
+                      value={formData.primaryDiagnosis}
+                      onChange={(e) => setFormData({...formData, primaryDiagnosis: e.target.value})}
+                      placeholder="Main diagnosis (e.g., Acute Myocardial Infarction, Hypertension)"
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Secondary Diagnosis</label>
+                    <input
+                      type="text"
+                      className="input"
+                      value={formData.secondaryDiagnosis}
+                      onChange={(e) => setFormData({...formData, secondaryDiagnosis: e.target.value})}
+                      placeholder="Additional diagnoses or comorbidities"
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Differential Diagnosis</label>
+                    <textarea
+                      className="input"
+                      rows="3"
+                      value={formData.differentialDiagnosis}
+                      onChange={(e) => setFormData({...formData, differentialDiagnosis: e.target.value})}
+                      placeholder="Other possible diagnoses to consider"
                     />
                   </div>
                 </div>
@@ -637,7 +894,7 @@ const PatientQueue = () => {
               >
                 <h3 className="text-lg font-semibold text-gray-900 flex items-center">
                   <TestTube className="h-5 w-5 mr-2" />
-                  Orders & Prescriptions
+                  Lab & Radiology Orders
                 </h3>
                 {expandedSections.orders ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
               </div>
@@ -647,469 +904,233 @@ const PatientQueue = () => {
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {/* Lab Orders Section */}
                     <div className="border rounded-lg p-4">
-                    <h5 className="font-medium text-gray-700 mb-3 flex items-center">
-                      <TestTube className="h-4 w-4 mr-2" />
-                      Lab Orders
-                    </h5>
-                    
-                    {/* Multiple Lab Test Selection */}
-                    <div className="mb-4">
-                      <label className="label">Select Lab Tests (Multiple Selection)</label>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-48 overflow-y-auto border rounded p-3">
-                        {labTestOptions.map((test) => (
-                          <label key={test.id} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-2 rounded">
-                            <input
-                              type="checkbox"
-                              checked={selectedLabTests.includes(test.id)}
-                              onChange={() => handleLabTestToggle(test.id)}
-                              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                            />
-                            <span className="text-sm">
-                              {test.name} - ETB {test.price}
-                            </span>
-                          </label>
-                        ))}
-                      </div>
+                      <h5 className="font-medium text-gray-700 mb-3 flex items-center">
+                        <TestTube className="h-4 w-4 mr-2" />
+                        Lab Orders
+                      </h5>
                       
-                      {selectedLabTests.length > 0 && (
-                        <div className="mt-3 p-3 bg-blue-50 rounded">
-                          <p className="text-sm font-medium text-blue-800">
-                            Selected: {selectedLabTests.length} test(s) - 
-                            Total: ETB {selectedLabTests.reduce((sum, testId) => {
-                              const test = labTestOptions.find(t => t.id === testId);
-                              return sum + (test ? test.price : 0);
-                            }, 0)}
-                          </p>
+                      {/* Multiple Lab Test Selection */}
+                      <div className="mb-4">
+                        <label className="label">Select Lab Tests (Multiple Selection)</label>
+                        <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto border rounded p-3">
+                          {labTestOptions.map((test) => {
+                            const isAlreadyOrdered = alreadyOrderedLabTests.includes(test.id);
+                            const isSelected = selectedLabTests.includes(test.id);
+                            
+                            return (
+                              <label key={test.id} className={`flex items-center space-x-2 p-2 rounded ${isAlreadyOrdered ? 'cursor-not-allowed opacity-60 bg-gray-100' : 'cursor-pointer hover:bg-gray-50'}`}>
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => !isAlreadyOrdered && handleLabTestToggle(test.id)}
+                                  disabled={isAlreadyOrdered}
+                                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
+                                />
+                                <span className={`text-sm ${isAlreadyOrdered ? 'text-gray-500' : ''}`}>
+                                  {test.name} - ETB {test.price}
+                                  {isAlreadyOrdered && (
+                                    <span className="ml-2 text-xs text-green-600 font-medium">
+                                      ✓ Already Ordered
+                                    </span>
+                                  )}
+                                </span>
+                              </label>
+                            );
+                          })}
                         </div>
-                      )}
-                      
-                      <div className="mt-3">
-                        <label className="label">Instructions for all selected tests</label>
-                        <textarea
-                          className="input"
-                          rows="2"
-                          placeholder="Special instructions for all selected lab tests..."
-                          value={labInstructions}
-                          onChange={(e) => setLabInstructions(e.target.value)}
-                        />
-                      </div>
-                      
-                      <div className="mt-3">
-                        <button
-                          type="button"
-                          onClick={handleAddMultipleLabOrders}
-                          className={`btn btn-sm ${labOrdered ? 'btn-secondary' : 'btn-primary'}`}
-                          disabled={selectedLabTests.length === 0 || labOrdered}
-                        >
-                          {labOrdered ? 'Lab Orders Sent ✓' : `Add ${selectedLabTests.length} Lab Order(s)`}
-                        </button>
-                      </div>
-                    </div>
-                    
-                    {/* Existing Lab Orders */}
-                    {selectedVisit.labOrders && selectedVisit.labOrders.length > 0 && (
-                      <div className="space-y-2">
-                        {selectedVisit.labOrders.map((order, index) => (
-                          <div key={index} className="p-2 bg-blue-50 rounded text-sm flex justify-between items-center">
-                            <span className="font-medium">{order.type?.name || 'Lab Test'}</span>
-                            <span className="text-gray-500">{order.status}</span>
+                        
+                        {selectedLabTests.length > 0 && (
+                          <div className="mt-3 p-3 bg-blue-50 rounded">
+                            <p className="text-sm font-medium text-blue-800">
+                              Selected: {selectedLabTests.length} test(s) - 
+                              Total: ETB {selectedLabTests.reduce((sum, testId) => {
+                                const test = labTestOptions.find(t => t.id === testId);
+                                return sum + (test ? test.price : 0);
+                              }, 0)}
+                            </p>
                           </div>
-                        ))}
+                        )}
+                        
+                        <div className="mt-3">
+                          <label className="label">Instructions for all selected tests</label>
+                          <textarea
+                            className="input"
+                            rows="2"
+                            placeholder="Special instructions for all selected lab tests..."
+                            value={labInstructions}
+                            onChange={(e) => setLabInstructions(e.target.value)}
+                          />
+                        </div>
                       </div>
-                    )}
                     </div>
 
                     {/* Radiology Orders Section */}
                     <div className="border rounded-lg p-4">
-                    <h5 className="font-medium text-gray-700 mb-3 flex items-center">
-                      <Scan className="h-4 w-4 mr-2" />
-                      Radiology Orders
-                    </h5>
-                    
-                    {/* Multiple Radiology Test Selection */}
-                    <div className="mb-4">
-                      <label className="label">Select Radiology Tests (Multiple Selection)</label>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-48 overflow-y-auto border rounded p-3">
-                        {radiologyTestOptions.map((test) => (
-                          <label key={test.id} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-2 rounded">
-                            <input
-                              type="checkbox"
-                              checked={selectedRadiologyTests.includes(test.id)}
-                              onChange={() => handleRadiologyTestToggle(test.id)}
-                              className="rounded border-gray-300 text-green-600 focus:ring-green-500"
-                            />
-                            <span className="text-sm">
-                              {test.name} - ETB {test.price}
-                            </span>
-                          </label>
-                        ))}
-                      </div>
+                      <h5 className="font-medium text-gray-700 mb-3 flex items-center">
+                        <Scan className="h-4 w-4 mr-2" />
+                        Radiology Orders
+                      </h5>
                       
-                      {selectedRadiologyTests.length > 0 && (
-                        <div className="mt-3 p-3 bg-green-50 rounded">
-                          <p className="text-sm font-medium text-green-800">
-                            Selected: {selectedRadiologyTests.length} test(s) - 
-                            Total: ETB {selectedRadiologyTests.reduce((sum, testId) => {
-                              const test = radiologyTestOptions.find(t => t.id === testId);
-                              return sum + (test ? test.price : 0);
-                            }, 0)}
-                          </p>
-                        </div>
-                      )}
-                      
-                      <div className="mt-3">
-                        <label className="label">Instructions for all selected tests</label>
-                        <textarea
-                          className="input"
-                          rows="2"
-                          placeholder="Special instructions for all selected radiology tests..."
-                          value={radiologyInstructions}
-                          onChange={(e) => setRadiologyInstructions(e.target.value)}
-                        />
-                      </div>
-                      
-                      <div className="mt-3">
-                        <button
-                          type="button"
-                          onClick={handleAddMultipleRadiologyOrders}
-                          className={`btn btn-sm ${radiologyOrdered ? 'btn-secondary' : 'btn-primary'}`}
-                          disabled={selectedRadiologyTests.length === 0 || radiologyOrdered}
-                        >
-                          {radiologyOrdered ? 'Radiology Orders Sent ✓' : `Add ${selectedRadiologyTests.length} Radiology Order(s)`}
-                        </button>
-                      </div>
-                    </div>
-                    
-                    {/* Existing Radiology Orders */}
-                    {selectedVisit.radiologyOrders && selectedVisit.radiologyOrders.length > 0 && (
-                      <div className="space-y-2">
-                        {selectedVisit.radiologyOrders.map((order, index) => (
-                          <div key={index} className="p-2 bg-green-50 rounded text-sm flex justify-between items-center">
-                            <span className="font-medium">{order.type?.name || 'Radiology'}</span>
-                            <span className="text-gray-500">{order.status}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    </div>
-                  </div>
-
-                  {/* Medication Orders Section */}
-                  <div className="border rounded-lg p-4">
-                    <h5 className="font-medium text-gray-700 mb-3 flex items-center">
-                      <Pill className="h-4 w-4 mr-2" />
-                      Medication Orders
-                      {/* Show restriction warning if investigations are pending */}
-                      {(() => {
-                        const hasLabOrders = selectedVisit.labOrders && selectedVisit.labOrders.length > 0;
-                        const hasRadiologyOrders = selectedVisit.radiologyOrders && selectedVisit.radiologyOrders.length > 0;
-                        
-                        if (hasLabOrders || hasRadiologyOrders) {
-                          const allLabCompleted = !hasLabOrders || selectedVisit.labOrders.every(order => 
-                            order.status === 'COMPLETED' || order.batchOrder?.status === 'COMPLETED'
-                          );
-                          const allRadiologyCompleted = !hasRadiologyOrders || selectedVisit.radiologyOrders.every(order => 
-                            order.status === 'COMPLETED' || order.batchOrder?.status === 'COMPLETED'
-                          );
-                          
-                          if (!allLabCompleted || !allRadiologyCompleted) {
+                      {/* Multiple Radiology Test Selection */}
+                      <div className="mb-4">
+                        <label className="label">Select Radiology Tests (Multiple Selection)</label>
+                        <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto border rounded p-3">
+                          {radiologyTestOptions.map((test) => {
+                            const isAlreadyOrdered = alreadyOrderedRadiologyTests.includes(test.id);
+                            const isSelected = selectedRadiologyTests.includes(test.id);
+                            
                             return (
-                              <span className="ml-2 text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full">
-                                Pending Results
-                              </span>
+                              <label key={test.id} className={`flex items-center space-x-2 p-2 rounded ${isAlreadyOrdered ? 'cursor-not-allowed opacity-60 bg-gray-100' : 'cursor-pointer hover:bg-gray-50'}`}>
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => !isAlreadyOrdered && handleRadiologyTestToggle(test.id)}
+                                  disabled={isAlreadyOrdered}
+                                  className="rounded border-gray-300 text-green-600 focus:ring-green-500 disabled:opacity-50"
+                                />
+                                <span className={`text-sm ${isAlreadyOrdered ? 'text-gray-500' : ''}`}>
+                                  {test.name} - ETB {test.price}
+                                  {isAlreadyOrdered && (
+                                    <span className="ml-2 text-xs text-green-600 font-medium">
+                                      ✓ Already Ordered
+                                    </span>
+                                  )}
+                                </span>
+                              </label>
                             );
-                          }
-                        }
-                        return null;
-                      })()}
-                    </h5>
-                    
-                    {/* Add Medication Order Form */}
-                    {(() => {
-                      const hasLabOrders = selectedVisit.labOrders && selectedVisit.labOrders.length > 0;
-                      const hasRadiologyOrders = selectedVisit.radiologyOrders && selectedVisit.radiologyOrders.length > 0;
-                      
-                      const allLabCompleted = !hasLabOrders || selectedVisit.labOrders.every(order => 
-                        order.status === 'COMPLETED' || order.batchOrder?.status === 'COMPLETED'
-                      );
-                      const allRadiologyCompleted = !hasRadiologyOrders || selectedVisit.radiologyOrders.every(order => 
-                        order.status === 'COMPLETED' || order.batchOrder?.status === 'COMPLETED'
-                      );
-                      
-                      const isRestricted = (hasLabOrders || hasRadiologyOrders) && (!allLabCompleted || !allRadiologyCompleted);
-                      
-                      return (
-                        <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-4 ${isRestricted ? 'opacity-50 pointer-events-none' : ''}`}>
-                          <div>
-                            <input
-                              type="text"
-                              className="input"
-                              placeholder="Medication Name"
-                              value={newMedicationOrder.name}
-                              onChange={(e) => setNewMedicationOrder({...newMedicationOrder, name: e.target.value})}
-                              disabled={isRestricted}
-                            />
-                          </div>
-                          <div>
-                            <select
-                              className="input"
-                              value={newMedicationOrder.dosageForm}
-                              onChange={(e) => setNewMedicationOrder({...newMedicationOrder, dosageForm: e.target.value})}
-                              disabled={isRestricted}
-                            >
-                              <option value="">Form</option>
-                              <option value="TABLETS">Tablets</option>
-                              <option value="CAPSULES">Capsules</option>
-                              <option value="INJECTION">Injection</option>
-                              <option value="SYRUP">Syrup</option>
-                            </select>
-                          </div>
-                          <div>
-                            <input
-                              type="text"
-                              className="input"
-                              placeholder="Strength (e.g., 500mg)"
-                              value={newMedicationOrder.strength}
-                              onChange={(e) => setNewMedicationOrder({...newMedicationOrder, strength: e.target.value})}
-                              disabled={isRestricted}
-                            />
-                          </div>
-                          <div>
-                            <button
-                              type="button"
-                              onClick={handleAddMedicationOrder}
-                              className="btn btn-primary btn-sm w-full"
-                              disabled={isRestricted}
-                            >
-                              Add Medication
-                            </button>
-                          </div>
+                          })}
                         </div>
-                      );
-                    })()}
-                    
-                    {/* Additional fields for medication */}
-                    {(() => {
-                      const hasLabOrders = selectedVisit.labOrders && selectedVisit.labOrders.length > 0;
-                      const hasRadiologyOrders = selectedVisit.radiologyOrders && selectedVisit.radiologyOrders.length > 0;
-                      
-                      const allLabCompleted = !hasLabOrders || selectedVisit.labOrders.every(order => 
-                        order.status === 'COMPLETED' || order.batchOrder?.status === 'COMPLETED'
-                      );
-                      const allRadiologyCompleted = !hasRadiologyOrders || selectedVisit.radiologyOrders.every(order => 
-                        order.status === 'COMPLETED' || order.batchOrder?.status === 'COMPLETED'
-                      );
-                      
-                      const isRestricted = (hasLabOrders || hasRadiologyOrders) && (!allLabCompleted || !allRadiologyCompleted);
-                      
-                      return (
-                        <div className={`grid grid-cols-1 md:grid-cols-3 gap-3 mb-4 ${isRestricted ? 'opacity-50 pointer-events-none' : ''}`}>
-                          <div>
-                            <input
-                              type="number"
-                              className="input"
-                              placeholder="Quantity"
-                              value={newMedicationOrder.quantity}
-                              onChange={(e) => setNewMedicationOrder({...newMedicationOrder, quantity: e.target.value})}
-                              disabled={isRestricted}
-                            />
+                        
+                        {selectedRadiologyTests.length > 0 && (
+                          <div className="mt-3 p-3 bg-green-50 rounded">
+                            <p className="text-sm font-medium text-green-800">
+                              Selected: {selectedRadiologyTests.length} test(s) - 
+                              Total: ETB {selectedRadiologyTests.reduce((sum, testId) => {
+                                const test = radiologyTestOptions.find(t => t.id === testId);
+                                return sum + (test ? test.price : 0);
+                              }, 0)}
+                            </p>
                           </div>
-                          <div>
-                            <input
-                              type="text"
-                              className="input"
-                              placeholder="Frequency (e.g., Twice daily)"
-                              value={newMedicationOrder.frequency}
-                              onChange={(e) => setNewMedicationOrder({...newMedicationOrder, frequency: e.target.value})}
-                              disabled={isRestricted}
-                            />
-                          </div>
-                          <div>
-                            <input
-                              type="text"
-                              className="input"
-                              placeholder="Duration (e.g., 7 days)"
-                              value={newMedicationOrder.duration}
-                              onChange={(e) => setNewMedicationOrder({...newMedicationOrder, duration: e.target.value})}
-                              disabled={isRestricted}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })()}
-                    
-                    {(() => {
-                      const hasLabOrders = selectedVisit.labOrders && selectedVisit.labOrders.length > 0;
-                      const hasRadiologyOrders = selectedVisit.radiologyOrders && selectedVisit.radiologyOrders.length > 0;
-                      
-                      const allLabCompleted = !hasLabOrders || selectedVisit.labOrders.every(order => 
-                        order.status === 'COMPLETED' || order.batchOrder?.status === 'COMPLETED'
-                      );
-                      const allRadiologyCompleted = !hasRadiologyOrders || selectedVisit.radiologyOrders.every(order => 
-                        order.status === 'COMPLETED' || order.batchOrder?.status === 'COMPLETED'
-                      );
-                      
-                      const isRestricted = (hasLabOrders || hasRadiologyOrders) && (!allLabCompleted || !allRadiologyCompleted);
-                      
-                      return (
-                        <div className={`mb-4 ${isRestricted ? 'opacity-50 pointer-events-none' : ''}`}>
+                        )}
+                        
+                        <div className="mt-3">
+                          <label className="label">Instructions for all selected tests</label>
                           <textarea
                             className="input"
                             rows="2"
-                            placeholder="Instructions for taking the medication"
-                            value={newMedicationOrder.instructions}
-                            onChange={(e) => setNewMedicationOrder({...newMedicationOrder, instructions: e.target.value})}
-                            disabled={isRestricted}
+                            placeholder="Special instructions for all selected radiology tests..."
+                            value={radiologyInstructions}
+                            onChange={(e) => setRadiologyInstructions(e.target.value)}
                           />
                         </div>
-                      );
-                    })()}
-                    
-                    {/* Existing Medication Orders */}
-                    {selectedVisit.medicationOrders && selectedVisit.medicationOrders.length > 0 && (
-                      <div className="space-y-2">
-                        {selectedVisit.medicationOrders.map((order, index) => (
-                          <div key={index} className="p-2 bg-purple-50 rounded text-sm flex justify-between items-center">
-                            <span className="font-medium">{order.name} - {order.dosageForm} {order.strength}</span>
-                            <span className="text-gray-500">{order.frequency}</span>
-                          </div>
-                        ))}
                       </div>
-                    )}
+                    </div>
                   </div>
+
+                  {/* Combined Order Button */}
+                  <div className="flex justify-center">
+                    <button
+                      type="button"
+                      onClick={handleSubmitOrders}
+                      disabled={selectedLabTests.length === 0 && selectedRadiologyTests.length === 0}
+                      className={`btn btn-lg ${
+                        selectedLabTests.length === 0 && selectedRadiologyTests.length === 0 
+                          ? 'btn-secondary' 
+                          : 'btn-primary'
+                      }`}
+                    >
+                      {selectedLabTests.length > 0 && selectedRadiologyTests.length > 0 
+                        ? 'Order Lab & Radiology Tests'
+                        : selectedLabTests.length > 0 
+                        ? 'Order Lab Tests'
+                        : selectedRadiologyTests.length > 0
+                        ? 'Order Radiology Tests'
+                        : 'Select Tests to Order'
+                      }
+                    </button>
+                  </div>
+
+                  {/* Current Order Status */}
+                  {orderStatus && (orderStatus.labOrders.length > 0 || orderStatus.radiologyOrders.length > 0 || orderStatus.batchOrders.length > 0) && (
+                    <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="flex items-center mb-3">
+                        <FileText className="h-5 w-5 text-blue-500 mr-2" />
+                        <span className="text-blue-800 font-medium">Current Order Status</span>
+                      </div>
+                      
+                      {orderStatus.labOrders.length > 0 && (
+                        <div className="mb-3">
+                          <h4 className="text-sm font-medium text-blue-700 mb-2">Lab Orders:</h4>
+                          <div className="space-y-1">
+                            {orderStatus.labOrders.map(order => (
+                              <div key={order.id} className="flex justify-between items-center text-sm">
+                                <span className="text-blue-600">{order.typeName}</span>
+                                <span className={`px-2 py-1 rounded text-xs ${getOrderStatusColor(order.status)}`}>
+                                  {order.status.replace(/_/g, ' ')}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {orderStatus.radiologyOrders.length > 0 && (
+                        <div className="mb-3">
+                          <h4 className="text-sm font-medium text-blue-700 mb-2">Radiology Orders:</h4>
+                          <div className="space-y-1">
+                            {orderStatus.radiologyOrders.map(order => (
+                              <div key={order.id} className="flex justify-between items-center text-sm">
+                                <span className="text-blue-600">{order.typeName}</span>
+                                <span className={`px-2 py-1 rounded text-xs ${getOrderStatusColor(order.status)}`}>
+                                  {order.status.replace(/_/g, ' ')}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {orderStatus.batchOrders.length > 0 && (
+                        <div>
+                          <h4 className="text-sm font-medium text-blue-700 mb-2">Batch Orders:</h4>
+                          <div className="space-y-1">
+                            {orderStatus.batchOrders.map(batchOrder => (
+                              <div key={batchOrder.id} className="flex justify-between items-center text-sm">
+                                <span className="text-blue-600">
+                                  {batchOrder.type} ({batchOrder.services.length} services)
+                                </span>
+                                <span className={`px-2 py-1 rounded text-xs ${getOrderStatusColor(batchOrder.status)}`}>
+                                  {batchOrder.status.replace(/_/g, ' ')}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Order Status */}
+                  {(labOrdered || radiologyOrdered) && (
+                    <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                      <div className="flex items-center">
+                        <CheckCircle className="h-5 w-5 text-green-600 mr-2" />
+                        <div>
+                          <p className="font-medium text-green-800">Orders Submitted Successfully</p>
+                          <p className="text-sm text-green-600">
+                            {labOrdered && radiologyOrdered 
+                              ? 'Lab and radiology orders have been sent to their respective departments.'
+                              : labOrdered 
+                              ? 'Lab orders have been sent to the lab department.'
+                              : 'Radiology orders have been sent to the radiology department.'
+                            }
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
-
-              {/* Results Section */}
-              <div className="border rounded-lg p-4">
-                <div 
-                  className="flex items-center justify-between cursor-pointer"
-                  onClick={() => toggleSection('results')}
-                >
-                  <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-                    <FileText className="h-5 w-5 mr-2" />
-                    Lab & Radiology Results
-                  </h3>
-                  {expandedSections.results ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
-                </div>
-                {expandedSections.results && (
-                  <div className="mt-4 space-y-6">
-                    {/* Lab Results */}
-                    <div className="border rounded-lg p-4">
-                      <h5 className="font-medium text-gray-700 mb-3 flex items-center">
-                        <TestTube className="h-4 w-4 mr-2" />
-                        Lab Results
-                      </h5>
-                      {selectedVisit.labOrders && selectedVisit.labOrders.length > 0 ? (
-                        <div className="space-y-4">
-                          {selectedVisit.labOrders.map((order, index) => (
-                            <div key={index} className="border rounded-lg p-3">
-                              <div className="flex justify-between items-start mb-2">
-                                <h6 className="font-medium text-gray-900">{order.type?.name || 'Lab Test'}</h6>
-                                <span className={`badge ${
-                                  order.batchOrder?.status === 'COMPLETED' ? 'badge-success' : 
-                                  order.batchOrder?.status === 'QUEUED' ? 'badge-info' : 'badge-warning'
-                                }`}>
-                                  {order.batchOrder?.status || order.status}
-                                </span>
-                              </div>
-                              {order.batchOrder?.status === 'COMPLETED' && (
-                                <div className="mt-2 space-y-2">
-                                  <div className="text-sm text-gray-700">
-                                    <strong>Result:</strong> {order.batchOrder.result || 'No result provided'}
-                                  </div>
-                                  {order.batchOrder.additionalNotes && (
-                                    <div className="text-sm text-gray-600">
-                                      <strong>Notes:</strong> {order.batchOrder.additionalNotes}
-                                    </div>
-                                  )}
-                                  {order.batchOrder.attachments && order.batchOrder.attachments.length > 0 && (
-                                    <div className="text-sm">
-                                      <strong>Attachments:</strong>
-                                      <div className="mt-1 space-y-1">
-                                        {order.batchOrder.attachments.map((file, fileIndex) => (
-                                          <a 
-                                            key={fileIndex}
-                                            href={file.path} 
-                                            target="_blank" 
-                                            rel="noopener noreferrer"
-                                            className="text-blue-600 hover:text-blue-800 underline"
-                                          >
-                                            {file.originalName || `Attachment ${fileIndex + 1}`}
-                                          </a>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-gray-500 text-sm">No lab results available</p>
-                      )}
-                    </div>
-
-                    {/* Radiology Results */}
-                    <div className="border rounded-lg p-4">
-                      <h5 className="font-medium text-gray-700 mb-3 flex items-center">
-                        <Scan className="h-4 w-4 mr-2" />
-                        Radiology Results
-                      </h5>
-                      {selectedVisit.radiologyOrders && selectedVisit.radiologyOrders.length > 0 ? (
-                        <div className="space-y-4">
-                          {selectedVisit.radiologyOrders.map((order, index) => (
-                            <div key={index} className="border rounded-lg p-3">
-                              <div className="flex justify-between items-start mb-2">
-                                <h6 className="font-medium text-gray-900">{order.type?.name || 'Radiology Test'}</h6>
-                                <span className={`badge ${
-                                  order.batchOrder?.status === 'COMPLETED' ? 'badge-success' : 
-                                  order.batchOrder?.status === 'QUEUED' ? 'badge-info' : 'badge-warning'
-                                }`}>
-                                  {order.batchOrder?.status || order.status}
-                                </span>
-                              </div>
-                              {order.batchOrder?.status === 'COMPLETED' && (
-                                <div className="mt-2 space-y-2">
-                                  <div className="text-sm text-gray-700">
-                                    <strong>Report:</strong> {order.batchOrder.result || 'No report provided'}
-                                  </div>
-                                  {order.batchOrder.additionalNotes && (
-                                    <div className="text-sm text-gray-600">
-                                      <strong>Notes:</strong> {order.batchOrder.additionalNotes}
-                                    </div>
-                                  )}
-                                  {order.batchOrder.attachments && order.batchOrder.attachments.length > 0 && (
-                                    <div className="text-sm">
-                                      <strong>Images:</strong>
-                                      <div className="mt-1 space-y-1">
-                                        {order.batchOrder.attachments.map((file, fileIndex) => (
-                                          <a 
-                                            key={fileIndex}
-                                            href={file.path} 
-                                            target="_blank" 
-                                            rel="noopener noreferrer"
-                                            className="text-blue-600 hover:text-blue-800 underline"
-                                          >
-                                            {file.originalName || `Image ${fileIndex + 1}`}
-                                          </a>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-gray-500 text-sm">No radiology results available</p>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
             </div>
 
             {/* Save Button */}

@@ -661,3 +661,83 @@ exports.getBatchRadiologyResults = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+exports.completeBatchRadiologyOrder = async (req, res) => {
+  try {
+    const { batchOrderId } = req.params;
+    const radiologistId = req.user.id;
+
+    // Get the batch order
+    const batchOrder = await prisma.batchOrder.findUnique({
+      where: { id: parseInt(batchOrderId) },
+      include: {
+        services: {
+          include: {
+            investigationType: true
+          }
+        },
+        visit: true
+      }
+    });
+
+    if (!batchOrder) {
+      return res.status(404).json({ error: 'Batch order not found' });
+    }
+
+    if (batchOrder.status === 'COMPLETED') {
+      return res.status(400).json({ error: 'Batch order is already completed' });
+    }
+
+    // Update batch order status to completed
+    const updatedBatchOrder = await prisma.batchOrder.update({
+      where: { id: parseInt(batchOrderId) },
+      data: {
+        status: 'COMPLETED',
+        updatedAt: new Date()
+      },
+      include: {
+        services: {
+          include: {
+            investigationType: true
+          }
+        },
+        visit: true
+      }
+    });
+
+    // Check if all investigations for this visit are completed
+    try {
+      const { checkVisitInvestigationCompletion } = require('../utils/investigationUtils');
+      await checkVisitInvestigationCompletion(batchOrder.visitId);
+    } catch (error) {
+      console.error('Error checking investigation completion:', error);
+      // Don't fail the request if investigation completion check fails
+    }
+
+    // Create audit log
+    await prisma.auditLog.create({
+      data: {
+        userId: radiologistId,
+        action: 'COMPLETE_RADIOLOGY_BATCH_ORDER',
+        entity: 'BatchOrder',
+        entityId: parseInt(batchOrderId),
+        details: JSON.stringify({
+          batchOrderId: parseInt(batchOrderId),
+          visitId: batchOrder.visitId,
+          services: batchOrder.services.map(s => s.investigationType?.name).join(', ')
+        }),
+        ip: req.ip,
+        userAgent: req.get('User-Agent')
+      }
+    });
+
+    res.json({
+      message: 'Radiology batch order completed successfully',
+      batchOrder: updatedBatchOrder
+    });
+
+  } catch (error) {
+    console.error('Error completing radiology batch order:', error);
+    res.status(500).json({ error: error.message });
+  }
+};

@@ -10,7 +10,7 @@ const BillingQueue = () => {
   const [selectedBilling, setSelectedBilling] = useState(null);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [statusFilter, setStatusFilter] = useState('PENDING');
   const [insurances, setInsurances] = useState([]);
   
   // Clean payment form state

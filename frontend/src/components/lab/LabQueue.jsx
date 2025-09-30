@@ -16,6 +16,7 @@ const LabQueue = () => {
   });
   const [expandedTests, setExpandedTests] = useState({});
   const [uploading, setUploading] = useState(false);
+  const [statusFilter, setStatusFilter] = useState('PENDING');
 
   useEffect(() => {
     fetchOrders();
@@ -34,6 +35,15 @@ const LabQueue = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const getFilteredOrders = () => {
+    if (statusFilter === 'PENDING') {
+      return orders.filter(order => order.status !== 'COMPLETED');
+    } else if (statusFilter === 'COMPLETED') {
+      return orders.filter(order => order.status === 'COMPLETED');
+    }
+    return orders;
   };
 
   const toggleTestExpansion = (testId) => {
@@ -229,16 +239,43 @@ const LabQueue = () => {
         </div>
       </div>
 
+      {/* Status Filter */}
+      <div className="mb-6">
+        <div className="flex items-center space-x-4">
+          <label className="text-sm font-medium text-gray-700">Filter by Status:</label>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="PENDING">Pending Orders</option>
+            <option value="COMPLETED">Completed Orders</option>
+            <option value="ALL">All Orders</option>
+          </select>
+          <span className="text-sm text-gray-500">
+            Showing {getFilteredOrders().length} of {orders.length} orders
+          </span>
+        </div>
+      </div>
+
       {/* Orders List */}
-      {orders.length === 0 ? (
+      {getFilteredOrders().length === 0 ? (
         <div className="text-center py-12">
           <TestTube className="h-16 w-16 mx-auto text-gray-300 mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No Lab Orders</h3>
-          <p className="text-gray-600">No laboratory tests are currently queued for processing.</p>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">
+            {statusFilter === 'PENDING' ? 'No Pending Lab Orders' :
+             statusFilter === 'COMPLETED' ? 'No Completed Lab Orders' :
+             'No Lab Orders'}
+          </h3>
+          <p className="text-gray-600">
+            {statusFilter === 'PENDING' ? 'No laboratory tests are currently queued for processing.' :
+             statusFilter === 'COMPLETED' ? 'No laboratory tests have been completed yet.' :
+             'No laboratory tests are currently queued for processing.'}
+          </p>
         </div>
       ) : (
         <div className="grid gap-6">
-          {orders.map((order) => (
+          {getFilteredOrders().map((order) => (
             <div 
               key={order.id} 
               className={`card ${getPriorityColor(order.type)} cursor-pointer hover:shadow-lg transition-shadow duration-200`}

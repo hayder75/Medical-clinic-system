@@ -79,6 +79,7 @@ exports.getQueue = async (req, res) => {
     const doctorId = req.user.id;
     
     // Get visits assigned to this doctor that are waiting for doctor review or returned with results
+    // AND have paid their consultation fee
     const queue = await prisma.visit.findMany({
       where: { 
         status: {
@@ -86,6 +87,19 @@ exports.getQueue = async (req, res) => {
         },
         assignmentId: {
           not: null
+        },
+        // Ensure consultation fee is paid
+        bills: {
+          some: {
+            status: 'PAID',
+            services: {
+              some: {
+                service: {
+                  code: 'CONS001' // Consultation service code
+                }
+              }
+            }
+          }
         }
       },
       include: {
@@ -133,7 +147,8 @@ exports.getQueue = async (req, res) => {
                 service: true,
                 investigationType: true
               }
-            }
+            },
+            attachments: true
           }
         },
         medicationOrders: true,
@@ -162,6 +177,7 @@ exports.getQueue = async (req, res) => {
 exports.getResultsQueue = async (req, res) => {
   try {
     const doctorId = req.user.id;
+    console.log('🔍 getResultsQueue - Doctor ID:', doctorId);
     
     // Get visits assigned to this doctor that have results ready for review
     const resultsQueue = await prisma.visit.findMany({
@@ -217,7 +233,8 @@ exports.getResultsQueue = async (req, res) => {
                 service: true,
                 investigationType: true
               }
-            }
+            },
+            attachments: true
           }
         },
         medicationOrders: true,
@@ -237,8 +254,8 @@ exports.getResultsQueue = async (req, res) => {
       ]
     });
 
-    // Add result type labels for each visit
-    const queueWithLabels = resultsQueue.map(visit => {
+    // Add result type labels and include radiology/lab results for each visit
+    const queueWithLabels = await Promise.all(resultsQueue.map(async (visit) => {
       let resultLabels = [];
       
       if (visit.labOrders.some(order => order.labResults.length > 0)) {
@@ -253,13 +270,88 @@ exports.getResultsQueue = async (req, res) => {
         resultLabels.push('Batch Results Available');
       }
 
+      // Add radiology and lab results to batch orders
+      const batchOrdersWithResults = await Promise.all(visit.batchOrders.map(async (batchOrder) => {
+        let radiologyResults = [];
+        let labResults = [];
+        
+        if (batchOrder.type === 'RADIOLOGY') {
+          radiologyResults = await prisma.radiologyResult.findMany({
+            where: { batchOrderId: batchOrder.id },
+            include: {
+              testType: true,
+              attachments: true
+            }
+          });
+          
+          // Also add batch order level results if individual results don't exist
+          if (radiologyResults.length === 0 && batchOrder.result) {
+            radiologyResults.push({
+              id: `batch-${batchOrder.id}`,
+              testType: { name: 'Radiology Tests' },
+              resultText: batchOrder.result,
+              additionalNotes: batchOrder.additionalNotes || '',
+              status: batchOrder.status,
+              attachments: batchOrder.attachments || [],
+              createdAt: batchOrder.updatedAt || batchOrder.createdAt
+            });
+          }
+        }
+        
+        if (batchOrder.type === 'LAB') {
+          // Get lab results from batch order - use the batch order result and services
+          labResults.push({
+            id: `batch-${batchOrder.id}`,
+            testType: { name: 'Lab Tests' },
+            resultText: batchOrder.result || 'No result provided',
+            additionalNotes: batchOrder.additionalNotes || '',
+            status: batchOrder.status,
+            attachments: batchOrder.attachments || [],
+            createdAt: batchOrder.updatedAt || batchOrder.createdAt,
+            services: batchOrder.services.map(service => ({
+              name: service.investigationType?.name || service.service?.name || 'Test',
+              result: service.result || 'No result'
+            }))
+          });
+        }
+        
+        return {
+          ...batchOrder,
+          radiologyResults,
+          labResults
+        };
+      }));
+
       return {
         ...visit,
+        batchOrders: batchOrdersWithResults,
         resultLabels
       };
+    }));
+
+    // Filter to only show visits assigned to this doctor
+    const doctorAssignments = await prisma.assignment.findMany({
+      where: {
+        doctorId: doctorId,
+        status: {
+          in: ['Active', 'Pending']
+        }
+      },
+      select: { id: true }
     });
 
-    res.json({ resultsQueue: queueWithLabels });
+    console.log('🔍 Doctor assignments:', doctorAssignments);
+    console.log('🔍 Raw results queue count:', resultsQueue.length);
+
+    const assignmentIds = doctorAssignments.map(a => a.id);
+    const filteredQueue = queueWithLabels.filter(visit => 
+      assignmentIds.includes(visit.assignmentId)
+    );
+
+    console.log('🔍 Filtered queue count:', filteredQueue.length);
+    console.log('🔍 Assignment IDs:', assignmentIds);
+
+    res.json({ queue: filteredQueue });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -622,22 +714,94 @@ exports.createMultipleLabOrders = async (req, res) => {
       return res.status(400).json({ error: 'Consultation fee must be paid before ordering lab tests' });
     }
 
-    // Get the correct service IDs for each investigation type
+    // Check for existing lab orders to prevent duplicates
+    const existingLabOrders = await prisma.labOrder.findMany({
+      where: {
+        visitId: visitId,
+        status: {
+          in: ['UNPAID', 'PAID', 'QUEUED', 'IN_PROGRESS', 'COMPLETED']
+        }
+      },
+      include: {
+        type: true
+      }
+    });
+
+    const existingBatchOrders = await prisma.batchOrder.findMany({
+      where: {
+        visitId: visitId,
+        type: 'LAB',
+        status: {
+          in: ['UNPAID', 'PAID', 'QUEUED', 'IN_PROGRESS', 'COMPLETED']
+        }
+      },
+      include: {
+        services: {
+          include: {
+            investigationType: true
+          }
+        }
+      }
+    });
+
+    // Get all already ordered lab test types
+    const alreadyOrderedTypes = new Set();
+    
+    // Add from individual lab orders
+    existingLabOrders.forEach(order => {
+      alreadyOrderedTypes.add(order.typeId);
+    });
+    
+    // Add from batch orders
+    existingBatchOrders.forEach(batchOrder => {
+      batchOrder.services.forEach(service => {
+        if (service.investigationType && service.investigationType.category === 'LAB') {
+          alreadyOrderedTypes.add(service.investigationType.id);
+        }
+      });
+    });
+
+    // Check for duplicates in the new orders
+    const duplicateTypes = orders.filter(order => alreadyOrderedTypes.has(order.typeId));
+    const newOrders = orders.filter(order => !alreadyOrderedTypes.has(order.typeId));
+
+    if (duplicateTypes.length > 0) {
+      const duplicateTypeNames = await prisma.investigationType.findMany({
+        where: { id: { in: duplicateTypes.map(o => o.typeId) } },
+        select: { id: true, name: true }
+      });
+      
+      return res.status(400).json({ 
+        error: 'Some lab tests have already been ordered',
+        duplicates: duplicateTypeNames.map(t => t.name),
+        message: `The following lab tests are already ordered: ${duplicateTypeNames.map(t => t.name).join(', ')}. Please remove them and try again.`,
+        alreadyOrdered: duplicateTypeNames.map(t => ({ id: t.id, name: t.name }))
+      });
+    }
+
+    if (newOrders.length === 0) {
+      return res.status(400).json({ 
+        error: 'All selected lab tests have already been ordered',
+        message: 'All the lab tests you selected have already been ordered for this patient.'
+      });
+    }
+
+    // Get the correct service IDs for each investigation type (only new orders)
     const investigationTypes = await prisma.investigationType.findMany({
       where: { 
-        id: { in: orders.map(o => o.typeId) },
+        id: { in: newOrders.map(o => o.typeId) },
         category: 'LAB'
       },
       select: { id: true, serviceId: true }
     });
 
-    // Convert individual orders to batch order format
+    // Convert individual orders to batch order format (only new orders)
     const batchOrderData = {
       visitId,
       patientId,
       type: 'LAB',
       instructions: 'Lab tests ordered by doctor',
-      services: orders.map(order => {
+      services: newOrders.map(order => {
         const investigation = investigationTypes.find(i => i.id === order.typeId);
         return {
           serviceId: investigation?.serviceId || '2d25da56-c20f-4a51-b207-755073afd6d0',
@@ -983,22 +1147,94 @@ exports.createMultipleRadiologyOrders = async (req, res) => {
       return res.status(400).json({ error: 'Consultation fee must be paid before ordering radiology tests' });
     }
 
-    // Get the correct service IDs for each investigation type
+    // Check for existing radiology orders to prevent duplicates
+    const existingRadiologyOrders = await prisma.radiologyOrder.findMany({
+      where: {
+        visitId: visitId,
+        status: {
+          in: ['UNPAID', 'PAID', 'QUEUED', 'IN_PROGRESS', 'COMPLETED']
+        }
+      },
+      include: {
+        type: true
+      }
+    });
+
+    const existingBatchOrders = await prisma.batchOrder.findMany({
+      where: {
+        visitId: visitId,
+        type: 'RADIOLOGY',
+        status: {
+          in: ['UNPAID', 'PAID', 'QUEUED', 'IN_PROGRESS', 'COMPLETED']
+        }
+      },
+      include: {
+        services: {
+          include: {
+            investigationType: true
+          }
+        }
+      }
+    });
+
+    // Get all already ordered radiology test types
+    const alreadyOrderedTypes = new Set();
+    
+    // Add from individual radiology orders
+    existingRadiologyOrders.forEach(order => {
+      alreadyOrderedTypes.add(order.typeId);
+    });
+    
+    // Add from batch orders
+    existingBatchOrders.forEach(batchOrder => {
+      batchOrder.services.forEach(service => {
+        if (service.investigationType && service.investigationType.category === 'RADIOLOGY') {
+          alreadyOrderedTypes.add(service.investigationType.id);
+        }
+      });
+    });
+
+    // Check for duplicates in the new orders
+    const duplicateTypes = orders.filter(order => alreadyOrderedTypes.has(order.typeId));
+    const newOrders = orders.filter(order => !alreadyOrderedTypes.has(order.typeId));
+
+    if (duplicateTypes.length > 0) {
+      const duplicateTypeNames = await prisma.investigationType.findMany({
+        where: { id: { in: duplicateTypes.map(o => o.typeId) } },
+        select: { id: true, name: true }
+      });
+      
+      return res.status(400).json({ 
+        error: 'Some radiology tests have already been ordered',
+        duplicates: duplicateTypeNames.map(t => t.name),
+        message: `The following radiology tests are already ordered: ${duplicateTypeNames.map(t => t.name).join(', ')}. Please remove them and try again.`,
+        alreadyOrdered: duplicateTypeNames.map(t => ({ id: t.id, name: t.name }))
+      });
+    }
+
+    if (newOrders.length === 0) {
+      return res.status(400).json({ 
+        error: 'All selected radiology tests have already been ordered',
+        message: 'All the radiology tests you selected have already been ordered for this patient.'
+      });
+    }
+
+    // Get the correct service IDs for each investigation type (only new orders)
     const investigationTypes = await prisma.investigationType.findMany({
       where: { 
-        id: { in: orders.map(o => o.typeId) },
+        id: { in: newOrders.map(o => o.typeId) },
         category: 'RADIOLOGY'
       },
       select: { id: true, serviceId: true }
     });
 
-    // Convert individual orders to batch order format
+    // Convert individual orders to batch order format (only new orders)
     const batchOrderData = {
       visitId,
       patientId,
       type: 'RADIOLOGY',
       instructions: 'Radiology tests ordered by doctor',
-      services: orders.map(order => {
+      services: newOrders.map(order => {
         const investigation = investigationTypes.find(i => i.id === order.typeId);
         return {
           serviceId: investigation?.serviceId || 'd849879f-4522-4523-8d67-53fa558c99ef', // Chest X-Ray service
@@ -1347,17 +1583,15 @@ exports.getPatientHistory = async (req, res) => {
             }
           }
         },
-        appointments: {
+        batchOrders: {
           include: {
-            doctor: {
-              select: {
-                id: true,
-                fullname: true,
-                specialties: true
+            services: {
+              include: {
+                investigationType: true
               }
             }
           },
-          orderBy: { date: 'desc' }
+          orderBy: { createdAt: 'desc' }
         }
       },
       orderBy: { createdAt: 'desc' }
@@ -1369,9 +1603,54 @@ exports.getPatientHistory = async (req, res) => {
       orderBy: { createdAt: 'desc' }
     });
 
+    // Add radiology and lab results to each visit
+    const visitsWithResults = await Promise.all(visits.map(async (visit) => {
+      // Get radiology results for batch orders
+      const radiologyResults = await prisma.radiologyResult.findMany({
+        where: {
+          batchOrderId: {
+            in: visit.batchOrders
+              .filter(bo => bo.type === 'RADIOLOGY')
+              .map(bo => bo.id)
+          }
+        },
+        include: {
+          testType: true,
+          attachments: true
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+
+      // Get lab results from batch order services (since lab results are stored in batch order services)
+      const labResults = [];
+      for (const batchOrder of visit.batchOrders) {
+        if (batchOrder.type === 'LAB') {
+          for (const service of batchOrder.services) {
+            if (service.investigationType && service.result) {
+              labResults.push({
+                id: `batch-${batchOrder.id}-${service.id}`,
+                testType: service.investigationType,
+                resultText: service.result,
+                additionalNotes: service.additionalNotes || '',
+                status: service.status,
+                attachments: [], // Lab results from batch orders don't have separate attachments
+                createdAt: batchOrder.updatedAt || batchOrder.createdAt
+              });
+            }
+          }
+        }
+      }
+
+      return {
+        ...visit,
+        radiologyResults,
+        labResults
+      };
+    }));
+
     res.json({
       patient,
-      visits,
+      visits: visitsWithResults,
       medicalHistory
     });
   } catch (error) {
@@ -1409,8 +1688,8 @@ exports.completeVisit = async (req, res) => {
       return res.status(404).json({ error: 'Visit not found' });
     }
 
-    if (visit.status !== 'UNDER_DOCTOR_REVIEW') {
-      return res.status(400).json({ error: 'Visit must be under doctor review to complete' });
+    if (!['UNDER_DOCTOR_REVIEW', 'SENT_TO_PHARMACY'].includes(visit.status)) {
+      return res.status(400).json({ error: 'Visit must be under doctor review or sent to pharmacy to complete' });
     }
 
     // Create medical history snapshot
@@ -1551,5 +1830,574 @@ exports.completeVisit = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+};
+
+// Get patient vitals data for doctor
+exports.getPatientVitals = async (req, res) => {
+  try {
+    const { visitId } = req.params;
+    const doctorId = req.user.id;
+
+    // Check if doctor is assigned to this visit
+    const visit = await prisma.visit.findUnique({
+      where: { id: parseInt(visitId) },
+      include: {
+        patient: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            mobile: true,
+            email: true,
+            dob: true,
+            gender: true,
+            bloodType: true
+          }
+        }
+      }
+    });
+
+    if (!visit) {
+      return res.status(404).json({ error: 'Visit not found' });
+    }
+
+    // Check if doctor is assigned to this patient
+    const assignment = await prisma.assignment.findFirst({
+      where: {
+        patientId: visit.patientId,
+        doctorId: doctorId,
+        status: {
+          in: ['Active', 'Pending']
+        }
+      }
+    });
+
+    // For now, allow any doctor to access vitals (for testing purposes)
+    // TODO: Re-enable assignment check in production
+    // if (!assignment) {
+    //   return res.status(403).json({ error: 'You are not assigned to this patient' });
+    // }
+
+    // Get the most recent vitals for this visit
+    const vitals = await prisma.vitalSign.findFirst({
+      where: {
+        visitId: parseInt(visitId)
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    if (!vitals) {
+      return res.status(404).json({ error: 'No vitals recorded for this visit' });
+    }
+
+    res.json({
+      vitals: {
+        // Basic Vitals
+        bloodPressure: vitals.bloodPressure,
+        temperature: vitals.temperature,
+        heartRate: vitals.heartRate,
+        height: vitals.height,
+        weight: vitals.weight,
+        bmi: vitals.bmi,
+        oxygenSaturation: vitals.oxygenSaturation,
+        condition: vitals.condition,
+        notes: vitals.notes,
+        
+        // Chief Complaint & History
+        chiefComplaint: vitals.chiefComplaint,
+        historyOfPresentIllness: vitals.historyOfPresentIllness,
+        onsetOfSymptoms: vitals.onsetOfSymptoms,
+        durationOfSymptoms: vitals.durationOfSymptoms,
+        severityOfSymptoms: vitals.severityOfSymptoms,
+        associatedSymptoms: vitals.associatedSymptoms,
+        relievingFactors: vitals.relievingFactors,
+        aggravatingFactors: vitals.aggravatingFactors,
+        
+        // Physical Examination
+        generalAppearance: vitals.generalAppearance,
+        headAndNeck: vitals.headAndNeck,
+        cardiovascularExam: vitals.cardiovascularExam,
+        respiratoryExam: vitals.respiratoryExam,
+        abdominalExam: vitals.abdominalExam,
+        extremities: vitals.extremities,
+        neurologicalExam: vitals.neurologicalExam,
+        
+        createdAt: vitals.createdAt
+      },
+      patient: visit.patient
+    });
+  } catch (error) {
+    console.error('Error fetching patient vitals:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Get current order status for a visit (to show which tests are already ordered)
+exports.getVisitOrderStatus = async (req, res) => {
+  try {
+    const { visitId } = req.params;
+    const doctorId = req.user.id;
+
+    // Check if visit exists
+    const visit = await prisma.visit.findUnique({
+      where: { id: parseInt(visitId) }
+    });
+
+    if (!visit) {
+      return res.status(404).json({ error: 'Visit not found' });
+    }
+
+    // Get existing lab orders
+    const existingLabOrders = await prisma.labOrder.findMany({
+      where: {
+        visitId: parseInt(visitId),
+        status: {
+          in: ['UNPAID', 'PAID', 'QUEUED', 'IN_PROGRESS', 'COMPLETED']
+        }
+      },
+      include: {
+        type: true
+      }
+    });
+
+    // Get existing radiology orders
+    const existingRadiologyOrders = await prisma.radiologyOrder.findMany({
+      where: {
+        visitId: parseInt(visitId),
+        status: {
+          in: ['UNPAID', 'PAID', 'QUEUED', 'IN_PROGRESS', 'COMPLETED']
+        }
+      },
+      include: {
+        type: true
+      }
+    });
+
+    // Get existing batch orders
+    const existingBatchOrders = await prisma.batchOrder.findMany({
+      where: {
+        visitId: parseInt(visitId),
+        status: {
+          in: ['UNPAID', 'PAID', 'QUEUED', 'IN_PROGRESS', 'COMPLETED']
+        }
+      },
+      include: {
+        services: {
+          include: {
+            investigationType: true
+          }
+        }
+      }
+    });
+
+    // Extract ordered test types
+    const orderedLabTypes = new Set();
+    const orderedRadiologyTypes = new Set();
+
+    // Add from individual lab orders
+    existingLabOrders.forEach(order => {
+      orderedLabTypes.add(order.typeId);
+    });
+
+    // Add from individual radiology orders
+    existingRadiologyOrders.forEach(order => {
+      orderedRadiologyTypes.add(order.typeId);
+    });
+
+    // Add from batch orders
+    existingBatchOrders.forEach(batchOrder => {
+      batchOrder.services.forEach(service => {
+        if (service.investigationType) {
+          if (service.investigationType.category === 'LAB') {
+            orderedLabTypes.add(service.investigationType.id);
+          } else if (service.investigationType.category === 'RADIOLOGY') {
+            orderedRadiologyTypes.add(service.investigationType.id);
+          }
+        }
+      });
+    });
+
+    res.json({
+      visitId: parseInt(visitId),
+      orderedLabTypes: Array.from(orderedLabTypes),
+      orderedRadiologyTypes: Array.from(orderedRadiologyTypes),
+      labOrders: existingLabOrders.map(order => ({
+        id: order.id,
+        typeId: order.typeId,
+        typeName: order.type.name,
+        status: order.status,
+        instructions: order.instructions,
+        createdAt: order.createdAt
+      })),
+      radiologyOrders: existingRadiologyOrders.map(order => ({
+        id: order.id,
+        typeId: order.typeId,
+        typeName: order.type.name,
+        status: order.status,
+        instructions: order.instructions,
+        createdAt: order.createdAt
+      })),
+      batchOrders: existingBatchOrders.map(batchOrder => ({
+        id: batchOrder.id,
+        type: batchOrder.type,
+        status: batchOrder.status,
+        services: batchOrder.services.map(service => ({
+          id: service.id,
+          investigationTypeId: service.investigationType?.id,
+          investigationTypeName: service.investigationType?.name,
+          category: service.investigationType?.category
+        }))
+      }))
+    });
+  } catch (error) {
+    console.error('Error fetching visit order status:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Batch prescription submission
+exports.createBatchPrescription = async (req, res) => {
+  try {
+    console.log('🔍 createBatchPrescription - Request body:', req.body);
+    const { visitId, patientId, medications } = req.body;
+    const doctorId = req.user.id;
+    console.log('🔍 createBatchPrescription - Extracted:', { visitId, patientId, medications, doctorId });
+
+    // Validate required fields
+    if (!visitId || !patientId || !medications || !Array.isArray(medications) || medications.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: visitId, patientId, and medications array'
+      });
+    }
+
+    // Validate each medication
+    const medicationSchema = z.object({
+      medicationCatalogId: z.string().nullable().optional(),
+      name: z.string().min(1, 'Medication name is required'),
+      genericName: z.string().nullable().optional(),
+      dosageForm: z.string().min(1, 'Dosage form is required'),
+      strength: z.string().min(1, 'Strength is required'),
+      quantity: z.number().min(1, 'Quantity must be at least 1'),
+      frequency: z.string().nullable().optional(),
+      duration: z.string().nullable().optional(),
+      instructions: z.string().nullable().optional(),
+      additionalNotes: z.string().nullable().optional(),
+      category: z.string().nullable().optional(),
+      type: z.string().default('Prescription'),
+      unitPrice: z.number().nullable().optional()
+    });
+
+    // Validate all medications
+    for (const medication of medications) {
+      try {
+        medicationSchema.parse(medication);
+      } catch (validationError) {
+        console.log('🔍 Validation error:', validationError);
+        return res.status(400).json({
+          success: false,
+          error: `Invalid medication data: ${validationError.errors?.[0]?.message || validationError.message}`,
+          details: validationError.errors || [validationError.message]
+        });
+      }
+    }
+
+    // Check if visit exists and doctor is assigned
+    console.log('🔍 createBatchPrescription - Looking up visit:', parseInt(visitId));
+    const visit = await prisma.visit.findUnique({
+      where: { id: parseInt(visitId) },
+      include: {
+        patient: true
+      }
+    });
+    console.log('🔍 createBatchPrescription - Visit found:', !!visit);
+
+    if (!visit) {
+      return res.status(404).json({
+        success: false,
+        error: 'Visit not found'
+      });
+    }
+
+    // Check if doctor is assigned to this patient
+    const assignment = await prisma.assignment.findFirst({
+      where: {
+        patientId: visit.patientId,
+        doctorId: doctorId,
+        status: { in: ['Active', 'Pending'] }
+      }
+    });
+    console.log('🔍 createBatchPrescription - Assignment found:', !!assignment);
+
+    if (!assignment) {
+      return res.status(403).json({
+        success: false,
+        error: 'You are not assigned to this patient'
+      });
+    }
+
+    // Validate medication catalog IDs if provided
+    const catalogIds = medications
+      .map(m => m.medicationCatalogId)
+      .filter(Boolean);
+
+    if (catalogIds.length > 0) {
+      const existingMedications = await prisma.medicationCatalog.findMany({
+        where: { id: { in: catalogIds } },
+        select: { id: true, name: true, availableQuantity: true }
+      });
+
+      const existingIds = existingMedications.map(m => m.id);
+      const missingIds = catalogIds.filter(id => !existingIds.includes(id));
+
+      if (missingIds.length > 0) {
+        return res.status(400).json({
+          success: false,
+          error: `Medications not found in catalog: ${missingIds.join(', ')}`
+        });
+      }
+
+      // Check stock availability
+      const lowStockMedications = existingMedications.filter(med => {
+        const requestedMed = medications.find(m => m.medicationCatalogId === med.id);
+        return requestedMed && med.availableQuantity < requestedMed.quantity;
+      });
+
+      if (lowStockMedications.length > 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Insufficient stock for some medications',
+          lowStock: lowStockMedications.map(med => {
+            const requestedMed = medications.find(m => m.medicationCatalogId === med.id);
+            return {
+              id: med.id,
+              name: med.name,
+              available: med.availableQuantity,
+              requested: requestedMed ? requestedMed.quantity : 0
+            };
+          })
+        });
+      }
+    }
+
+    // Create medication orders
+    console.log('🔍 createBatchPrescription - Creating medication orders...');
+    const medicationData = medications.map(medication => ({
+      visitId: parseInt(visitId),
+      patientId,
+      doctorId,
+      medicationCatalogId: medication.medicationCatalogId || null,
+      name: medication.name,
+      genericName: medication.genericName || null,
+      dosageForm: medication.dosageForm,
+      strength: medication.strength,
+      quantity: medication.quantity,
+      frequency: medication.frequency || null,
+      duration: medication.duration || null,
+      instructions: medication.instructions || null,
+      additionalNotes: medication.additionalNotes || null,
+      category: medication.category || null,
+      type: medication.type || 'Prescription',
+      unitPrice: medication.unitPrice || null,
+      status: 'UNPAID'
+    }));
+    console.log('🔍 createBatchPrescription - Medication data:', medicationData);
+    
+    const createdOrders = await prisma.medicationOrder.createMany({
+      data: medicationData
+    });
+    console.log('🔍 createBatchPrescription - Created orders:', createdOrders);
+
+    // Create pharmacy invoice for the medications
+    const totalAmount = medications.reduce((total, med) => {
+      return total + ((med.unitPrice || 0) * med.quantity);
+    }, 0);
+
+    const pharmacyInvoice = await prisma.pharmacyInvoice.create({
+      data: {
+        patientId,
+        visitId: parseInt(visitId),
+        totalAmount,
+        status: 'PENDING',
+        notes: 'Doctor prescribed medications',
+        type: 'DOCTOR_PRESCRIPTION'
+      }
+    });
+
+    // Create pharmacy invoice items for each medication
+    const invoiceItems = await prisma.pharmacyInvoiceItem.createMany({
+      data: medications.map(medication => ({
+        pharmacyInvoiceId: pharmacyInvoice.id,
+        medicationOrderId: null, // Will be updated after we get the order IDs
+        name: medication.name,
+        dosageForm: medication.dosageForm,
+        strength: medication.strength,
+        quantity: medication.quantity,
+        unitPrice: medication.unitPrice || 0,
+        totalPrice: (medication.unitPrice || 0) * medication.quantity
+      }))
+    });
+
+    // Update the invoice items with the correct medication order IDs
+    const createdOrderIds = await prisma.medicationOrder.findMany({
+      where: { 
+        visitId: parseInt(visitId),
+        patientId,
+        doctorId
+      },
+      select: { id: true, name: true },
+      orderBy: { createdAt: 'desc' },
+      take: medications.length
+    });
+
+    // Update invoice items with medication order IDs
+    for (let i = 0; i < createdOrderIds.length; i++) {
+      await prisma.pharmacyInvoiceItem.updateMany({
+        where: {
+          pharmacyInvoiceId: pharmacyInvoice.id,
+          name: createdOrderIds[i].name
+        },
+        data: {
+          medicationOrderId: createdOrderIds[i].id
+        }
+      });
+    }
+
+    // Update visit status to include pharmacy
+    await prisma.visit.update({
+      where: { id: parseInt(visitId) },
+      data: { 
+        status: 'SENT_TO_PHARMACY',
+        updatedAt: new Date()
+      }
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Prescription submitted successfully',
+      ordersCreated: createdOrders.count,
+      pharmacyInvoiceId: pharmacyInvoice.id,
+      totalAmount,
+      visitId: parseInt(visitId),
+      patientId,
+      medications: medications.map(med => ({
+        name: med.name,
+        dosageForm: med.dosageForm,
+        strength: med.strength,
+        quantity: med.quantity
+      }))
+    });
+
+  } catch (error) {
+    console.error('Error creating batch prescription:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to create prescription',
+      details: error.message
+    });
+  }
+};
+
+// Get prescription history for a visit
+exports.getPrescriptionHistory = async (req, res) => {
+  try {
+    const { visitId } = req.params;
+    const doctorId = req.user.id;
+
+    // Check if doctor is assigned to this visit
+    const visit = await prisma.visit.findUnique({
+      where: { id: parseInt(visitId) },
+      include: {
+        assignments: {
+          where: {
+            doctorId: doctorId,
+            status: { in: ['Active', 'Pending'] }
+          }
+        }
+      }
+    });
+
+    if (!visit) {
+      return res.status(404).json({
+        success: false,
+        error: 'Visit not found'
+      });
+    }
+
+    if (visit.assignments.length === 0) {
+      return res.status(403).json({
+        success: false,
+        error: 'You are not assigned to this patient'
+      });
+    }
+
+    // Get all medication orders for this visit
+    const prescriptions = await prisma.medicationOrder.findMany({
+      where: { visitId: parseInt(visitId) },
+      include: {
+        medicationCatalog: {
+          select: {
+            id: true,
+            name: true,
+            genericName: true,
+            unitPrice: true,
+            availableQuantity: true
+          }
+        },
+        dispensedMedicines: {
+          include: {
+            pharmacyInvoice: {
+              select: {
+                id: true,
+                invoiceNumber: true,
+                status: true,
+                dispensedAt: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    res.json({
+      success: true,
+      prescriptions: prescriptions.map(prescription => ({
+        id: prescription.id,
+        name: prescription.name,
+        genericName: prescription.genericName,
+        dosageForm: prescription.dosageForm,
+        strength: prescription.strength,
+        quantity: prescription.quantity,
+        frequency: prescription.frequency,
+        duration: prescription.duration,
+        instructions: prescription.instructions,
+        additionalNotes: prescription.additionalNotes,
+        category: prescription.category,
+        type: prescription.type,
+        unitPrice: prescription.unitPrice,
+        status: prescription.status,
+        createdAt: prescription.createdAt,
+        catalogInfo: prescription.medicationCatalog,
+        dispensedInfo: prescription.dispensedMedicines.map(dispensed => ({
+          id: dispensed.id,
+          quantity: dispensed.quantity,
+          status: dispensed.status,
+          dispensedAt: dispensed.dispensedAt,
+          pharmacyInvoice: dispensed.pharmacyInvoice
+        }))
+      }))
+    });
+
+  } catch (error) {
+    console.error('Error fetching prescription history:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch prescription history',
+      details: error.message
+    });
   }
 };

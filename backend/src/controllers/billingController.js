@@ -46,6 +46,57 @@ exports.registerPatient = async (req, res) => {
   try {
     const { name, type, dob, gender, mobile, email, address, emergencyContact, bloodType, maritalStatus, insuranceId } = req.body;
     
+    // Check for duplicate patient before creating new one
+    if (mobile) {
+      const existingPatient = await prisma.patient.findFirst({
+        where: {
+          mobile: mobile,
+          status: 'Active'
+        }
+      });
+
+      if (existingPatient) {
+        return res.status(409).json({ 
+          error: 'Patient with this mobile number already exists',
+          existingPatient: {
+            id: existingPatient.id,
+            name: existingPatient.name,
+            mobile: existingPatient.mobile,
+            type: existingPatient.type
+          },
+          suggestion: 'Use the search function to find existing patient and create a new visit'
+        });
+      }
+    }
+
+    // Also check by name and DOB for additional duplicate prevention
+    if (name && dob) {
+      const existingByNameAndDob = await prisma.patient.findFirst({
+        where: {
+          name: {
+            equals: name,
+            mode: 'insensitive'
+          },
+          dob: new Date(dob),
+          status: 'Active'
+        }
+      });
+
+      if (existingByNameAndDob) {
+        return res.status(409).json({ 
+          error: 'Patient with this name and date of birth already exists',
+          existingPatient: {
+            id: existingByNameAndDob.id,
+            name: existingByNameAndDob.name,
+            mobile: existingByNameAndDob.mobile,
+            type: existingByNameAndDob.type,
+            dob: existingByNameAndDob.dob
+          },
+          suggestion: 'Use the search function to find existing patient and create a new visit'
+        });
+      }
+    }
+    
     const year = new Date().getFullYear();
     let id;
     
@@ -146,6 +197,314 @@ exports.registerPatient = async (req, res) => {
       billing
     });
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Create a new visit for an existing patient
+exports.createVisitForExistingPatient = async (req, res) => {
+  try {
+    const { patientId, type, notes } = req.body;
+    
+    if (!patientId) {
+      return res.status(400).json({ error: 'Patient ID is required' });
+    }
+
+    // Check if patient exists
+    const patient = await prisma.patient.findUnique({
+      where: { id: patientId },
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        mobile: true,
+        email: true,
+        insuranceId: true,
+        status: true
+      }
+    });
+
+    if (!patient) {
+      return res.status(404).json({ error: 'Patient not found' });
+    }
+
+    if (patient.status !== 'Active') {
+      return res.status(400).json({ error: 'Patient is not active' });
+    }
+
+    // Check if patient already has an active visit
+    const activeVisit = await prisma.visit.findFirst({
+      where: {
+        patientId: patientId,
+        status: {
+          in: [
+            'WAITING_FOR_TRIAGE',
+            'TRIAGED', 
+            'WAITING_FOR_DOCTOR',
+            'IN_DOCTOR_QUEUE',
+            'UNDER_DOCTOR_REVIEW',
+            'SENT_TO_LAB',
+            'SENT_TO_RADIOLOGY', 
+            'SENT_TO_BOTH',
+            'RETURNED_WITH_RESULTS',
+            'AWAITING_LAB_RESULTS',
+            'AWAITING_RADIOLOGY_RESULTS',
+            'AWAITING_RESULTS_REVIEW'
+          ]
+        }
+      },
+      include: {
+        bills: {
+          where: {
+            status: {
+              in: ['PENDING', 'PAID']
+            }
+          }
+        }
+      }
+    });
+
+    if (activeVisit) {
+      return res.status(409).json({ 
+        error: 'Patient already has an active visit',
+        existingVisit: {
+          id: activeVisit.id,
+          visitUid: activeVisit.visitUid,
+          status: activeVisit.status,
+          createdAt: activeVisit.createdAt,
+          hasPendingBilling: activeVisit.bills.some(bill => bill.status === 'PENDING')
+        },
+        suggestion: 'Complete the current visit before creating a new one'
+      });
+    }
+
+    // Check if patient has any pending entry fee billing (for extra safety)
+    const pendingEntryFee = await prisma.billing.findFirst({
+      where: {
+        patientId: patientId,
+        status: 'PENDING',
+        services: {
+          some: {
+            service: {
+              code: 'ENTRY001'
+            }
+          }
+        }
+      },
+      include: {
+        visit: {
+          select: {
+            id: true,
+            visitUid: true,
+            status: true
+          }
+        }
+      }
+    });
+
+    if (pendingEntryFee) {
+      return res.status(409).json({ 
+        error: 'Patient has pending entry fee billing',
+        existingBilling: {
+          id: pendingEntryFee.id,
+          totalAmount: pendingEntryFee.totalAmount,
+          status: pendingEntryFee.status,
+          visitId: pendingEntryFee.visitId,
+          visitUid: pendingEntryFee.visit.visitUid,
+          visitStatus: pendingEntryFee.visit.status
+        },
+        suggestion: 'Please complete the pending payment before creating a new visit'
+      });
+    }
+
+    // Create a new visit record
+    const visitUid = `VISIT-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${String(Date.now()).slice(-4)}`;
+    const visit = await prisma.visit.create({
+      data: {
+        visitUid: visitUid,
+        patientId: patient.id,
+        status: 'WAITING_FOR_TRIAGE',
+        notes: notes || `Returning patient visit - ${type || 'regular'}`
+      }
+    });
+
+    // Create entry fee billing for non-emergency patients
+    let billing = null;
+    if (type !== 'EMERGENCY') {
+      try {
+        // Find entry fee service
+        const entryService = await prisma.service.findFirst({
+          where: {
+            code: 'ENTRY001',
+            category: 'OTHER'
+          }
+        });
+
+        if (entryService) {
+          billing = await prisma.billing.create({
+            data: {
+              patientId: patient.id,
+              visitId: visit.id,
+              insuranceId: patient.insuranceId,
+              totalAmount: entryService.price,
+              status: 'PENDING',
+              notes: `Returning patient entry fee - ${type || 'regular'}`
+            }
+          });
+
+          await prisma.billingService.create({
+            data: {
+              billingId: billing.id,
+              serviceId: entryService.id,
+              quantity: 1,
+              unitPrice: entryService.price,
+              totalPrice: entryService.price
+            }
+          });
+        }
+      } catch (error) {
+        console.error('Error creating billing for returning patient:', error);
+      }
+    }
+
+    res.json({
+      message: 'Visit created successfully for existing patient',
+      patient,
+      visit,
+      billing
+    });
+  } catch (error) {
+    console.error('Error creating visit for existing patient:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Check if patient can create a new visit
+exports.checkPatientVisitStatus = async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    
+    if (!patientId) {
+      return res.status(400).json({ error: 'Patient ID is required' });
+    }
+
+    // Check if patient exists
+    const patient = await prisma.patient.findUnique({
+      where: { id: patientId },
+      select: {
+        id: true,
+        name: true,
+        status: true
+      }
+    });
+
+    if (!patient) {
+      return res.status(404).json({ error: 'Patient not found' });
+    }
+
+    if (patient.status !== 'Active') {
+      return res.status(400).json({ 
+        error: 'Patient is not active',
+        canCreateVisit: false,
+        reason: 'Patient status is not active'
+      });
+    }
+
+    // Check for active visits
+    const activeVisit = await prisma.visit.findFirst({
+      where: {
+        patientId: patientId,
+        status: {
+          in: [
+            'WAITING_FOR_TRIAGE',
+            'TRIAGED', 
+            'WAITING_FOR_DOCTOR',
+            'IN_DOCTOR_QUEUE',
+            'UNDER_DOCTOR_REVIEW',
+            'SENT_TO_LAB',
+            'SENT_TO_RADIOLOGY', 
+            'SENT_TO_BOTH',
+            'RETURNED_WITH_RESULTS',
+            'AWAITING_LAB_RESULTS',
+            'AWAITING_RADIOLOGY_RESULTS',
+            'AWAITING_RESULTS_REVIEW'
+          ]
+        }
+      },
+      include: {
+        bills: {
+          where: {
+            status: 'PENDING'
+          }
+        }
+      }
+    });
+
+    if (activeVisit) {
+      return res.json({
+        canCreateVisit: false,
+        reason: 'Patient has an active visit',
+        activeVisit: {
+          id: activeVisit.id,
+          visitUid: activeVisit.visitUid,
+          status: activeVisit.status,
+          createdAt: activeVisit.createdAt,
+          hasPendingBilling: activeVisit.bills.length > 0
+        }
+      });
+    }
+
+    // Check for pending entry fee billing
+    const pendingEntryFee = await prisma.billing.findFirst({
+      where: {
+        patientId: patientId,
+        status: 'PENDING',
+        services: {
+          some: {
+            service: {
+              code: 'ENTRY001'
+            }
+          }
+        }
+      },
+      include: {
+        visit: {
+          select: {
+            id: true,
+            visitUid: true,
+            status: true
+          }
+        }
+      }
+    });
+
+    if (pendingEntryFee) {
+      return res.json({
+        canCreateVisit: false,
+        reason: 'Patient has pending entry fee billing',
+        pendingBilling: {
+          id: pendingEntryFee.id,
+          totalAmount: pendingEntryFee.totalAmount,
+          visitId: pendingEntryFee.visitId,
+          visitUid: pendingEntryFee.visit.visitUid,
+          visitStatus: pendingEntryFee.visit.status
+        }
+      });
+    }
+
+    // Patient can create a new visit
+    res.json({
+      canCreateVisit: true,
+      reason: 'No active visits or pending billings found',
+      patient: {
+        id: patient.id,
+        name: patient.name,
+        status: patient.status
+      }
+    });
+
+  } catch (error) {
+    console.error('Error checking patient visit status:', error);
     res.status(500).json({ error: error.message });
   }
 };

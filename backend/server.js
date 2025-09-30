@@ -21,8 +21,10 @@ const radiologiesRoutes = require('./src/routes/radiologies');
 const pharmaciesRoutes = require('./src/routes/pharmacies');
 const batchOrdersRoutes = require('./src/routes/batchOrders');
 const pharmacyBillingRoutes = require('./src/routes/pharmacyBilling');
+const medicationRoutes = require('./src/routes/medications');
 const adminRoutes = require('./src/routes/admin');
 const schedulesRoutes = require('./src/routes/schedules');
+const walkInSalesRoutes = require('./src/routes/walkInSales');
 
 // Middleware
 const authMiddleware = require('./src/middleware/auth');
@@ -60,8 +62,10 @@ app.use('/api/radiologies', authMiddleware, roleGuard(['RADIOLOGIST', 'RADIOLOGY
 app.use('/api/pharmacies', authMiddleware, roleGuard(['PHARMACY_OFFICER', 'PHARMACIST', 'PHARMACY_BILLING_OFFICER', 'ADMIN']), pharmaciesRoutes);
 app.use('/api/batch-orders', batchOrdersRoutes);
 app.use('/api/pharmacy-billing', authMiddleware, roleGuard(['PHARMACY_BILLING_OFFICER', 'PHARMACIST', 'ADMIN']), pharmacyBillingRoutes);
+app.use('/api/medications', authMiddleware, medicationRoutes);
 app.use('/api/admin', authMiddleware, roleGuard(['ADMIN']), adminRoutes);
 app.use('/api/schedules', authMiddleware, schedulesRoutes);
+app.use('/api/walk-in-sales', authMiddleware, roleGuard(['PHARMACIST', 'PHARMACY_BILLING_OFFICER', 'ADMIN']), walkInSalesRoutes);
 
 // Cron for inactivity (run daily)
 cron.schedule('0 0 * * *', async () => {

@@ -12,6 +12,7 @@ const TriageQueue = () => {
   const [selectedDoctor, setSelectedDoctor] = useState('');
   const [specialtyFilter, setSpecialtyFilter] = useState('ALL');
   const [vitalsData, setVitalsData] = useState({
+    // Basic Vitals
     bloodPressure: '',
     temperature: '',
     heartRate: '',
@@ -19,7 +20,26 @@ const TriageQueue = () => {
     weight: '',
     oxygenSaturation: '',
     condition: '',
-    notes: ''
+    notes: '',
+    
+    // Chief Complaint & History (Optional)
+    chiefComplaint: '',
+    historyOfPresentIllness: '',
+    onsetOfSymptoms: '',
+    durationOfSymptoms: '',
+    severityOfSymptoms: '',
+    associatedSymptoms: '',
+    relievingFactors: '',
+    aggravatingFactors: '',
+    
+    // Physical Examination (Optional)
+    generalAppearance: '',
+    headAndNeck: '',
+    cardiovascularExam: '',
+    respiratoryExam: '',
+    abdominalExam: '',
+    extremities: '',
+    neurologicalExam: ''
   });
 
   const specialties = [
@@ -95,6 +115,7 @@ const TriageQueue = () => {
       setSelectedDoctor('');
       setSpecialtyFilter('ALL');
       setVitalsData({
+        // Basic Vitals
         bloodPressure: '',
         temperature: '',
         heartRate: '',
@@ -102,7 +123,26 @@ const TriageQueue = () => {
         weight: '',
         oxygenSaturation: '',
         condition: '',
-        notes: ''
+        notes: '',
+        
+        // Chief Complaint & History (Optional)
+        chiefComplaint: '',
+        historyOfPresentIllness: '',
+        onsetOfSymptoms: '',
+        durationOfSymptoms: '',
+        severityOfSymptoms: '',
+        associatedSymptoms: '',
+        relievingFactors: '',
+        aggravatingFactors: '',
+        
+        // Physical Examination (Optional)
+        generalAppearance: '',
+        headAndNeck: '',
+        cardiovascularExam: '',
+        respiratoryExam: '',
+        abdominalExam: '',
+        extremities: '',
+        neurologicalExam: ''
       });
       fetchPatients();
     } catch (error) {
@@ -229,55 +269,13 @@ const TriageQueue = () => {
               </h3>
               
               <form onSubmit={handleVitalsSubmit} className="space-y-6">
-                {/* Doctor Assignment Section */}
-                <div className="bg-blue-50 p-4 rounded-lg">
-                  <h4 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
-                    <UserPlus className="h-5 w-5 mr-2" />
-                    Assign Doctor
-                  </h4>
-                  
-                  <div className="space-y-4">
-                    <div>
-                      <label className="label">Filter by Specialty</label>
-                      <div className="flex flex-wrap gap-2">
-                        {specialties.map(spec => (
-                          <button
-                            key={spec.value}
-                            type="button"
-                            onClick={() => setSpecialtyFilter(spec.value)}
-                            className={`btn btn-sm ${specialtyFilter === spec.value ? 'btn-primary' : 'btn-outline'}`}
-                          >
-                            {spec.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="label">Select Doctor *</label>
-                      <select
-                        className="input"
-                        value={selectedDoctor}
-                        onChange={(e) => setSelectedDoctor(e.target.value)}
-                        required
-                      >
-                        <option value="">Select a Doctor</option>
-                        {filteredDoctors.map(doctor => (
-                          <option key={doctor.id} value={doctor.id}>
-                            {doctor.fullname} ({doctor.specialties?.join(', ') || 'N/A'}) - ETB {doctor.consultationFee || 'N/A'}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                </div>
-
                 {/* Vitals Section */}
                 <div>
                   <h4 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
                     <Stethoscope className="h-5 w-5 mr-2" />
                     Record Vitals
                   </h4>
+                </div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -382,6 +380,237 @@ const TriageQueue = () => {
                     </p>
                   </div>
                 )}
+
+                {/* Chief Complaint & History Section (Optional) */}
+                <div className="bg-yellow-50 p-4 rounded-lg">
+                  <h4 className="text-lg font-medium text-gray-900 mb-4">
+                    Chief Complaint & History (Optional)
+                  </h4>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <label className="label">Chief Complaint</label>
+                      <input
+                        type="text"
+                        className="input"
+                        placeholder="Primary reason for visit (e.g., chest pain, headache, fever)"
+                        value={vitalsData.chiefComplaint}
+                        onChange={(e) => setVitalsData({...vitalsData, chiefComplaint: e.target.value})}
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="label">History of Present Illness</label>
+                      <textarea
+                        className="input"
+                        rows="3"
+                        placeholder="Detailed description of current symptoms, when they started, how they've progressed"
+                        value={vitalsData.historyOfPresentIllness}
+                        onChange={(e) => setVitalsData({...vitalsData, historyOfPresentIllness: e.target.value})}
+                      />
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="label">Onset of Symptoms</label>
+                        <input
+                          type="text"
+                          className="input"
+                          placeholder="e.g., Sudden, Gradual, After trauma"
+                          value={vitalsData.onsetOfSymptoms}
+                          onChange={(e) => setVitalsData({...vitalsData, onsetOfSymptoms: e.target.value})}
+                        />
+                      </div>
+                      <div>
+                        <label className="label">Duration</label>
+                        <input
+                          type="text"
+                          className="input"
+                          placeholder="e.g., 2 hours, 3 days, 1 week"
+                          value={vitalsData.durationOfSymptoms}
+                          onChange={(e) => setVitalsData({...vitalsData, durationOfSymptoms: e.target.value})}
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="label">Severity (1-10 scale)</label>
+                        <input
+                          type="text"
+                          className="input"
+                          placeholder="e.g., 7/10, Moderate, Severe"
+                          value={vitalsData.severityOfSymptoms}
+                          onChange={(e) => setVitalsData({...vitalsData, severityOfSymptoms: e.target.value})}
+                        />
+                      </div>
+                      <div>
+                        <label className="label">Associated Symptoms</label>
+                        <input
+                          type="text"
+                          className="input"
+                          placeholder="e.g., nausea, dizziness, shortness of breath"
+                          value={vitalsData.associatedSymptoms}
+                          onChange={(e) => setVitalsData({...vitalsData, associatedSymptoms: e.target.value})}
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="label">Relieving Factors</label>
+                        <input
+                          type="text"
+                          className="input"
+                          placeholder="e.g., rest, medication, position"
+                          value={vitalsData.relievingFactors}
+                          onChange={(e) => setVitalsData({...vitalsData, relievingFactors: e.target.value})}
+                        />
+                      </div>
+                      <div>
+                        <label className="label">Aggravating Factors</label>
+                        <input
+                          type="text"
+                          className="input"
+                          placeholder="e.g., movement, stress, certain foods"
+                          value={vitalsData.aggravatingFactors}
+                          onChange={(e) => setVitalsData({...vitalsData, aggravatingFactors: e.target.value})}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Physical Examination Section (Optional) */}
+                <div className="bg-green-50 p-4 rounded-lg">
+                  <h4 className="text-lg font-medium text-gray-900 mb-4">
+                    Physical Examination (Optional)
+                  </h4>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <label className="label">General Appearance</label>
+                      <input
+                        type="text"
+                        className="input"
+                        placeholder="Overall appearance, distress level, alertness, cooperation"
+                        value={vitalsData.generalAppearance}
+                        onChange={(e) => setVitalsData({...vitalsData, generalAppearance: e.target.value})}
+                      />
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="label">Head & Neck</label>
+                        <textarea
+                          className="input"
+                          rows="2"
+                          placeholder="Eyes, ears, nose, throat, lymph nodes"
+                          value={vitalsData.headAndNeck}
+                          onChange={(e) => setVitalsData({...vitalsData, headAndNeck: e.target.value})}
+                        />
+                      </div>
+                      <div>
+                        <label className="label">Cardiovascular</label>
+                        <textarea
+                          className="input"
+                          rows="2"
+                          placeholder="Heart sounds, murmurs, pulses, JVD"
+                          value={vitalsData.cardiovascularExam}
+                          onChange={(e) => setVitalsData({...vitalsData, cardiovascularExam: e.target.value})}
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="label">Respiratory</label>
+                        <textarea
+                          className="input"
+                          rows="2"
+                          placeholder="Lung sounds, chest expansion, percussion"
+                          value={vitalsData.respiratoryExam}
+                          onChange={(e) => setVitalsData({...vitalsData, respiratoryExam: e.target.value})}
+                        />
+                      </div>
+                      <div>
+                        <label className="label">Abdomen</label>
+                        <textarea
+                          className="input"
+                          rows="2"
+                          placeholder="Inspection, palpation, percussion, auscultation"
+                          value={vitalsData.abdominalExam}
+                          onChange={(e) => setVitalsData({...vitalsData, abdominalExam: e.target.value})}
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="label">Extremities</label>
+                        <textarea
+                          className="input"
+                          rows="2"
+                          placeholder="Edema, pulses, range of motion, deformities"
+                          value={vitalsData.extremities}
+                          onChange={(e) => setVitalsData({...vitalsData, extremities: e.target.value})}
+                        />
+                      </div>
+                      <div>
+                        <label className="label">Neurological</label>
+                        <textarea
+                          className="input"
+                          rows="2"
+                          placeholder="Mental status, cranial nerves, motor, sensory, reflexes"
+                          value={vitalsData.neurologicalExam}
+                          onChange={(e) => setVitalsData({...vitalsData, neurologicalExam: e.target.value})}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Doctor Assignment Section */}
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <h4 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+                    <UserPlus className="h-5 w-5 mr-2" />
+                    Assign Doctor
+                  </h4>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <label className="label">Filter by Specialty</label>
+                      <div className="flex flex-wrap gap-2">
+                        {specialties.map(spec => (
+                          <button
+                            key={spec.value}
+                            type="button"
+                            onClick={() => setSpecialtyFilter(spec.value)}
+                            className={`btn btn-sm ${specialtyFilter === spec.value ? 'btn-primary' : 'btn-outline'}`}
+                          >
+                            {spec.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="label">Select Doctor *</label>
+                      <select
+                        className="input"
+                        value={selectedDoctor}
+                        onChange={(e) => setSelectedDoctor(e.target.value)}
+                        required
+                      >
+                        <option value="">Select a Doctor</option>
+                        {filteredDoctors.map(doctor => (
+                          <option key={doctor.id} value={doctor.id}>
+                            {doctor.fullname} ({doctor.specialties?.join(', ') || 'N/A'}) - ETB {doctor.consultationFee || 'N/A'}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="flex justify-end space-x-3 pt-4">

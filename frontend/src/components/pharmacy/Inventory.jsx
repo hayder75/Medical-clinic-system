@@ -21,13 +21,20 @@ const Inventory = () => {
   });
 
   const categories = [
-    'ANTIBIOTICS',
-    'PAINKILLERS',
-    'VITAMINS',
-    'DIABETES',
+    'ANTIBIOTIC',
+    'ANALGESIC',
     'CARDIOVASCULAR',
+    'ANTIDIABETIC',
     'RESPIRATORY',
+    'CORTICOSTEROID',
     'GASTROINTESTINAL',
+    'VITAMIN',
+    'OPIOID',
+    'BENZODIAZEPINE',
+    'ANTIHISTAMINE',
+    'ANTACID',
+    'LAXATIVE',
+    'DIURETIC',
     'OTHER'
   ];
 
@@ -49,7 +56,7 @@ const Inventory = () => {
     try {
       setLoading(true);
       const response = await api.get('/pharmacies/inventory');
-      setInventory(response.data);
+      setInventory(response.data.inventory || []);
     } catch (error) {
       toast.error('Failed to fetch inventory');
       console.error('Error fetching inventory:', error);
@@ -98,12 +105,12 @@ const Inventory = () => {
     setFormData({
       name: item.name,
       category: item.category,
-      quantity: item.quantity.toString(),
-      unit: item.unit,
-      price: item.price.toString(),
-      supplier: item.supplier || '',
-      expiryDate: item.expiryDate || '',
-      lowStockThreshold: item.lowStockThreshold.toString()
+      quantity: item.availableQuantity.toString(),
+      unit: item.dosageForm,
+      price: item.unitPrice.toString(),
+      supplier: item.manufacturer || '',
+      expiryDate: item.expiryDate ? new Date(item.expiryDate).toISOString().split('T')[0] : '',
+      lowStockThreshold: item.minimumStock.toString()
     });
     setShowModal(true);
   };
@@ -127,8 +134,8 @@ const Inventory = () => {
   });
 
   const getStockStatus = (item) => {
-    if (item.quantity <= 0) return { status: 'out', color: 'badge-danger', text: 'Out of Stock' };
-    if (item.quantity <= item.lowStockThreshold) return { status: 'low', color: 'badge-warning', text: 'Low Stock' };
+    if (item.availableQuantity <= 0) return { status: 'out', color: 'badge-danger', text: 'Out of Stock' };
+    if (item.availableQuantity <= item.minimumStock) return { status: 'low', color: 'badge-warning', text: 'Low Stock' };
     return { status: 'good', color: 'badge-success', text: 'In Stock' };
   };
 
@@ -199,10 +206,10 @@ const Inventory = () => {
                         {item.category}
                       </span>
                     </td>
-                    <td className="font-medium">{item.quantity}</td>
-                    <td>{item.unit}</td>
-                    <td className="font-medium">ETB {item.price.toLocaleString()}</td>
-                    <td>{item.supplier || 'N/A'}</td>
+                    <td className="font-medium">{item.availableQuantity}</td>
+                    <td>{item.dosageForm}</td>
+                    <td className="font-medium">ETB {item.unitPrice.toLocaleString()}</td>
+                    <td>{item.manufacturer || 'N/A'}</td>
                     <td>{item.expiryDate ? new Date(item.expiryDate).toLocaleDateString() : 'N/A'}</td>
                     <td>
                       <span className={`badge ${stockStatus.color}`}>

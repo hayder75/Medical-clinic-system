@@ -23,6 +23,25 @@ const vitalsSchema = z.object({
   gcsMotor: z.number().optional(),
   bloodPressureSystolic: z.number().optional(),
   bloodPressureDiastolic: z.number().optional(),
+  
+  // Chief Complaint & History (Optional)
+  chiefComplaint: z.string().optional(),
+  historyOfPresentIllness: z.string().optional(),
+  onsetOfSymptoms: z.string().optional(),
+  durationOfSymptoms: z.string().optional(),
+  severityOfSymptoms: z.string().optional(),
+  associatedSymptoms: z.string().optional(),
+  relievingFactors: z.string().optional(),
+  aggravatingFactors: z.string().optional(),
+  
+  // Physical Examination (Optional)
+  generalAppearance: z.string().optional(),
+  headAndNeck: z.string().optional(),
+  cardiovascularExam: z.string().optional(),
+  respiratoryExam: z.string().optional(),
+  abdominalExam: z.string().optional(),
+  extremities: z.string().optional(),
+  neurologicalExam: z.string().optional(),
 });
 
 const assignmentSchema = z.object({

@@ -8,27 +8,27 @@ const PharmacyInvoices = () => {
   const [loading, setLoading] = useState(true);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
-  const [showDispenseForm, setShowDispenseForm] = useState(false);
+  const [statusFilter, setStatusFilter] = useState('PENDING'); // Default to PENDING
   const [paymentData, setPaymentData] = useState({
     type: 'CASH',
     amount: '',
     bankName: '',
     transNumber: '',
+    insuranceId: '',
     notes: ''
   });
-  const [dispenseData, setDispenseData] = useState({
-    medications: []
-  });
+  const [insuranceCompanies, setInsuranceCompanies] = useState([]);
 
   useEffect(() => {
     fetchInvoices();
+    fetchInsuranceCompanies();
   }, []);
 
   const fetchInvoices = async () => {
     try {
       setLoading(true);
       const response = await api.get('/pharmacy-billing/invoices');
-      setInvoices(response.data);
+      setInvoices(response.data.invoices || []);
     } catch (error) {
       toast.error('Failed to fetch pharmacy invoices');
       console.error('Error fetching invoices:', error);
@@ -37,11 +37,20 @@ const PharmacyInvoices = () => {
     }
   };
 
+  const fetchInsuranceCompanies = async () => {
+    try {
+      const response = await api.get('/pharmacy-billing/insurance');
+      setInsuranceCompanies(response.data.insuranceCompanies || []);
+    } catch (error) {
+      console.error('Error fetching insurance companies:', error);
+    }
+  };
+
   const handlePayment = async (e) => {
     e.preventDefault();
     try {
-      await api.post('/pharmacy-billing/payments', {
-        invoiceId: selectedInvoice.id,
+      await api.post('/pharmacy-billing/payment', {
+        pharmacyInvoiceId: selectedInvoice.id,
         amount: parseFloat(paymentData.amount),
         type: paymentData.type,
         bankName: paymentData.bankName || null,
@@ -49,7 +58,7 @@ const PharmacyInvoices = () => {
         notes: paymentData.notes || null
       });
 
-      toast.success('Payment processed successfully!');
+      toast.success('Payment processed successfully! Invoice moved to pharmacy queue.');
       setShowPaymentForm(false);
       setSelectedInvoice(null);
       setPaymentData({
@@ -57,6 +66,7 @@ const PharmacyInvoices = () => {
         amount: '',
         bankName: '',
         transNumber: '',
+        insuranceId: '',
         notes: ''
       });
       fetchInvoices();
@@ -65,27 +75,10 @@ const PharmacyInvoices = () => {
     }
   };
 
-  const handleDispense = async (e) => {
-    e.preventDefault();
-    try {
-      await api.post('/pharmacy-billing/dispense', {
-        invoiceId: selectedInvoice.id,
-        medications: dispenseData.medications
-      });
-
-      toast.success('Medications dispensed successfully!');
-      setShowDispenseForm(false);
-      setSelectedInvoice(null);
-      setDispenseData({ medications: [] });
-      fetchInvoices();
-    } catch (error) {
-      toast.error(error.response?.data?.error || 'Dispensing failed');
-    }
-  };
 
   const getStatusColor = (status) => {
     switch (status) {
-      case 'UNPAID':
+      case 'PENDING':
         return 'badge-warning';
       case 'PAID':
         return 'badge-success';
@@ -98,7 +91,7 @@ const PharmacyInvoices = () => {
 
   const getStatusIcon = (status) => {
     switch (status) {
-      case 'UNPAID':
+      case 'PENDING':
         return <Clock className="h-4 w-4" />;
       case 'PAID':
         return <CheckCircle className="h-4 w-4" />;
@@ -108,6 +101,9 @@ const PharmacyInvoices = () => {
         return <Clock className="h-4 w-4" />;
     }
   };
+
+  // Filter invoices based on status
+  const filteredInvoices = invoices.filter(invoice => invoice.status === statusFilter);
 
   if (loading) {
     return (
@@ -125,15 +121,42 @@ const PharmacyInvoices = () => {
           <h2 className="text-2xl font-bold text-gray-900">Pharmacy Invoices</h2>
           <p className="text-gray-600">Process pharmacy payments and dispense medications</p>
         </div>
-        <div className="text-sm text-gray-500">
-          {invoices.filter(inv => inv.status === 'UNPAID').length} pending invoices
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2">
+            <label className="text-sm font-medium text-gray-700">Filter by Status:</label>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="input text-sm"
+            >
+              <option value="PENDING">Pending</option>
+              <option value="PAID">Paid</option>
+            </select>
+          </div>
+          <div className="text-sm text-gray-500">
+            {filteredInvoices.length} {statusFilter.toLowerCase()} invoices
+          </div>
         </div>
       </div>
 
       {/* Invoices List */}
       <div className="space-y-4">
-        {invoices.map((invoice) => (
-          <div key={invoice.id} className="card">
+        {filteredInvoices.length === 0 ? (
+          <div className="text-center py-12">
+            <Clock className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              No {statusFilter.toLowerCase()} invoices
+            </h3>
+            <p className="text-gray-500">
+              {statusFilter === 'PENDING' 
+                ? 'No invoices are currently pending payment.'
+                : 'No invoices have been paid yet.'
+              }
+            </p>
+          </div>
+        ) : (
+          filteredInvoices.map((invoice) => (
+            <div key={invoice.id} className="card">
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-center">
                 <div className="h-10 w-10 bg-primary-100 rounded-full flex items-center justify-center">
@@ -164,28 +187,28 @@ const PharmacyInvoices = () => {
               <div>
                 <p className="text-sm text-gray-500">Total Amount</p>
                 <p className="text-lg font-semibold text-gray-900">
-                  ETB {invoice.total.toLocaleString()}
+                  ETB {invoice.totalAmount.toLocaleString()}
                 </p>
               </div>
               <div>
                 <p className="text-sm text-gray-500">Medications</p>
                 <p className="text-sm text-gray-900">
-                  {invoice.medications?.length || 0} medication(s)
+                  {invoice.items?.length || 0} medication(s)
                 </p>
               </div>
             </div>
 
             {/* Medications List */}
-            {invoice.medications && invoice.medications.length > 0 && (
+            {invoice.items && invoice.items.length > 0 && (
               <div className="mb-4">
                 <h4 className="text-sm font-medium text-gray-700 mb-2">Medications</h4>
                 <div className="space-y-1">
-                  {invoice.medications.map((med, index) => (
+                  {invoice.items.map((item, index) => (
                     <div key={index} className="flex justify-between text-sm">
                       <span className="text-gray-600">
-                        {med.name} - {med.strength} ({med.dosageForm})
+                        {item.name} - {item.strength} ({item.dosageForm})
                       </span>
-                      <span className="font-medium">Qty: {med.quantity}</span>
+                      <span className="font-medium">Qty: {item.quantity} - ETB {item.totalPrice.toFixed(2)}</span>
                     </div>
                   ))}
                 </div>
@@ -194,13 +217,13 @@ const PharmacyInvoices = () => {
 
             {/* Actions */}
             <div className="flex space-x-2">
-              {invoice.status === 'UNPAID' && (
+              {invoice.status === 'PENDING' && (
                 <button
                   onClick={() => {
                     setSelectedInvoice(invoice);
                     setPaymentData({
                       ...paymentData,
-                      amount: invoice.total.toString()
+                      amount: invoice.totalAmount.toString()
                     });
                     setShowPaymentForm(true);
                   }}
@@ -212,28 +235,15 @@ const PharmacyInvoices = () => {
               )}
               
               {invoice.status === 'PAID' && (
-                <button
-                  onClick={() => {
-                    setSelectedInvoice(invoice);
-                    setDispenseData({
-                      medications: invoice.medications?.map(med => ({
-                        medicationOrderId: med.id,
-                        status: 'DISPENSED',
-                        quantity: med.quantity,
-                        notes: ''
-                      })) || []
-                    });
-                    setShowDispenseForm(true);
-                  }}
-                  className="btn btn-success btn-sm flex items-center"
-                >
-                  <Pill className="h-4 w-4 mr-1" />
-                  Dispense Medications
-                </button>
+                <div className="text-sm text-gray-500 flex items-center">
+                  <CheckCircle className="h-4 w-4 mr-1 text-green-500" />
+                  Moved to Pharmacy Queue
+                </div>
               )}
             </div>
           </div>
-        ))}
+          ))
+        )}
       </div>
 
       {/* Payment Form Modal */}
@@ -250,7 +260,7 @@ const PharmacyInvoices = () => {
                   <strong>Invoice ID:</strong> {selectedInvoice.id}
                 </p>
                 <p className="text-sm text-gray-600">
-                  <strong>Amount:</strong> ETB {selectedInvoice.total.toLocaleString()}
+                  <strong>Amount:</strong> ETB {selectedInvoice.totalAmount.toLocaleString()}
                 </p>
               </div>
 
@@ -265,7 +275,7 @@ const PharmacyInvoices = () => {
                   >
                     <option value="CASH">Cash</option>
                     <option value="BANK">Bank Transfer</option>
-                    <option value="CARD">Card</option>
+                    <option value="INSURANCE">Insurance</option>
                   </select>
                 </div>
 
@@ -304,6 +314,25 @@ const PharmacyInvoices = () => {
                   </>
                 )}
 
+                {paymentData.type === 'INSURANCE' && (
+                  <div>
+                    <label className="label">Insurance Company *</label>
+                    <select
+                      className="input"
+                      value={paymentData.insuranceId}
+                      onChange={(e) => setPaymentData({...paymentData, insuranceId: e.target.value})}
+                      required
+                    >
+                      <option value="">Select Insurance Company</option>
+                      {insuranceCompanies.map((insurance) => (
+                        <option key={insurance.id} value={insurance.id}>
+                          {insurance.name} ({insurance.code})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 <div>
                   <label className="label">Notes</label>
                   <textarea
@@ -335,59 +364,6 @@ const PharmacyInvoices = () => {
         </div>
       )}
 
-      {/* Dispense Form Modal */}
-      {showDispenseForm && selectedInvoice && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">
-                Dispense Medications - {selectedInvoice.patient.name}
-              </h3>
-              
-              <form onSubmit={handleDispense} className="space-y-4">
-                <div>
-                  <label className="label">Medications to Dispense</label>
-                  <div className="space-y-2">
-                    {dispenseData.medications.map((med, index) => (
-                      <div key={index} className="flex items-center space-x-2">
-                        <input
-                          type="checkbox"
-                          checked={med.status === 'DISPENSED'}
-                          onChange={(e) => {
-                            const newMeds = [...dispenseData.medications];
-                            newMeds[index].status = e.target.checked ? 'DISPENSED' : 'NOT_AVAILABLE';
-                            setDispenseData({...dispenseData, medications: newMeds});
-                          }}
-                          className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                        />
-                        <span className="text-sm">
-                          {selectedInvoice.medications[index]?.name} - {selectedInvoice.medications[index]?.strength}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="flex justify-end space-x-3 pt-4">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowDispenseForm(false);
-                      setSelectedInvoice(null);
-                    }}
-                    className="btn btn-secondary"
-                  >
-                    Cancel
-                  </button>
-                  <button type="submit" className="btn btn-success">
-                    Dispense Medications
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

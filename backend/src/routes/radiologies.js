@@ -18,5 +18,6 @@ router.get('/orders/:orderId/results', radiologyController.getRadiologyResults);
 router.post('/batch-orders/:batchOrderId/results', radiologyController.createBatchRadiologyResult);
 router.post('/batch-orders/:batchOrderId/results/:resultId/file', fileUpload.single('file'), radiologyController.uploadBatchRadiologyResultFile);
 router.get('/batch-orders/:batchOrderId/results', radiologyController.getBatchRadiologyResults);
+router.put('/batch-orders/:batchOrderId/results', radiologyController.completeBatchRadiologyOrder);
 
 module.exports = router;

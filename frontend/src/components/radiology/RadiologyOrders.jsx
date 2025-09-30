@@ -11,6 +11,7 @@ const RadiologyOrders = () => {
   const [testResults, setTestResults] = useState({});
   const [uploadingFiles, setUploadingFiles] = useState({});
   const [expandedTests, setExpandedTests] = useState({});
+  const [statusFilter, setStatusFilter] = useState('PENDING');
 
   useEffect(() => {
     fetchOrders();
@@ -28,6 +29,15 @@ const RadiologyOrders = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const getFilteredOrders = () => {
+    if (statusFilter === 'PENDING') {
+      return orders.filter(order => order.status !== 'COMPLETED');
+    } else if (statusFilter === 'COMPLETED') {
+      return orders.filter(order => order.status === 'COMPLETED');
+    }
+    return orders;
   };
 
   const fetchExistingResults = async (batchOrderId) => {
@@ -97,27 +107,43 @@ const RadiologyOrders = () => {
       setUploadingFiles(prev => ({ ...prev, [testId]: true }));
       
       const testResult = testResults[testId];
-      if (!testResult || !testResult.resultId) {
-        toast.error('Please submit the test result first before uploading files');
+      if (!testResult) {
+        toast.error('Test result not found');
         return;
       }
 
-      const formData = new FormData();
-      formData.append('file', file);
+      // If result already exists, upload to the existing result
+      if (testResult.resultId) {
+        const formData = new FormData();
+        formData.append('file', file);
 
-      const response = await api.post(
-        `/radiologies/batch-orders/${selectedOrder.id}/results/${testResult.resultId}/file`,
-        formData,
-        {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        }
-      );
+        const response = await api.post(
+          `/radiologies/batch-orders/${selectedOrder.id}/results/${testResult.resultId}/file`,
+          formData,
+          {
+            headers: {
+              'Content-Type': 'multipart/form-data',
+            },
+          }
+        );
 
-      // Update the test result with the new file
-      updateTestResult(testId, 'files', [...(testResult.files || []), response.data.file]);
-      toast.success('File uploaded successfully');
+        // Update the test result with the new file
+        updateTestResult(testId, 'files', [...(testResult.files || []), response.data.file]);
+        toast.success('File uploaded successfully');
+      } else {
+        // If no result exists yet, store the file locally and upload when result is submitted
+        const fileData = {
+          id: Date.now(), // Temporary ID
+          originalName: file.name,
+          fileType: file.type,
+          size: file.size,
+          file: file, // Store the actual file object
+          uploaded: false
+        };
+        
+        updateTestResult(testId, 'files', [...(testResult.files || []), fileData]);
+        toast.success('File added. Will be uploaded when you submit the result.');
+      }
     } catch (error) {
       console.error('Error uploading file:', error);
       toast.error('Failed to upload file');
@@ -155,9 +181,41 @@ const RadiologyOrders = () => {
 
       console.log('Test result submitted:', response.data);
 
+      const resultId = response.data.radiologyResult.id;
+
+      // Upload any pending files
+      const pendingFiles = testResult.files?.filter(file => !file.uploaded) || [];
+      const uploadedFiles = testResult.files?.filter(file => file.uploaded) || [];
+
+      for (const fileData of pendingFiles) {
+        try {
+          const formData = new FormData();
+          formData.append('file', fileData.file);
+
+          const uploadResponse = await api.post(
+            `/radiologies/batch-orders/${selectedOrder.id}/results/${resultId}/file`,
+            formData,
+            {
+              headers: {
+                'Content-Type': 'multipart/form-data',
+              },
+            }
+          );
+
+          // Mark file as uploaded
+          fileData.uploaded = true;
+          fileData.id = uploadResponse.data.file.id;
+          fileData.originalName = uploadResponse.data.file.originalName;
+          fileData.fileType = uploadResponse.data.file.type;
+        } catch (uploadError) {
+          console.error('Error uploading file:', uploadError);
+          toast.error(`Failed to upload ${fileData.originalName}`);
+        }
+      }
+
       // Mark as completed locally
       updateTestResult(testId, 'completed', true);
-      updateTestResult(testId, 'resultId', response.data.radiologyResult.id);
+      updateTestResult(testId, 'resultId', resultId);
 
       toast.success('Test result submitted successfully');
     } catch (error) {
@@ -187,7 +245,7 @@ const RadiologyOrders = () => {
       }
 
       // Mark the entire batch order as completed
-      const response = await api.put(`/api/batch-orders/${selectedOrder.id}/results`, {
+      const response = await api.put(`/radiologies/batch-orders/${selectedOrder.id}/results`, {
         result: 'All radiology tests completed',
         additionalNotes: 'Batch order completed by radiology technician'
       });
@@ -265,14 +323,37 @@ const RadiologyOrders = () => {
         </button>
       </div>
 
-      {orders.length === 0 ? (
+      {/* Status Filter */}
+      <div className="mb-6">
+        <div className="flex items-center space-x-4">
+          <label className="text-sm font-medium text-gray-700">Filter by Status:</label>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="PENDING">Pending Orders</option>
+            <option value="COMPLETED">Completed Orders</option>
+            <option value="ALL">All Orders</option>
+          </select>
+          <span className="text-sm text-gray-500">
+            Showing {getFilteredOrders().length} of {orders.length} orders
+          </span>
+        </div>
+      </div>
+
+      {getFilteredOrders().length === 0 ? (
         <div className="text-center py-12">
           <Scan className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-500">No radiology orders found</p>
+          <p className="text-gray-500">
+            {statusFilter === 'PENDING' ? 'No pending radiology orders found' :
+             statusFilter === 'COMPLETED' ? 'No completed radiology orders found' :
+             'No radiology orders found'}
+          </p>
         </div>
       ) : (
         <div className="grid gap-4">
-          {orders.map((order) => (
+          {getFilteredOrders().map((order) => (
             <div
               key={order.id}
               className={`bg-white rounded-lg shadow-md border p-6 cursor-pointer hover:shadow-lg transition-shadow duration-200 ${
@@ -471,11 +552,20 @@ const RadiologyOrders = () => {
                               {testResult.files && testResult.files.length > 0 && (
                                 <div className="mt-2 space-y-2">
                                   {testResult.files.map((file, fileIndex) => (
-                                    <div key={fileIndex} className="flex items-center space-x-2 text-sm text-gray-600">
-                                      <FileText className="h-4 w-4" />
-                                      <span>{file.originalName}</span>
-                                      <span className="text-gray-400">
-                                        {file.fileType}
+                                    <div key={fileIndex} className="flex items-center justify-between text-sm">
+                                      <div className="flex items-center space-x-2 text-gray-600">
+                                        <FileText className="h-4 w-4" />
+                                        <span>{file.originalName}</span>
+                                        <span className="text-gray-400">
+                                          {file.fileType}
+                                        </span>
+                                      </div>
+                                      <span className={`text-xs px-2 py-1 rounded ${
+                                        file.uploaded 
+                                          ? 'bg-green-100 text-green-800' 
+                                          : 'bg-yellow-100 text-yellow-800'
+                                      }`}>
+                                        {file.uploaded ? 'Uploaded' : 'Pending'}
                                       </span>
                                     </div>
                                   ))}

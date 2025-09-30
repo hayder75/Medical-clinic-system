@@ -93,6 +93,7 @@ const Layout = ({ children, title, subtitle }) => {
           { name: 'Pharmacy Billing', href: '/pharmacy-billing/invoices', icon: CreditCard },
           { name: 'Prescription Queue', href: '/pharmacy/queue', icon: Pill },
           { name: 'Inventory', href: '/pharmacy/inventory', icon: ShoppingCart },
+          { name: 'Walk-in Sales', href: '/pharmacy/walk-in-sales', icon: ShoppingCart },
         ];
       
       case 'LAB_TECHNICIAN':

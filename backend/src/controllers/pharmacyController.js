@@ -22,7 +22,12 @@ const registerMedicationSchema = z.object({
 exports.getOrders = async (req, res) => {
   try {
     const orders = await prisma.medicationOrder.findMany({
-      where: { status: 'QUEUED' },
+      where: { 
+        status: { in: ['QUEUED', 'PAID'] }, // Only show QUEUED and PAID orders (not COMPLETED)
+        visit: {
+          status: { not: 'COMPLETED' } // Exclude orders from completed visits
+        }
+      },
       include: { 
         patient: { 
           select: { 
@@ -102,8 +107,8 @@ exports.dispense = async (req, res) => {
       return res.status(404).json({ error: 'Medication order not found' });
     }
 
-    if (order.status !== 'QUEUED') {
-      return res.status(400).json({ error: 'Order is not in queue for dispensing' });
+    if (!['QUEUED', 'PAID'].includes(order.status)) {
+      return res.status(400).json({ error: 'Order is not ready for dispensing' });
     }
 
     // Check inventory availability
@@ -209,23 +214,231 @@ exports.dispense = async (req, res) => {
   }
 };
 
+// Bulk dispense all medications for a patient
+exports.bulkDispense = async (req, res) => {
+  try {
+    const { patientId, visitId, medications } = req.body;
+    const pharmacyId = req.user.id;
+
+    if (!medications || !Array.isArray(medications) || medications.length === 0) {
+      return res.status(400).json({ error: 'Medications array is required' });
+    }
+
+    const results = [];
+    const errors = [];
+
+    // Process each medication
+    for (const med of medications) {
+      try {
+        // Check if order exists and is in correct status
+        const order = await prisma.medicationOrder.findUnique({
+          where: { id: med.medicationOrderId },
+          include: {
+            patient: true,
+            visit: true
+          }
+        });
+
+        if (!order) {
+          errors.push({ medicationOrderId: med.medicationOrderId, error: 'Order not found' });
+          continue;
+        }
+
+        if (!['QUEUED', 'PAID'].includes(order.status)) {
+          errors.push({ medicationOrderId: med.medicationOrderId, error: 'Order not ready for dispensing' });
+          continue;
+        }
+
+        // Get the pharmacy invoice ID from the medication order
+        const pharmacyInvoice = await prisma.pharmacyInvoice.findFirst({
+          where: {
+            pharmacyInvoiceItems: {
+              some: {
+                medicationOrderId: order.id
+              }
+            }
+          }
+        });
+
+        if (!pharmacyInvoice) {
+          errors.push({ medicationOrderId: med.medicationOrderId, error: 'Pharmacy invoice not found' });
+          continue;
+        }
+
+        // Create dispensed medicine record
+        const dispensedMedicine = await prisma.dispensedMedicine.create({
+          data: {
+            pharmacyInvoiceId: pharmacyInvoice.id,
+            medicationOrderId: order.id,
+            status: med.status || 'DISPENSED',
+            quantity: med.quantity || order.quantity,
+            notes: med.notes || '',
+            dispensedBy: pharmacyId
+          }
+        });
+
+        // Update order status to COMPLETED
+        await prisma.medicationOrder.update({
+          where: { id: order.id },
+          data: { status: 'COMPLETED' }
+        });
+
+        // Decrease stock in medication catalog if medicationCatalogId exists
+        if (order.medicationCatalogId) {
+          const dispensedQuantity = med.quantity || order.quantity;
+          await prisma.medicationCatalog.update({
+            where: { id: order.medicationCatalogId },
+            data: {
+              availableQuantity: {
+                decrement: dispensedQuantity
+              }
+            }
+          });
+        }
+
+        results.push({
+          medicationOrderId: order.id,
+          medicationName: order.name,
+          status: 'DISPENSED',
+          dispensedMedicineId: dispensedMedicine.id
+        });
+
+      } catch (error) {
+        errors.push({ 
+          medicationOrderId: med.medicationOrderId, 
+          error: error.message 
+        });
+      }
+    }
+
+    // Check if all medications for this visit are completed
+    if (results.length > 0) {
+      const remainingOrders = await prisma.medicationOrder.findMany({
+        where: {
+          visitId: parseInt(visitId),
+          status: { in: ['UNPAID', 'PAID', 'QUEUED'] }
+        }
+      });
+
+      // If no remaining orders, update visit status to COMPLETED
+      if (remainingOrders.length === 0) {
+        await prisma.visit.update({
+          where: { id: parseInt(visitId) },
+          data: { status: 'COMPLETED' }
+        });
+      }
+    }
+
+    // Create audit log
+    await prisma.auditLog.create({
+      data: {
+        userId: pharmacyId,
+        action: 'BULK_DISPENSE_MEDICATIONS',
+        entity: 'MedicationOrder',
+        entityId: 0,
+        details: JSON.stringify({
+          patientId,
+          visitId,
+          totalMedications: medications.length,
+          successful: results.length,
+          failed: errors.length,
+          results,
+          errors
+        }),
+        ip: req.ip,
+        userAgent: req.get('User-Agent')
+      }
+    });
+
+    res.json({
+      message: `Bulk dispensing completed. ${results.length} successful, ${errors.length} failed.`,
+      results,
+      errors
+    });
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 exports.getInventory = async (req, res) => {
   try {
-    const inventory = await prisma.inventory.findMany({
-      include: {
-        service: {
-          select: {
-            id: true,
-            code: true,
-            name: true,
-            category: true,
-            price: true
-          }
-        }
-      },
+    const inventory = await prisma.medicationCatalog.findMany({
       orderBy: { name: 'asc' }
     });
     res.json({ inventory });
+  } catch (error) {
+    console.error('❌ getInventory - Error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Add new medication to inventory
+exports.addInventoryItem = async (req, res) => {
+  try {
+    const { name, category, quantity, unit, price, supplier, expiryDate, lowStockThreshold } = req.body;
+
+    const medication = await prisma.medicationCatalog.create({
+      data: {
+        name,
+        category: category || 'OTHER',
+        dosageForm: unit || 'TABLET',
+        strength: 'N/A', // Will be updated when specific strength is known
+        type: 'PRESCRIPTION',
+        unitPrice: parseFloat(price),
+        availableQuantity: parseInt(quantity),
+        minimumStock: parseInt(lowStockThreshold) || 10,
+        manufacturer: supplier || null
+      }
+    });
+
+    res.status(201).json({ 
+      message: 'Medication added to inventory successfully',
+      medication 
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Update inventory item
+exports.updateInventoryItem = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, category, quantity, unit, price, supplier, expiryDate, lowStockThreshold } = req.body;
+
+    const medication = await prisma.medicationCatalog.update({
+      where: { id },
+      data: {
+        name,
+        category: category || 'OTHER',
+        dosageForm: unit || 'TABLET',
+        unitPrice: parseFloat(price),
+        availableQuantity: parseInt(quantity),
+        minimumStock: parseInt(lowStockThreshold) || 10,
+        manufacturer: supplier || null
+      }
+    });
+
+    res.json({ 
+      message: 'Inventory item updated successfully',
+      medication 
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Delete inventory item
+exports.deleteInventoryItem = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    await prisma.medicationCatalog.delete({
+      where: { id }
+    });
+
+    res.json({ message: 'Inventory item deleted successfully' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -371,46 +584,6 @@ exports.registerMedication = async (req, res) => {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: 'Validation error', details: error.errors });
     }
-    res.status(500).json({ error: error.message });
-  }
-};
-
-// Get inventory for pharmacy
-exports.getInventory = async (req, res) => {
-  try {
-    const { lowStock, category } = req.query;
-    
-    let whereClause = {
-      service: {
-        category: 'MEDICATION'
-      }
-    };
-    
-    if (lowStock === 'true') {
-      whereClause.quantity = { lt: 10 };
-    }
-    
-    if (category) {
-      whereClause.category = category;
-    }
-
-    const inventory = await prisma.inventory.findMany({
-      where: whereClause,
-      include: {
-        service: {
-          select: {
-            id: true,
-            code: true,
-            name: true,
-            price: true
-          }
-        }
-      },
-      orderBy: { name: 'asc' }
-    });
-
-    res.json({ inventory });
-  } catch (error) {
     res.status(500).json({ error: error.message });
   }
 };

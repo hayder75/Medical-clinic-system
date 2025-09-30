@@ -3,6 +3,7 @@ import { Routes, Route } from 'react-router-dom';
 import Layout from '../../components/common/Layout';
 import PrescriptionQueue from '../../components/pharmacy/PrescriptionQueue';
 import Inventory from '../../components/pharmacy/Inventory';
+import WalkInSales from '../../components/pharmacy/WalkInSales';
 import { 
   Pill, 
   Clock, 
@@ -159,6 +160,7 @@ const PharmacyDashboard = () => {
         <Route path="/" element={<DashboardOverview />} />
         <Route path="/queue" element={<PrescriptionQueue />} />
         <Route path="/inventory" element={<Inventory />} />
+        <Route path="/walk-in-sales" element={<WalkInSales />} />
       </Routes>
     </Layout>
   );

@@ -222,19 +222,38 @@ model BillPayment {
 
 model PharmacyInvoice {
   id                String      @id @default(uuid())
-  patientId         String
-  patient           Patient     @relation(fields: [patientId], references: [id])
+  patientId         String?
+  patient           Patient?    @relation(fields: [patientId], references: [id])
   visitId           Int?
   visit             Visit?      @relation(fields: [visitId], references: [id])
   totalAmount       Float
   status            BillingStatus @default(PENDING)
+  type              PharmacyInvoiceType @default(DOCTOR_PRESCRIPTION)
   notes             String?
+  createdBy         String?     // User ID who created the invoice
   processedBy       String?     // User ID who processed the payment
   processedAt       DateTime?
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
 
   dispensedMedicines DispensedMedicine[]
+  pharmacyInvoiceItems PharmacyInvoiceItem[]
+}
+
+model PharmacyInvoiceItem {
+  id                String      @id @default(uuid())
+  pharmacyInvoiceId String
+  pharmacyInvoice   PharmacyInvoice @relation(fields: [pharmacyInvoiceId], references: [id])
+  medicationOrderId Int?
+  medicationOrder   MedicationOrder? @relation(fields: [medicationOrderId], references: [id])
+  name              String
+  dosageForm        String
+  strength          String
+  quantity          Int
+  unitPrice         Float
+  totalPrice        Float
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
 }
 
 model DispensedMedicine {
@@ -258,15 +277,20 @@ model MedicationOrder {
   patient       Patient  @relation(fields: [patientId], references: [id])
   doctorId      String
   doctor        User     @relation(fields: [doctorId], references: [id])
+  medicationCatalogId String?
+  medicationCatalog MedicationCatalog? @relation(fields: [medicationCatalogId], references: [id])
   name          String
+  genericName   String?
   dosageForm    String
   strength      String
   quantity      Int
-  frequency     String
-  duration      String
-  instructions  String
+  frequency     String?
+  duration      String?
+  instructions  String?
   additionalNotes String?
   category      MedicineCategory?
+  type          String?
+  unitPrice     Float?
   status        OrderStatus @default(UNPAID)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -274,6 +298,7 @@ model MedicationOrder {
   dispenseLogs  DispenseLog[]
   continuousInfusion ContinuousInfusion?
   dispensedMedicines DispensedMedicine[]
+  pharmacyInvoiceItems PharmacyInvoiceItem[]
 }
 
 model DispenseLog {
@@ -434,6 +459,23 @@ model Inventory {
   service       Service? @relation(fields: [serviceId], references: [id])
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+}
+
+model MedicationCatalog {
+  id                String   @id @default(uuid())
+  name              String
+  genericName       String?
+  dosageForm        String
+  strength          String
+  category          MedicineCategory
+  unitPrice         Float
+  availableQuantity Int
+  minimumStock      Int
+  manufacturer      String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  medicationOrders  MedicationOrder[]
 }
 
 model Assignment {
@@ -616,6 +658,11 @@ enum DispensedStatus {
   PARTIAL_DISPENSED
 }
 
+enum PharmacyInvoiceType {
+  DOCTOR_PRESCRIPTION
+  WALK_IN_SALE
+}
+
 enum VisitStatus {
   WAITING_FOR_TRIAGE
   TRIAGED
@@ -629,6 +676,7 @@ enum VisitStatus {
   AWAITING_LAB_RESULTS
   AWAITING_RADIOLOGY_RESULTS
   AWAITING_RESULTS_REVIEW
+  SENT_TO_PHARMACY
   COMPLETED
   CANCELLED
 }

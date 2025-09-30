@@ -120,6 +120,7 @@ exports.fillResult = async (req, res) => {
     if (serviceResults && Array.isArray(serviceResults)) {
       for (const serviceResult of serviceResults) {
         if (serviceResult.batchOrderServiceId && serviceResult.result) {
+          // Update batch order service
           await prisma.batchOrderService.update({
             where: { id: serviceResult.batchOrderServiceId },
             data: {
@@ -127,6 +128,26 @@ exports.fillResult = async (req, res) => {
               status: 'COMPLETED'
             }
           });
+          
+          // Create separate LabResult record for consistency with radiology system
+          const batchOrderService = await prisma.batchOrderService.findUnique({
+            where: { id: serviceResult.batchOrderServiceId },
+            include: {
+              investigationType: true
+            }
+          });
+          
+          if (batchOrderService && batchOrderService.investigationType) {
+            await prisma.labResult.create({
+              data: {
+                orderId: parseInt(orderId),
+                testTypeId: batchOrderService.investigationType.id,
+                resultText: serviceResult.result,
+                additionalNotes: serviceResult.additionalNotes || '',
+                status: 'COMPLETED'
+              }
+            });
+          }
         }
       }
     }

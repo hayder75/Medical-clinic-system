@@ -123,31 +123,76 @@ exports.createBatchOrder = async (req, res) => {
       }
     });
 
-    // Create billing for the batch order
-    const billing = await prisma.billing.create({
-      data: {
-        patientId,
-        visitId,
-        totalAmount,
-        status: 'PENDING',
-        notes: `Batch ${type.toLowerCase()} order - ${services.length} service(s)`,
-        services: {
-          create: services.map(service => {
-            const serviceData = validServices.find(s => s.id === service.serviceId);
-            const investigationData = service.investigationTypeId ? 
-              validInvestigationTypes.find(i => i.id === service.investigationTypeId) : null;
-            const price = investigationData ? investigationData.price : serviceData.price;
-            
-            return {
-              serviceId: service.serviceId,
-              quantity: 1,
-              unitPrice: price,
-              totalPrice: price
-            };
-          })
-        }
+    // Check if diagnostics billing already exists for this visit
+    let billing = await prisma.billing.findFirst({
+      where: {
+        visitId: visitId,
+        OR: [
+          { notes: { contains: 'diagnostics' } },
+          { notes: { contains: 'lab' } },
+          { notes: { contains: 'radiology' } },
+          { notes: { contains: 'Batch' } }
+        ],
+        status: 'PENDING'
       }
     });
+
+    if (!billing) {
+      // Create new diagnostics billing
+      billing = await prisma.billing.create({
+        data: {
+          patientId,
+          visitId,
+          totalAmount,
+          status: 'PENDING',
+          notes: 'Combined diagnostics billing - lab and radiology',
+          services: {
+            create: services.map(service => {
+              const serviceData = validServices.find(s => s.id === service.serviceId);
+              const investigationData = service.investigationTypeId ? 
+                validInvestigationTypes.find(i => i.id === service.investigationTypeId) : null;
+              const price = investigationData ? investigationData.price : serviceData.price;
+              
+              return {
+                serviceId: service.serviceId,
+                quantity: 1,
+                unitPrice: price,
+                totalPrice: price
+              };
+            })
+          }
+        }
+      });
+    } else {
+      // Update existing diagnostics billing
+      const newTotalAmount = billing.totalAmount + totalAmount;
+      
+      await prisma.billing.update({
+        where: { id: billing.id },
+        data: { totalAmount: newTotalAmount }
+      });
+
+      // Add new services to existing billing
+      await prisma.billingService.createMany({
+        data: services.map(service => {
+          const serviceData = validServices.find(s => s.id === service.serviceId);
+          const investigationData = service.investigationTypeId ? 
+            validInvestigationTypes.find(i => i.id === service.investigationTypeId) : null;
+          const price = investigationData ? investigationData.price : serviceData.price;
+          
+          return {
+            billingId: billing.id,
+            serviceId: service.serviceId,
+            quantity: 1,
+            unitPrice: price,
+            totalPrice: price
+          };
+        })
+      });
+
+      // Update billing total amount
+      billing.totalAmount = newTotalAmount;
+    }
 
     // Update visit status based on order type
     let newStatus = visit.status;
