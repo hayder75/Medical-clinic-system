@@ -7,7 +7,10 @@
   "scripts": {
     "migrate": "prisma migrate dev",
     "generate": "prisma generate",
-    "start": "node server.js"
+    "start": "node server.js",
+    "docker:start": "npx prisma db push && npx prisma generate && node seed-test-users.js && node server.js",
+    "dev": "node server.js",
+    "build": "prisma generate"
   },
   "dependencies": {
     "@prisma/client": "^5.20.0",

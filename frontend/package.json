@@ -1,6 +1,7 @@
 {
   "name": "medical-clinic-frontend",
   "version": "1.0.0",
+  "type": "module",
   "description": "Medical Clinic Management System Frontend",
   "main": "index.js",
   "scripts": {

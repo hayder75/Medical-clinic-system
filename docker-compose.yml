@@ -1,0 +1,73 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15
+    container_name: medical_clinic_db
+    environment:
+      POSTGRES_DB: medical_clinic_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/prisma/schema.prisma:/docker-entrypoint-initdb.d/schema.prisma
+    networks:
+      - medical_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: medical_clinic_backend
+    environment:
+      DATABASE_URL: postgresql://postgres:password@postgres:5432/medical_clinic_db?schema=public
+      JWT_SECRET: your-super-secret-jwt-key-change-this-in-production
+      JWT_EXPIRES_IN: 24h
+      PORT: 3000
+      HOST: 0.0.0.0
+      NODE_ENV: production
+      UPLOAD_DIR: uploads
+      MAX_FILE_SIZE: 10485760
+      CORS_ORIGIN: http://localhost:3001
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./backend/uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - medical_network
+    restart: unless-stopped
+
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: medical_clinic_frontend
+    environment:
+      VITE_API_URL: http://localhost:3000
+    ports:
+      - "3001:3001"
+    depends_on:
+      - backend
+    networks:
+      - medical_network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+
+networks:
+  medical_network:
+    driver: bridge
