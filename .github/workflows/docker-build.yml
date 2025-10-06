@@ -1,0 +1,45 @@
+name: Docker Build and Test
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+    
+    - name: Build and test with Docker Compose
+      run: |
+        # Create .env file for testing
+        cp backend/.env.example backend/.env
+        
+        # Build and start services
+        docker compose up -d --build
+        
+        # Wait for services to be ready
+        sleep 30
+        
+        # Test backend API
+        curl -f http://localhost:3000/api/auth/login \
+          -X POST \
+          -H "Content-Type: application/json" \
+          -d '{"username":"admin","password":"admin123"}' \
+          || exit 1
+        
+        # Test frontend
+        curl -f http://localhost:3001/ || exit 1
+        
+        # Show logs
+        docker compose logs
+        
+    - name: Cleanup
+      if: always()
+      run: docker compose down -v

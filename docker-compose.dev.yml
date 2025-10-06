@@ -13,7 +13,6 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./backend/prisma/schema.prisma:/docker-entrypoint-initdb.d/schema.prisma
     networks:
       - medical_network
     healthcheck:
@@ -22,12 +21,12 @@ services:
       timeout: 5s
       retries: 5
 
-  # Backend API
+  # Backend API (Development Mode)
   backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile
-    container_name: medical_clinic_backend
+      dockerfile: Dockerfile.dev
+    container_name: medical_clinic_backend_dev
     environment:
       DATABASE_URL: postgresql://postgres:password@postgres:5432/medical_clinic_db?schema=public
       JWT_SECRET: your-super-secret-jwt-key-change-this-in-production
@@ -41,37 +40,35 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./backend/uploads:/app/uploads
-      - ./backend/src:/app/src
-      - ./backend/server.js:/app/server.js
-      - ./backend/package.json:/app/package.json
+      - ./backend:/app
+      - /app/node_modules
     depends_on:
       postgres:
         condition: service_healthy
     networks:
       - medical_network
     restart: unless-stopped
+    command: npm run dev
 
-  # Frontend
+  # Frontend (Development Mode)
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile
-    container_name: medical_clinic_frontend
+      dockerfile: Dockerfile.dev
+    container_name: medical_clinic_frontend_dev
     environment:
       VITE_API_URL: http://localhost:3000
     ports:
       - "3001:3001"
     volumes:
-      - ./frontend/src:/app/src
-      - ./frontend/public:/app/public
-      - ./frontend/index.html:/app/index.html
-      - ./frontend/vite.config.js:/app/vite.config.js
+      - ./frontend:/app
+      - /app/node_modules
     depends_on:
       - backend
     networks:
       - medical_network
     restart: unless-stopped
+    command: npm run dev
 
 volumes:
   postgres_data:

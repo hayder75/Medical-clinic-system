@@ -8,8 +8,8 @@
     "migrate": "prisma migrate dev",
     "generate": "prisma generate",
     "start": "node server.js",
+    "dev": "nodemon server.js",
     "docker:start": "npx prisma db push && npx prisma generate && node seed-test-users.js && node server.js",
-    "dev": "node server.js",
     "build": "prisma generate"
   },
   "dependencies": {
@@ -27,6 +27,7 @@
     "zod": "^4.1.11"
   },
   "devDependencies": {
-    "prisma": "^5.20.0"
+    "prisma": "^5.20.0",
+    "nodemon": "^3.0.1"
   }
 }
