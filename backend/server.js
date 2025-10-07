@@ -35,7 +35,12 @@ const logger = require('./src/middleware/logger');
 const app = express();
 const prisma = new PrismaClient();
 
-app.use(cors());
+app.use(cors({
+  origin: ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002', 'http://127.0.0.1:5173', 'http://127.0.0.1:3000', 'http://127.0.0.1:3001', 'http://127.0.0.1:3002'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+}));
 app.use(morgan('dev'));
 app.use(express.json());
 app.use('/uploads', express.static('uploads'));
@@ -57,7 +62,7 @@ app.use('/api/visits', authMiddleware, visitsRoutes);
 app.use('/api/billing', authMiddleware, roleGuard(['BILLING_OFFICER', 'PHARMACY_BILLING_OFFICER', 'PHARMACIST', 'ADMIN']), billingRoutes);
 app.use('/api/doctors', authMiddleware, roleGuard(['DOCTOR', 'ADMIN']), doctorsRoutes);
 app.use('/api/nurses', authMiddleware, roleGuard(['NURSE', 'ADMIN']), nursesRoutes);
-app.use('/api/labs', authMiddleware, roleGuard(['LAB_TECHNICIAN', 'ADMIN']), labsRoutes);
+app.use('/api/labs', authMiddleware, roleGuard(['LAB_TECHNICIAN', 'DOCTOR', 'ADMIN']), labsRoutes);
 app.use('/api/radiologies', authMiddleware, roleGuard(['RADIOLOGIST', 'RADIOLOGY_TECHNICIAN', 'ADMIN']), radiologiesRoutes);
 app.use('/api/pharmacies', authMiddleware, roleGuard(['PHARMACY_OFFICER', 'PHARMACIST', 'PHARMACY_BILLING_OFFICER', 'ADMIN']), pharmaciesRoutes);
 app.use('/api/batch-orders', batchOrdersRoutes);

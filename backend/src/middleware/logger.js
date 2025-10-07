@@ -17,7 +17,10 @@ module.exports = async (req, res, next) => {
         },
       });
     } catch (error) {
-      console.error('Audit log error:', error.message);
+      // Silently skip audit log creation if user doesn't exist in database
+      if (!error.message.includes('Foreign key constraint') && !error.message.includes('AuditLog_userId_fkey')) {
+        console.error('Audit log error:', error.message);
+      }
     }
     oldSend.call(res, data);
   };

@@ -306,6 +306,7 @@ exports.getServices = async (req, res) => {
   }
 };
 
+
 exports.updateService = async (req, res) => {
   try {
     const { id } = req.params;
@@ -404,6 +405,64 @@ exports.getInsurances = async (req, res) => {
     });
 
     res.json({ insurances });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+exports.updateInsurance = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const data = createInsuranceSchema.partial().parse(req.body);
+
+    const insurance = await prisma.insurance.update({
+      where: { id },
+      data
+    });
+
+    res.json({
+      message: 'Insurance updated successfully',
+      insurance
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Validation error', details: error.errors });
+    }
+    res.status(500).json({ error: error.message });
+  }
+};
+
+exports.deleteInsurance = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Check if insurance exists
+    const insurance = await prisma.insurance.findUnique({
+      where: { id }
+    });
+
+    if (!insurance) {
+      return res.status(404).json({ error: 'Insurance not found' });
+    }
+
+    // Check if insurance is being used by patients
+    const patientsWithInsurance = await prisma.patient.findFirst({
+      where: { insuranceId: id }
+    });
+
+    if (patientsWithInsurance) {
+      return res.status(400).json({ 
+        error: 'Cannot delete insurance that is being used by patients' 
+      });
+    }
+
+    await prisma.insurance.delete({
+      where: { id }
+    });
+
+    res.json({
+      message: 'Insurance deleted successfully'
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -1096,54 +1155,6 @@ exports.getRevenueReport = async (req, res) => {
         total: (insuranceRevenue._sum.totalAmount || 0) + (cashRevenue._sum.totalAmount || 0)
       }
     });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-};
-
-// Insurance Management
-exports.createInsurance = async (req, res) => {
-  try {
-    const { name, code, contactInfo } = req.body;
-    const insurance = await prisma.insurance.create({
-      data: { name, code, contactInfo }
-    });
-    res.status(201).json(insurance);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-};
-
-exports.getInsurances = async (req, res) => {
-  try {
-    const insurances = await prisma.insurance.findMany({
-      orderBy: { name: 'asc' }
-    });
-    res.json({ insurances });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-};
-
-exports.updateInsurance = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { name, code, contactInfo } = req.body;
-    const insurance = await prisma.insurance.update({
-      where: { id },
-      data: { name, code, contactInfo }
-    });
-    res.json(insurance);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-};
-
-exports.deleteInsurance = async (req, res) => {
-  try {
-    const { id } = req.params;
-    await prisma.insurance.delete({ where: { id } });
-    res.json({ message: 'Insurance deleted successfully' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

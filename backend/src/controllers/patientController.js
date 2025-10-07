@@ -76,7 +76,8 @@ exports.searchPatients = async (req, res) => {
       ];
     }
 
-    const patients = await prisma.patient.findMany({
+    // Search patients directly
+    let patients = await prisma.patient.findMany({
       where: whereClause,
       select: {
         id: true,
@@ -91,8 +92,40 @@ exports.searchPatients = async (req, res) => {
         createdAt: true
       },
       orderBy: { name: 'asc' },
-      take: 20 // Limit results to prevent overwhelming response
+      take: 20
     });
+
+    // If no patients found, try searching by visit ID
+    if (patients.length === 0) {
+      const visits = await prisma.visit.findMany({
+        where: {
+          visitUid: {
+            contains: searchTerm,
+            mode: 'insensitive'
+          }
+        },
+        include: {
+          patient: {
+            select: {
+              id: true,
+              name: true,
+              type: true,
+              mobile: true,
+              email: true,
+              dob: true,
+              gender: true,
+              bloodType: true,
+              status: true,
+              createdAt: true
+            }
+          }
+        },
+        take: 20
+      });
+
+      patients = visits.map(visit => visit.patient).filter(patient => patient.status === 'Active');
+    }
+
 
     res.json({ 
       patients,

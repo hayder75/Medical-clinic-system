@@ -32,6 +32,11 @@ model User {
   batchOrders   BatchOrder[]     // batch orders created by this doctor
   visits        Visit[]
   nurseAdministrations NurseAdministration[]
+
+  @@index([role])
+  @@index([availability])
+  @@index([email])
+  @@index([username])
 }
 
 model Service {
@@ -112,6 +117,11 @@ model Patient {
   dentalRecords   DentalRecord[]
   visits          Visit[]
   pharmacyInvoices PharmacyInvoice[]
+
+  @@index([status])
+  @@index([type])
+  @@index([insuranceId])
+  @@index([createdAt])
 }
 
 model Visit {
@@ -139,6 +149,11 @@ model Visit {
   completedAt    DateTime?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
+
+  @@index([status])
+  @@index([patientId])
+  @@index([assignmentId])
+  @@index([createdAt])
 }
 
 model VitalSign {
@@ -166,6 +181,26 @@ model VitalSign {
   gcsMotor                Int?
   bloodPressureSystolic   Int?
   bloodPressureDiastolic  Int?
+  
+  // Chief Complaint & History
+  chiefComplaint          String?
+  historyOfPresentIllness String?
+  onsetOfSymptoms         String?
+  durationOfSymptoms      String?
+  severityOfSymptoms      String?
+  associatedSymptoms      String?
+  relievingFactors        String?
+  aggravatingFactors      String?
+  
+  // Physical Examination
+  generalAppearance       String?
+  headAndNeck            String?
+  cardiovascularExam     String?
+  respiratoryExam        String?
+  abdominalExam          String?
+  extremities            String?
+  neurologicalExam       String?
+  
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
 }
@@ -226,9 +261,12 @@ model PharmacyInvoice {
   patient           Patient?    @relation(fields: [patientId], references: [id])
   visitId           Int?
   visit             Visit?      @relation(fields: [visitId], references: [id])
+  invoiceNumber     String?     // Invoice number for tracking
   totalAmount       Float
   status            BillingStatus @default(PENDING)
   type              PharmacyInvoiceType @default(DOCTOR_PRESCRIPTION)
+  paymentMethod     PaymentType?
+  insuranceId       String?
   notes             String?
   createdBy         String?     // User ID who created the invoice
   processedBy       String?     // User ID who processed the payment
@@ -246,12 +284,15 @@ model PharmacyInvoiceItem {
   pharmacyInvoice   PharmacyInvoice @relation(fields: [pharmacyInvoiceId], references: [id])
   medicationOrderId Int?
   medicationOrder   MedicationOrder? @relation(fields: [medicationOrderId], references: [id])
+  medicationCatalogId String?
+  medicationCatalog MedicationCatalog? @relation(fields: [medicationCatalogId], references: [id])
   name              String
   dosageForm        String
   strength          String
   quantity          Int
   unitPrice         Float
   totalPrice        Float
+  notes             String?
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
 }
@@ -260,10 +301,16 @@ model DispensedMedicine {
   id                Int      @id @default(autoincrement())
   pharmacyInvoiceId String
   pharmacyInvoice   PharmacyInvoice @relation(fields: [pharmacyInvoiceId], references: [id])
-  medicationOrderId Int
-  medicationOrder   MedicationOrder @relation(fields: [medicationOrderId], references: [id])
+  medicationOrderId Int?
+  medicationOrder   MedicationOrder? @relation(fields: [medicationOrderId], references: [id])
+  medicationCatalogId String?
+  medicationCatalog MedicationCatalog? @relation(fields: [medicationCatalogId], references: [id])
   status            DispensedStatus
+  name              String?
+  dosageForm        String?
+  strength          String?
   quantity          Int?
+  unitPrice         Float?
   notes             String?
   dispensedAt       DateTime @default(now())
   dispensedBy       String?  // User ID who dispensed
@@ -476,6 +523,12 @@ model MedicationCatalog {
   updatedAt         DateTime @updatedAt
 
   medicationOrders  MedicationOrder[]
+  pharmacyInvoiceItems PharmacyInvoiceItem[]
+  dispensedMedicines DispensedMedicine[]
+
+  @@unique([name, dosageForm, strength])
+  @@index([category])
+  @@index([name])
 }
 
 model Assignment {
@@ -714,6 +767,9 @@ model BatchOrder {
   
   // Per-test results for radiology
   radiologyResults RadiologyResult[]
+  
+  // Detailed lab results
+  detailedResults DetailedLabResult[]
 }
 
 model BatchOrderService {
@@ -786,4 +842,35 @@ model RadiologyResultFile {
   fileType   String?
   uploadedAt DateTime         @default(now())
   uploadedBy String?          // User ID who uploaded
+}
+
+// New models for detailed lab test forms
+model LabTestTemplate {
+  id          String   @id @default(uuid())
+  name        String   // e.g., "Complete Blood Count (CBC)"
+  category    String   // e.g., "Hematology", "Urinalysis", "Blood Chemistry"
+  description String?  // Description of the test
+  fields      Json     // Array of field definitions with validation rules
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  detailedResults DetailedLabResult[]
+}
+
+model DetailedLabResult {
+  id              String   @id @default(uuid())
+  labOrderId      Int
+  labOrder        BatchOrder @relation(fields: [labOrderId], references: [id])
+  templateId      String
+  template        LabTestTemplate @relation(fields: [templateId], references: [id])
+  results         Json     // Structured results data
+  status          OrderStatus @default(UNPAID)
+  verifiedBy      String?  // Lab technician who verified
+  verifiedAt      DateTime?
+  additionalNotes String?   // Additional notes from lab technician
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([labOrderId, templateId])
 }

@@ -7,6 +7,8 @@ const prisma = require('../config/database');
  */
 async function checkVisitInvestigationCompletion(visitId) {
   try {
+    console.log(`🔍 Checking investigation completion for visit ${visitId}`);
+    
     // Get the visit with all related orders
     const visit = await prisma.visit.findUnique({
       where: { id: visitId },
@@ -30,8 +32,12 @@ async function checkVisitInvestigationCompletion(visitId) {
     });
 
     if (!visit) {
+      console.log(`❌ Visit ${visitId} not found`);
       throw new Error('Visit not found');
     }
+    
+    console.log(`📊 Visit ${visitId} current status: ${visit.status}, queueType: ${visit.queueType}`);
+    console.log(`🔬 Batch orders count: ${visit.batchOrders.length}`);
 
     // Check if there are any pending investigations
     const hasBatchOrders = visit.batchOrders.length > 0;
@@ -49,13 +55,17 @@ async function checkVisitInvestigationCompletion(visitId) {
     let batchOrdersComplete = true;
     if (hasBatchOrders) {
       batchOrdersComplete = visit.batchOrders.every(order => {
+        console.log(`   - Batch ${order.id}: ${order.status}`);
         return order.status === 'COMPLETED';
       });
     }
+    
+    console.log(`✅ All batch orders completed: ${batchOrdersComplete}`);
 
     const allInvestigationsComplete = batchOrdersComplete;
 
     if (allInvestigationsComplete) {
+      console.log(`🔄 Updating visit ${visitId} to AWAITING_RESULTS_REVIEW`);
       // Update visit status to AWAITING_RESULTS_REVIEW
       const updatedVisit = await prisma.visit.update({
         where: { id: visitId },
@@ -92,6 +102,7 @@ async function checkVisitInvestigationCompletion(visitId) {
         }
       });
 
+      console.log(`✅ Visit ${visitId} successfully updated to AWAITING_RESULTS_REVIEW`);
       return {
         isComplete: true,
         hasInvestigations: true,
@@ -100,6 +111,7 @@ async function checkVisitInvestigationCompletion(visitId) {
       };
     }
 
+    console.log(`⏳ Visit ${visitId} still has pending investigations`);
     return {
       isComplete: false,
       hasInvestigations: true,

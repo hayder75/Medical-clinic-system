@@ -13,6 +13,293 @@ const fillResultSchema = z.object({
   })).optional(),
 });
 
+// New validation schema for detailed lab results
+const detailedLabResultSchema = z.object({
+  labOrderId: z.number().int(),
+  templateId: z.string(),
+  results: z.record(z.string(), z.any()), // JSON object with field values
+  additionalNotes: z.string().optional(),
+});
+
+// Get lab test templates
+exports.getLabTemplates = async (req, res) => {
+  try {
+    const { category } = req.query;
+    
+    let whereClause = { isActive: true };
+    if (category) {
+      whereClause.category = category;
+    }
+
+    const templates = await prisma.labTestTemplate.findMany({
+      where: whereClause,
+      orderBy: [
+        { category: 'asc' },
+        { name: 'asc' }
+      ]
+    });
+
+    res.json({ templates });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Get specific lab test template
+exports.getLabTemplate = async (req, res) => {
+  try {
+    const { templateId } = req.params;
+
+    const template = await prisma.labTestTemplate.findUnique({
+      where: { id: templateId }
+    });
+
+    if (!template) {
+      return res.status(404).json({ error: 'Lab template not found' });
+    }
+
+    res.json({ template });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Submit detailed lab results
+exports.submitDetailedResults = async (req, res) => {
+  try {
+    const data = detailedLabResultSchema.parse(req.body);
+    const labTechnicianId = req.user.id;
+
+    // Check if batch order exists (using the current system structure)
+    const batchOrder = await prisma.batchOrder.findUnique({
+      where: { id: data.labOrderId },
+      include: {
+        visit: true,
+        patient: true,
+        services: {
+          include: {
+            service: true,
+            investigationType: true
+          }
+        }
+      }
+    });
+
+    if (!batchOrder) {
+      return res.status(404).json({ error: 'Lab order not found' });
+    }
+
+    // Check if template exists
+    const template = await prisma.labTestTemplate.findUnique({
+      where: { id: data.templateId }
+    });
+
+    if (!template) {
+      return res.status(404).json({ error: 'Lab template not found' });
+    }
+
+    // Validate results against template fields
+    const validationErrors = validateLabResults(data.results, template.fields);
+    if (validationErrors.length > 0) {
+      return res.status(400).json({ 
+        error: 'Validation errors in lab results',
+        validationErrors 
+      });
+    }
+
+    // Create detailed lab result for the batch order
+    const detailedResult = await prisma.detailedLabResult.create({
+      data: {
+        labOrderId: data.labOrderId,
+        templateId: data.templateId,
+        results: data.results,
+        additionalNotes: data.additionalNotes,
+        status: 'COMPLETED',
+        verifiedBy: labTechnicianId,
+        verifiedAt: new Date()
+      }
+    });
+
+    // Update batch order status
+    await prisma.batchOrder.update({
+      where: { id: data.labOrderId },
+      data: { 
+        status: 'COMPLETED',
+        result: `Lab results completed for ${template.name}`,
+        additionalNotes: data.additionalNotes
+      }
+    });
+
+    // Ensure visit status is moved to AWAITING_RESULTS_REVIEW if all investigations are done
+    try {
+      const completionResult = await checkVisitInvestigationCompletion(batchOrder.visitId);
+      console.log(`📋 Visit ${batchOrder.visitId} completion check result:`, completionResult.isComplete);
+    } catch (e) {
+      // Safely log but do not block response
+      console.error('checkVisitInvestigationCompletion failed:', e?.message || e);
+      
+      // Fallback: manually check and update if needed
+      try {
+        const visit = await prisma.visit.findUnique({
+          where: { id: batchOrder.visitId },
+          include: { batchOrders: true }
+        });
+        
+        if (visit && visit.batchOrders.every(order => order.status === 'COMPLETED')) {
+          await prisma.visit.update({
+            where: { id: batchOrder.visitId },
+            data: {
+              status: 'AWAITING_RESULTS_REVIEW',
+              queueType: 'RESULTS_REVIEW',
+              updatedAt: new Date()
+            }
+          });
+          console.log(`🔄 Fallback: Visit ${batchOrder.visitId} updated to AWAITING_RESULTS_REVIEW`);
+        }
+      } catch (fallbackError) {
+        console.error('Fallback visit update failed:', fallbackError?.message || fallbackError);
+      }
+    }
+
+    res.json({
+      message: 'Detailed lab results submitted successfully',
+      result: detailedResult
+    });
+
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Validation error', details: error.errors });
+    }
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Get detailed lab results for a batch order
+exports.getDetailedResults = async (req, res) => {
+  try {
+    const { labOrderId } = req.params;
+
+    const detailedResults = await prisma.detailedLabResult.findMany({
+      where: { labOrderId: parseInt(labOrderId) },
+      include: {
+        template: {
+          select: {
+            id: true,
+            name: true,
+            category: true,
+            fields: true
+          }
+        }
+      }
+    });
+
+    res.json({ detailedResults });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Helper function to validate lab results against template fields
+function validateLabResults(results, templateFields) {
+  const errors = [];
+  
+  templateFields.forEach(field => {
+    const value = results[field.name];
+    
+    // Check required fields
+    if (field.required && (value === undefined || value === null || value === '')) {
+      errors.push({
+        field: field.name,
+        message: `${field.label} is required`
+      });
+      return;
+    }
+
+    // Skip validation if field is not required and empty
+    if (!field.required && (value === undefined || value === null || value === '')) {
+      return;
+    }
+
+    // Validate number fields
+    if (field.type === 'number' && value !== undefined && value !== null && value !== '') {
+      const numValue = parseFloat(value);
+      
+      if (isNaN(numValue)) {
+        errors.push({
+          field: field.name,
+          message: `${field.label} must be a valid number`
+        });
+        return;
+      }
+
+      if (field.min !== undefined && numValue < field.min) {
+        errors.push({
+          field: field.name,
+          message: `${field.label} value (${numValue}) is below minimum (${field.min})`
+        });
+      }
+
+      if (field.max !== undefined && numValue > field.max) {
+        errors.push({
+          field: field.name,
+          message: `${field.label} value (${numValue}) is above maximum (${field.max})`
+        });
+      }
+    }
+
+    // Validate select fields
+    if (field.type === 'select' && field.options && !field.options.includes(value)) {
+      errors.push({
+        field: field.name,
+        message: `${field.label} must be one of: ${field.options.join(', ')}`
+      });
+    }
+  });
+
+  return errors;
+}
+
+// Helper function to update lab order status
+async function updateLabOrderStatus(labOrderId) {
+  // Check if all detailed results are completed
+  const pendingResults = await prisma.detailedLabResult.count({
+    where: {
+      labOrderId: labOrderId,
+      status: { not: 'COMPLETED' }
+    }
+  });
+
+  if (pendingResults === 0) {
+    // Update lab order status to completed
+    await prisma.labOrder.update({
+      where: { id: labOrderId },
+      data: { status: 'COMPLETED' }
+    });
+
+    // Update visit status if all lab orders are completed
+    const labOrder = await prisma.labOrder.findUnique({
+      where: { id: labOrderId },
+      include: { visit: true }
+    });
+
+    if (labOrder) {
+      const pendingLabOrders = await prisma.labOrder.count({
+        where: {
+          visitId: labOrder.visitId,
+          status: { not: 'COMPLETED' }
+        }
+      });
+
+      if (pendingLabOrders === 0) {
+        await prisma.visit.update({
+          where: { id: labOrder.visitId },
+          data: { status: 'RETURNED_WITH_RESULTS' }
+        });
+      }
+    }
+  }
+}
+
 exports.getOrders = async (req, res) => {
   try {
     // Get batch orders instead of individual lab orders

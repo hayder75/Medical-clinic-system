@@ -74,6 +74,23 @@ const completeVisitSchema = z.object({
   appointmentNotes: z.string().optional(),
 });
 
+exports.getInvestigationTypes = async (req, res) => {
+  try {
+    const investigationTypes = await prisma.investigationType.findMany({
+      include: {
+        service: true
+      },
+      orderBy: [
+        { category: 'asc' },
+        { name: 'asc' }
+      ]
+    });
+    res.json({ investigationTypes });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 exports.getQueue = async (req, res) => {
   try {
     const doctorId = req.user.id;
@@ -184,9 +201,10 @@ exports.getResultsQueue = async (req, res) => {
       where: { 
         status: 'AWAITING_RESULTS_REVIEW',
         queueType: 'RESULTS_REVIEW',
-        assignmentId: {
-          not: null
-        }
+        OR: [
+          { assignmentId: { not: null } },
+          { batchOrders: { some: { doctorId: doctorId } } }
+        ]
       },
       include: {
         patient: { 
@@ -803,8 +821,11 @@ exports.createMultipleLabOrders = async (req, res) => {
       instructions: 'Lab tests ordered by doctor',
       services: newOrders.map(order => {
         const investigation = investigationTypes.find(i => i.id === order.typeId);
+        if (!investigation || !investigation.serviceId) {
+          throw new Error(`Investigation type ${order.typeId} not found or not linked to a service`);
+        }
         return {
-          serviceId: investigation?.serviceId || '2d25da56-c20f-4a51-b207-755073afd6d0',
+          serviceId: investigation.serviceId,
           investigationTypeId: order.typeId,
           instructions: order.instructions || 'Lab test'
         };
@@ -1236,8 +1257,11 @@ exports.createMultipleRadiologyOrders = async (req, res) => {
       instructions: 'Radiology tests ordered by doctor',
       services: newOrders.map(order => {
         const investigation = investigationTypes.find(i => i.id === order.typeId);
+        if (!investigation || !investigation.serviceId) {
+          throw new Error(`Investigation type ${order.typeId} not found or not linked to a service`);
+        }
         return {
-          serviceId: investigation?.serviceId || 'd849879f-4522-4523-8d67-53fa558c99ef', // Chest X-Ray service
+          serviceId: investigation.serviceId,
           investigationTypeId: order.typeId,
           instructions: order.instructions || 'Radiology test'
         };
@@ -1621,21 +1645,62 @@ exports.getPatientHistory = async (req, res) => {
         orderBy: { createdAt: 'desc' }
       });
 
-      // Get lab results from batch order services (since lab results are stored in batch order services)
-      const labResults = [];
+      // Get detailed lab results from DetailedLabResult table
+      const batchOrderIds = visit.batchOrders
+        .filter(bo => bo.type === 'LAB')
+        .map(bo => bo.id);
+      
+      const detailedLabResults = await prisma.detailedLabResult.findMany({
+        where: {
+          labOrderId: {
+            in: batchOrderIds
+          }
+        },
+        include: {
+          template: true
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+
+      // Convert detailed lab results to the expected format
+      const labResults = detailedLabResults.map(result => ({
+        id: result.id,
+        testType: {
+          name: result.template.name,
+          category: result.template.category
+        },
+        resultText: `Detailed results for ${result.template.name}`,
+        detailedResults: result.results, // Include the actual detailed results
+        additionalNotes: result.additionalNotes || '',
+        status: result.status,
+        attachments: [], // Detailed lab results don't have separate attachments
+        createdAt: result.createdAt,
+        verifiedBy: result.verifiedBy,
+        verifiedAt: result.verifiedAt
+      }));
+
+      // Also include legacy lab results from batch order services (for backward compatibility)
       for (const batchOrder of visit.batchOrders) {
         if (batchOrder.type === 'LAB') {
           for (const service of batchOrder.services) {
             if (service.investigationType && service.result) {
-              labResults.push({
-                id: `batch-${batchOrder.id}-${service.id}`,
-                testType: service.investigationType,
-                resultText: service.result,
-                additionalNotes: service.additionalNotes || '',
-                status: service.status,
-                attachments: [], // Lab results from batch orders don't have separate attachments
-                createdAt: batchOrder.updatedAt || batchOrder.createdAt
-              });
+              // Check if we already have a detailed result for this service
+              const hasDetailedResult = detailedLabResults.some(dr => 
+                dr.labOrderId === batchOrder.id && 
+                dr.template.name === service.investigationType.name
+              );
+              
+              if (!hasDetailedResult) {
+                labResults.push({
+                  id: `batch-${batchOrder.id}-${service.id}`,
+                  testType: service.investigationType,
+                  resultText: service.result,
+                  additionalNotes: service.additionalNotes || '',
+                  status: service.status,
+                  attachments: [], // Lab results from batch orders don't have separate attachments
+                  createdAt: batchOrder.updatedAt || batchOrder.createdAt
+                });
+              }
             }
           }
         }
@@ -2227,21 +2292,7 @@ exports.createBatchPrescription = async (req, res) => {
       }
     });
 
-    // Create pharmacy invoice items for each medication
-    const invoiceItems = await prisma.pharmacyInvoiceItem.createMany({
-      data: medications.map(medication => ({
-        pharmacyInvoiceId: pharmacyInvoice.id,
-        medicationOrderId: null, // Will be updated after we get the order IDs
-        name: medication.name,
-        dosageForm: medication.dosageForm,
-        strength: medication.strength,
-        quantity: medication.quantity,
-        unitPrice: medication.unitPrice || 0,
-        totalPrice: (medication.unitPrice || 0) * medication.quantity
-      }))
-    });
-
-    // Update the invoice items with the correct medication order IDs
+    // Get the created medication orders to link them to invoice items
     const createdOrderIds = await prisma.medicationOrder.findMany({
       where: { 
         visitId: parseInt(visitId),
@@ -2253,18 +2304,21 @@ exports.createBatchPrescription = async (req, res) => {
       take: medications.length
     });
 
-    // Update invoice items with medication order IDs
-    for (let i = 0; i < createdOrderIds.length; i++) {
-      await prisma.pharmacyInvoiceItem.updateMany({
-        where: {
-          pharmacyInvoiceId: pharmacyInvoice.id,
-          name: createdOrderIds[i].name
-        },
-        data: {
-          medicationOrderId: createdOrderIds[i].id
-        }
-      });
-    }
+    // Create pharmacy invoice items for each medication
+    const invoiceItems = await prisma.pharmacyInvoiceItem.createMany({
+      data: medications.map((medication, index) => ({
+        pharmacyInvoiceId: pharmacyInvoice.id,
+        medicationOrderId: createdOrderIds[index]?.id || null, // Use createdOrderIds instead of createdOrders
+        medicationCatalogId: medication.medicationCatalogId || null,
+        name: medication.name,
+        dosageForm: medication.dosageForm,
+        strength: medication.strength,
+        quantity: medication.quantity,
+        unitPrice: medication.unitPrice || 0,
+        totalPrice: (medication.unitPrice || 0) * medication.quantity
+      }))
+    });
+
 
     // Update visit status to include pharmacy
     await prisma.visit.update({

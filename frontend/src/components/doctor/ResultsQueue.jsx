@@ -4,6 +4,92 @@ import api from '../../services/api';
 import toast from 'react-hot-toast';
 import EnhancedPrescription from './EnhancedPrescription';
 
+// Component to display detailed lab results
+const LabResultsDisplay = ({ batchOrder }) => {
+  const [detailedResults, setDetailedResults] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchDetailedResults();
+  }, [batchOrder.id]);
+
+  const fetchDetailedResults = async () => {
+    try {
+      const response = await api.get(`/labs/orders/${batchOrder.id}/detailed-results`);
+      setDetailedResults(response.data.detailedResults || []);
+    } catch (error) {
+      console.error('Error fetching detailed lab results:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="border rounded-lg p-3">
+        <div className="animate-pulse">
+          <div className="h-4 bg-gray-200 rounded w-1/4 mb-2"></div>
+          <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (detailedResults.length === 0) {
+    return (
+      <div className="border rounded-lg p-3">
+        <div className="text-sm text-gray-500">
+          <TestTube className="h-4 w-4 inline mr-2" />
+          No detailed lab results available
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {detailedResults.map((result, index) => (
+        <div key={result.id} className="border rounded-lg p-4">
+          <div className="flex justify-between items-start mb-3">
+            <h6 className="font-medium text-gray-900 flex items-center">
+              <TestTube className="h-4 w-4 mr-2 text-blue-600" />
+              {result.template.name}
+            </h6>
+            <span className="badge badge-success">Completed</span>
+          </div>
+          
+          <div className="space-y-3">
+            {/* Display detailed results */}
+            <div className="bg-white rounded-lg p-3">
+              <div className="text-sm font-medium text-gray-900 mb-2">
+                Test Results:
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
+                {Object.entries(result.results).map(([key, value]) => (
+                  <div key={key} className="flex justify-between">
+                    <span className="text-gray-600 capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}:</span>
+                    <span className="text-gray-900 font-medium">{value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            {result.additionalNotes && (
+              <div className="text-sm text-gray-600">
+                <strong>Notes:</strong> {result.additionalNotes}
+              </div>
+            )}
+
+            <div className="text-xs text-gray-500">
+              Verified by: Lab Technician | {new Date(result.verifiedAt).toLocaleString()}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 // Component to display per-test radiology results
 const RadiologyResultsDisplay = ({ batchOrder }) => {
   const [radiologyResults, setRadiologyResults] = useState([]);
@@ -410,89 +496,7 @@ const ResultsQueue = () => {
                   {selectedVisit.batchOrders
                     .filter(order => order.type === 'LAB' && order.status === 'COMPLETED')
                     .map((order, index) => (
-                      <div key={index} className="border rounded-lg p-4 bg-blue-50">
-                        <div className="flex justify-between items-start mb-3">
-                          <h6 className="font-medium text-gray-900 text-lg">Lab Tests</h6>
-                          <span className="badge badge-success">Completed</span>
-                        </div>
-                        
-                        {/* Main Result */}
-                        <div className="bg-white rounded-lg p-3 mb-3">
-                          <div className="text-sm text-gray-700 mb-2">
-                            <strong>Result:</strong> {order.result || 'No result provided'}
-                          </div>
-                          {order.additionalNotes && (
-                            <div className="text-sm text-gray-600">
-                              <strong>Notes:</strong> {order.additionalNotes}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Tests Performed */}
-                        {order.services && order.services.length > 0 && (
-                          <div className="bg-white rounded-lg p-3 mb-3">
-                            <div className="text-sm font-medium text-gray-900 mb-2">
-                              Tests Performed:
-                            </div>
-                            <div className="space-y-2">
-                              {order.services.map((service, serviceIndex) => (
-                                <div key={serviceIndex} className="flex justify-between items-center text-sm">
-                                  <span className="text-gray-700">
-                                    • {service.investigationType?.name || service.service?.name || 'Test'}
-                                  </span>
-                                  <span className="text-xs text-gray-500">
-                                    {service.result || 'No individual result'}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Attachments */}
-                        {order.attachments && order.attachments.length > 0 && (
-                          <div className="bg-white rounded-lg p-3">
-                            <div className="text-sm font-medium text-gray-900 mb-2">
-                              Attached Files:
-                            </div>
-                            <div className="space-y-2">
-                              {order.attachments.map((file, fileIndex) => (
-                                <div key={fileIndex} className="flex items-center space-x-2">
-                                  <div className="flex-shrink-0">
-                                    {file.type?.startsWith('image/') ? (
-                                      <img 
-                                        src={`http://localhost:3000/${file.path}`} 
-                                        alt="Lab result" 
-                                        className="w-16 h-16 object-cover rounded border"
-                                        onClick={() => window.open(`http://localhost:3000/${file.path}`, '_blank')}
-                                        style={{ cursor: 'pointer' }}
-                                      />
-                                    ) : (
-                                      <div className="w-16 h-16 bg-gray-200 rounded border flex items-center justify-center">
-                                        <FileText className="h-6 w-6 text-gray-500" />
-                                      </div>
-                                    )}
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-sm text-gray-900 truncate">
-                                      {file.path.split('/').pop()}
-                                    </p>
-                                    <p className="text-xs text-gray-500">
-                                      {file.type || 'Unknown type'}
-                                    </p>
-                                  </div>
-                                  <button
-                                    onClick={() => window.open(`http://localhost:3000/${file.path}`, '_blank')}
-                                    className="text-blue-600 hover:text-blue-800 text-sm"
-                                  >
-                                    View
-                                  </button>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
+                      <LabResultsDisplay key={index} batchOrder={order} />
                     ))}
                 </div>
               </div>

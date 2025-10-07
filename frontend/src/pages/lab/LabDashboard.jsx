@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import Layout from '../../components/common/Layout';
-import LabQueue from '../../components/lab/LabQueue';
+import EnhancedLabQueue from '../../components/lab/EnhancedLabQueue';
 import { 
   TestTube, 
   Clock, 
@@ -48,7 +48,7 @@ const LabDashboard = () => {
       value: stats.totalTests,
       icon: TestTube,
       color: 'bg-blue-500',
-      description: 'All tests this month'
+      description: 'All lab tests'
     },
     {
       title: 'Urgent Orders',
@@ -59,104 +59,42 @@ const LabDashboard = () => {
     }
   ];
 
-  const DashboardOverview = () => (
-    <div className="space-y-6">
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {statCards.map((stat, index) => (
-          <div key={index} className="card">
-            <div className="flex items-center">
-              <div className={`p-3 rounded-lg ${stat.color}`}>
-                <stat.icon className="h-6 w-6 text-white" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">{stat.title}</p>
-                <p className="text-2xl font-semibold text-gray-900">{stat.value}</p>
-                <p className="text-xs text-gray-500">{stat.description}</p>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Quick Actions */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="card">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Quick Actions</h3>
-          <div className="space-y-3">
-            <button className="w-full text-left p-3 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
-              <div className="flex items-center">
-                <TestTube className="h-5 w-5 text-blue-500 mr-3" />
-                <div>
-                  <p className="font-medium">Process Order</p>
-                  <p className="text-sm text-gray-500">Start processing lab test</p>
-                </div>
-              </div>
-            </button>
-            <button className="w-full text-left p-3 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
-              <div className="flex items-center">
-                <FileText className="h-5 w-5 text-green-500 mr-3" />
-                <div>
-                  <p className="font-medium">Upload Results</p>
-                  <p className="text-sm text-gray-500">Upload test results and files</p>
-                </div>
-              </div>
-            </button>
-            <button className="w-full text-left p-3 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
-              <div className="flex items-center">
-                <AlertTriangle className="h-5 w-5 text-red-500 mr-3" />
-                <div>
-                  <p className="font-medium">Urgent Orders</p>
-                  <p className="text-sm text-gray-500">View high priority tests</p>
-                </div>
-              </div>
-            </button>
-          </div>
-        </div>
-
-        <div className="card">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Recent Activity</h3>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between py-2 border-b border-gray-100">
-              <div className="flex items-center">
-                <div className="h-2 w-2 bg-green-500 rounded-full mr-3"></div>
-                <span className="text-sm text-gray-600">CBC test completed</span>
-              </div>
-              <span className="text-xs text-gray-400">5 minutes ago</span>
-            </div>
-            <div className="flex items-center justify-between py-2 border-b border-gray-100">
-              <div className="flex items-center">
-                <div className="h-2 w-2 bg-blue-500 rounded-full mr-3"></div>
-                <span className="text-sm text-gray-600">New blood test order</span>
-              </div>
-              <span className="text-xs text-gray-400">15 minutes ago</span>
-            </div>
-            <div className="flex items-center justify-between py-2 border-b border-gray-100">
-              <div className="flex items-center">
-                <div className="h-2 w-2 bg-yellow-500 rounded-full mr-3"></div>
-                <span className="text-sm text-gray-600">Urgent test requested</span>
-              </div>
-              <span className="text-xs text-gray-400">30 minutes ago</span>
-            </div>
-            <div className="flex items-center justify-between py-2 border-b border-gray-100">
-              <div className="flex items-center">
-                <div className="h-2 w-2 bg-purple-500 rounded-full mr-3"></div>
-                <span className="text-sm text-gray-600">Results uploaded</span>
-              </div>
-              <span className="text-xs text-gray-400">1 hour ago</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
   return (
-    <Layout title="Lab Dashboard" subtitle="Laboratory test processing and results management">
-      <Routes>
-        <Route path="/" element={<DashboardOverview />} />
-        <Route path="/orders" element={<LabQueue />} />
-      </Routes>
+    <Layout>
+      <div className="p-6">
+        {/* Header */}
+        <div className="mb-8">
+          <div className="flex items-center mb-2">
+            <TestTube className="w-8 h-8 text-blue-600 mr-3" />
+            <h1 className="text-3xl font-bold text-gray-800">Lab Dashboard</h1>
+          </div>
+          <p className="text-gray-600">Manage laboratory tests and results</p>
+        </div>
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          {statCards.map((card, index) => (
+            <div key={index} className="bg-white rounded-lg shadow-md p-6">
+              <div className="flex items-center">
+                <div className={`p-3 rounded-full ${card.color} text-white mr-4`}>
+                  <card.icon className="w-6 h-6" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-600">{card.title}</p>
+                  <p className="text-2xl font-bold text-gray-800">{card.value}</p>
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 mt-2">{card.description}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Main Content */}
+        <Routes>
+          <Route path="/" element={<EnhancedLabQueue />} />
+          <Route path="/queue" element={<EnhancedLabQueue />} />
+        </Routes>
+      </div>
     </Layout>
   );
 };

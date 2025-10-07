@@ -60,32 +60,30 @@ const PatientQueue = () => {
   const [alreadyOrderedRadiologyTests, setAlreadyOrderedRadiologyTests] = useState([]);
   const [orderStatus, setOrderStatus] = useState(null);
   
-  // Lab test options
-  const labTestOptions = [
-    { id: 19, name: 'CBC (Complete Blood Count)', price: 150 },
-    { id: 20, name: 'Blood Sugar (Fasting)', price: 100 },
-    { id: 21, name: 'Lipid Profile', price: 200 },
-    { id: 22, name: 'Liver Function Test', price: 180 },
-    { id: 23, name: 'Kidney Function Test', price: 160 },
-    { id: 24, name: 'Thyroid Function Test', price: 250 },
-    { id: 25, name: 'Urinalysis', price: 80 },
-    { id: 26, name: 'Stool Analysis', price: 120 }
-  ];
+  // Lab and radiology test options (will be fetched from backend)
+  const [labTestOptions, setLabTestOptions] = useState([]);
+  const [radiologyTestOptions, setRadiologyTestOptions] = useState([]);
 
-  // Radiology test options
-  const radiologyTestOptions = [
-    { id: 27, name: 'Chest X-Ray', price: 200 },
-    { id: 28, name: 'Abdominal X-Ray', price: 180 },
-    { id: 29, name: 'CT Scan - Head', price: 800 },
-    { id: 30, name: 'CT Scan - Chest', price: 1000 },
-    { id: 31, name: 'MRI - Brain', price: 1200 },
-    { id: 32, name: 'Ultrasound - Abdomen', price: 300 },
-    { id: 33, name: 'Ultrasound - Pelvis', price: 250 },
-    { id: 34, name: 'ECG', price: 150 }
-  ];
+  // Fetch investigation types from backend
+  const fetchInvestigationTypes = async () => {
+    try {
+      const response = await api.get('/doctors/investigation-types');
+      const types = response.data.investigationTypes || [];
+      
+      const labTypes = types.filter(type => type.category === 'LAB');
+      const radiologyTypes = types.filter(type => type.category === 'RADIOLOGY');
+      
+      setLabTestOptions(labTypes);
+      setRadiologyTestOptions(radiologyTypes);
+    } catch (error) {
+      console.error('Error fetching investigation types:', error);
+      toast.error('Failed to load test options');
+    }
+  };
 
   useEffect(() => {
     fetchVisits();
+    fetchInvestigationTypes();
   }, []);
 
   const fetchVisits = async () => {
@@ -213,9 +211,9 @@ const PatientQueue = () => {
     try {
       // Update diagnosis and instructions
       await api.put(`/doctors/visits/${selectedVisit.id}`, {
-        diagnosis: formData.diagnosis,
-        diagnosisDetails: formData.diagnosisDetails,
-        instructions: formData.instructions
+        diagnosis: formData.primaryDiagnosis,
+        diagnosisDetails: formData.differentialDiagnosis,
+        instructions: formData.instructions || `${formData.secondaryDiagnosis ? `Secondary: ${formData.secondaryDiagnosis}` : ''}`
       });
       toast.success('Patient information updated successfully');
       fetchVisits();

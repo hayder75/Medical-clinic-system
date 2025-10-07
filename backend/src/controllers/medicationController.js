@@ -7,7 +7,6 @@ exports.searchMedications = async (req, res) => {
     const { query, category, type, limit = 50 } = req.query;
     
     const whereClause = {
-      isActive: true,
       ...(query && {
         OR: [
           { name: { contains: query, mode: 'insensitive' } },
@@ -27,12 +26,13 @@ exports.searchMedications = async (req, res) => {
         genericName: true,
         dosageForm: true,
         strength: true,
-        type: true,
+        category: true,
         unitPrice: true,
         availableQuantity: true,
-        category: true,
+        minimumStock: true,
         manufacturer: true,
-        description: true
+        createdAt: true,
+        updatedAt: true
       },
       orderBy: [
         { name: 'asc' },
@@ -247,7 +247,6 @@ exports.getLowStockMedications = async (req, res) => {
   try {
     const medications = await prisma.medicationCatalog.findMany({
       where: {
-        isActive: true,
         availableQuantity: {
           lte: prisma.medicationCatalog.fields.minimumStock
         }
@@ -274,7 +273,6 @@ exports.getLowStockMedications = async (req, res) => {
 exports.getMedicationCategories = async (req, res) => {
   try {
     const categories = await prisma.medicationCatalog.findMany({
-      where: { isActive: true },
       select: { category: true },
       distinct: ['category']
     });

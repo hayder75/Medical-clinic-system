@@ -8,6 +8,7 @@ router.get('/results-queue', doctorController.getResultsQueue);
 router.get('/patient-history/:patientId', doctorController.getPatientHistory);
 router.get('/vitals/:visitId', doctorController.getPatientVitals);
 router.get('/order-status/:visitId', doctorController.getVisitOrderStatus);
+router.get('/investigation-types', doctorController.getInvestigationTypes);
 router.post('/select', doctorController.selectVisit);
 router.put('/visits/:visitId', doctorController.updateVisit);
 router.post('/lab-orders', doctorController.createLabOrder);

@@ -214,10 +214,32 @@ exports.fillReport = async (req, res) => {
 
     // Check if all investigations for this visit are completed
     try {
-      await checkVisitInvestigationCompletion(batchOrder.visitId);
+      const completionResult = await checkVisitInvestigationCompletion(batchOrder.visitId);
+      console.log(`📋 Visit ${batchOrder.visitId} completion check result:`, completionResult.isComplete);
     } catch (error) {
       console.error('Error checking investigation completion:', error);
-      // Don't fail the request if investigation completion check fails
+      
+      // Fallback: manually check and update if needed
+      try {
+        const visit = await prisma.visit.findUnique({
+          where: { id: batchOrder.visitId },
+          include: { batchOrders: true }
+        });
+        
+        if (visit && visit.batchOrders.every(order => order.status === 'COMPLETED')) {
+          await prisma.visit.update({
+            where: { id: batchOrder.visitId },
+            data: {
+              status: 'AWAITING_RESULTS_REVIEW',
+              queueType: 'RESULTS_REVIEW',
+              updatedAt: new Date()
+            }
+          });
+          console.log(`🔄 Fallback: Visit ${batchOrder.visitId} updated to AWAITING_RESULTS_REVIEW`);
+        }
+      } catch (fallbackError) {
+        console.error('Fallback visit update failed:', fallbackError?.message || fallbackError);
+      }
     }
 
     res.json({

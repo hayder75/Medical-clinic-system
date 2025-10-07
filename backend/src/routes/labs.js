@@ -15,4 +15,10 @@ router.post('/results', labController.createLabResult);
 router.post('/results/:resultId/file', fileUpload.single('file'), labController.uploadLabResultFile);
 router.get('/orders/:orderId/results', labController.getLabResults);
 
+// New detailed lab form routes
+router.get('/templates', labController.getLabTemplates);
+router.get('/templates/:templateId', labController.getLabTemplate);
+router.post('/results/detailed', labController.submitDetailedResults);
+router.get('/orders/:labOrderId/detailed-results', labController.getDetailedResults);
+
 module.exports = router;

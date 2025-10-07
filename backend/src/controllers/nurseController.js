@@ -166,14 +166,31 @@ exports.assignDoctor = async (req, res) => {
       return res.status(404).json({ error: 'Doctor not found or not available' });
     }
 
-    // Create assignment
-    const assignment = await prisma.assignment.create({
-      data: {
+    // Check if assignment already exists
+    let assignment = await prisma.assignment.findFirst({
+      where: {
         patientId,
         doctorId,
-        status: 'Pending'
+        status: { in: ['Pending', 'Active'] }
       }
     });
+
+    // Create assignment if it doesn't exist
+    if (!assignment) {
+      assignment = await prisma.assignment.create({
+        data: {
+          patientId,
+          doctorId,
+          status: 'Pending'
+        }
+      });
+    } else {
+      // Update existing assignment to Pending if it was completed
+      assignment = await prisma.assignment.update({
+        where: { id: assignment.id },
+        data: { status: 'Pending' }
+      });
+    }
 
     // Update visit status and link assignment
     await prisma.visit.update({

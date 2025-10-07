@@ -49,14 +49,27 @@ const PharmacyInvoices = () => {
   const handlePayment = async (e) => {
     e.preventDefault();
     try {
-      await api.post('/pharmacy-billing/payment', {
+      const paymentPayload = {
         pharmacyInvoiceId: selectedInvoice.id,
         amount: parseFloat(paymentData.amount),
-        type: paymentData.type,
-        bankName: paymentData.bankName || null,
-        transNumber: paymentData.transNumber || null,
-        notes: paymentData.notes || null
-      });
+        type: paymentData.type
+      };
+      
+      // Only include optional fields if they have values
+      if (paymentData.bankName && paymentData.bankName.trim()) {
+        paymentPayload.bankName = paymentData.bankName;
+      }
+      if (paymentData.transNumber && paymentData.transNumber.trim()) {
+        paymentPayload.transNumber = paymentData.transNumber;
+      }
+      if (paymentData.notes && paymentData.notes.trim()) {
+        paymentPayload.notes = paymentData.notes;
+      }
+      if (paymentData.insuranceId && paymentData.insuranceId.trim()) {
+        paymentPayload.insuranceId = paymentData.insuranceId;
+      }
+      
+      await api.post('/pharmacy-billing/payment', paymentPayload);
 
       toast.success('Payment processed successfully! Invoice moved to pharmacy queue.');
       setShowPaymentForm(false);
@@ -193,17 +206,17 @@ const PharmacyInvoices = () => {
               <div>
                 <p className="text-sm text-gray-500">Medications</p>
                 <p className="text-sm text-gray-900">
-                  {invoice.items?.length || 0} medication(s)
+                  {invoice.pharmacyInvoiceItems?.length || 0} medication(s)
                 </p>
               </div>
             </div>
 
             {/* Medications List */}
-            {invoice.items && invoice.items.length > 0 && (
+            {invoice.pharmacyInvoiceItems && invoice.pharmacyInvoiceItems.length > 0 && (
               <div className="mb-4">
                 <h4 className="text-sm font-medium text-gray-700 mb-2">Medications</h4>
                 <div className="space-y-1">
-                  {invoice.items.map((item, index) => (
+                  {invoice.pharmacyInvoiceItems.map((item, index) => (
                     <div key={index} className="flex justify-between text-sm">
                       <span className="text-gray-600">
                         {item.name} - {item.strength} ({item.dosageForm})
