@@ -137,6 +137,43 @@ exports.recordVitals = async (req, res) => {
   }
 };
 
+// Get doctors by specialty
+exports.getDoctorsBySpecialty = async (req, res) => {
+  try {
+    const { specialty } = req.query;
+
+    let whereClause = {
+      role: 'DOCTOR',
+      availability: true
+    };
+
+    // If specialty is specified, filter by it
+    if (specialty && specialty !== 'General') {
+      whereClause.specialties = {
+        has: specialty
+      };
+    }
+
+    const doctors = await prisma.user.findMany({
+      where: whereClause,
+      select: {
+        id: true,
+        fullname: true,
+        username: true,
+        email: true,
+        specialties: true,
+        consultationFee: true
+      },
+      orderBy: { fullname: 'asc' }
+    });
+
+    res.json({ doctors });
+  } catch (error) {
+    console.error('Error fetching doctors by specialty:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
 exports.assignDoctor = async (req, res) => {
   try {
     console.log('Assignment request body:', JSON.stringify(req.body, null, 2));

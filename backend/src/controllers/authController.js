@@ -46,7 +46,7 @@ exports.login = async (req, res) => {
       user = await prisma.user.findUnique({ where: { username } });
       if (user && await bcrypt.compare(password, user.password)) {
         const token = jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET || 'fallback-secret', { expiresIn: '1h' });
-        return res.json({ token, user: { id: user.id, role: user.role, fullname: user.fullname } });
+        return res.json({ token, user: { id: user.id, role: user.role, fullname: user.fullname, specialties: user.specialties } });
       }
     } catch (dbError) {
       console.log('Database not available, using test users');

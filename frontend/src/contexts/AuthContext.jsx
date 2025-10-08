@@ -20,11 +20,19 @@ export const AuthProvider = ({ children }) => {
     const initAuth = async () => {
       if (token) {
         try {
-          const userData = await authService.getCurrentUser();
-          setUser(userData);
+          // Try to get user data from sessionStorage first (from login)
+          const storedUser = sessionStorage.getItem('user');
+          if (storedUser) {
+            setUser(JSON.parse(storedUser));
+          } else {
+            // Fallback to JWT decoding if no stored user
+            const userData = await authService.getCurrentUser();
+            setUser(userData);
+          }
         } catch (error) {
           console.error('Auth initialization failed:', error);
           sessionStorage.removeItem('token');
+          sessionStorage.removeItem('user');
           setToken(null);
         }
       }
@@ -40,6 +48,7 @@ export const AuthProvider = ({ children }) => {
       const { token: newToken, user: userData } = response;
       
       sessionStorage.setItem('token', newToken);
+      sessionStorage.setItem('user', JSON.stringify(userData));
       setToken(newToken);
       setUser(userData);
       
@@ -54,6 +63,7 @@ export const AuthProvider = ({ children }) => {
 
   const logout = () => {
     sessionStorage.removeItem('token');
+    sessionStorage.removeItem('user');
     setToken(null);
     setUser(null);
   };

@@ -181,6 +181,13 @@ const LabQueue = () => {
     }
   };
 
+  const isDentalOrder = (order) => {
+    return order.services?.some(service => 
+      service.service?.code?.startsWith('DENTAL_') || 
+      service.investigationType?.name?.toLowerCase().includes('dental')
+    );
+  };
+
   const getStatusIcon = (status) => {
     switch (status) {
       case 'QUEUED':
@@ -301,6 +308,11 @@ const LabQueue = () => {
                   </div>
                 </div>
                 <div className="flex items-center space-x-2">
+                  {isDentalOrder(order) && (
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                      🦷 Dental
+                    </span>
+                  )}
                   <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}>
                     {getStatusIcon(order.status)}
                     <span className="ml-1">{order.status.replace(/_/g, ' ')}</span>

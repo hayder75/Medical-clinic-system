@@ -7,6 +7,7 @@ router.post('/vitals', nurseController.recordVitals);
 router.post('/assignments', nurseController.assignDoctor);
 router.get('/queue', nurseController.getPatientQueue);
 router.get('/doctors', nurseController.getDoctors);
+router.get('/doctors-by-specialty', nurseController.getDoctorsBySpecialty);
 router.get('/today-tasks', nurseController.getTodayTasks);
 router.post('/administer', nurseController.markAdministered);
 router.post('/administer-task', nurseController.administerTask);

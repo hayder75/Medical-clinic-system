@@ -1,20 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { Stethoscope, User, Clock, FileText, TestTube, Scan, Pill, CheckCircle, Eye, Printer, History, ChevronDown, ChevronRight, Plus } from 'lucide-react';
+import { Stethoscope, User, Clock, FileText, TestTube, Scan, Pill, CheckCircle, Eye, Printer, History, ChevronDown, ChevronRight, Plus, Circle } from 'lucide-react';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
+import DentalChart from '../dental/DentalChart';
+import { useAuth } from '../../contexts/AuthContext';
 
 const PatientQueue = () => {
+  const { user: currentUser } = useAuth();
   const [visits, setVisits] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedVisit, setSelectedVisit] = useState(null);
   const [showPatientForm, setShowPatientForm] = useState(false);
+  const [dentalRecord, setDentalRecord] = useState(null);
   const [expandedSections, setExpandedSections] = useState({
     vitals: true,
     chiefComplaint: true,
     history: false,
     physicalExam: false,
     assessment: false,
-    orders: false
+    orders: false,
+    dental: true // Default to expanded for dentists
   });
   const [formData, setFormData] = useState({
     // Chief Complaint & History
@@ -86,6 +91,22 @@ const PatientQueue = () => {
     fetchInvestigationTypes();
   }, []);
 
+  // Debug: Log when currentUser changes
+  useEffect(() => {
+    console.log('PatientQueue: currentUser changed:', currentUser);
+  }, [currentUser]);
+
+  const fetchDentalRecord = async (patientId, visitId) => {
+    try {
+      const response = await api.get(`/dental/records/${patientId}/${visitId}`);
+      setDentalRecord(response.data.dentalRecord);
+    } catch (error) {
+      // If no dental record exists, that's okay - we'll create one
+      console.log('No existing dental record found, will create new one');
+      setDentalRecord(null);
+    }
+  };
+
   const fetchVisits = async () => {
     try {
       setLoading(true);
@@ -102,6 +123,13 @@ const PatientQueue = () => {
   const handlePatientSelect = async (visit) => {
     setSelectedVisit(visit);
     setShowPatientForm(true);
+    
+    // Fetch dental record if current user is a dentist
+    if (currentUser?.specialties?.includes('Dentist')) {
+      await fetchDentalRecord(visit.patientId, visit.id);
+      // Expand dental section for dentists
+      setExpandedSections(prev => ({ ...prev, dental: true }));
+    }
     
     // Reset form data for new patient
     setFormData({
@@ -883,6 +911,44 @@ const PatientQueue = () => {
                 </div>
               )}
             </div>
+
+            {/* Debug Section - Always show for testing */}
+            <div className="card bg-yellow-50 border-yellow-200">
+              <div className="p-4">
+                <h3 className="text-lg font-semibold text-yellow-800 mb-2">Debug Info</h3>
+                <p className="text-sm text-yellow-700">Current User: {JSON.stringify(currentUser)}</p>
+                <p className="text-sm text-yellow-700">Specialties: {JSON.stringify(currentUser?.specialties)}</p>
+                <p className="text-sm text-yellow-700">Is Dentist: {String(currentUser?.specialties?.includes('Dentist'))}</p>
+              </div>
+            </div>
+
+            {/* Dental Chart Section - Only for Dentists */}
+            {console.log('Current user:', currentUser, 'Specialties:', currentUser?.specialties, 'Is dentist:', currentUser?.specialties?.includes('Dentist'))}
+            {currentUser?.specialties?.includes('Dentist') && (
+              <div className="card">
+                <div 
+                  className="flex items-center justify-between cursor-pointer"
+                  onClick={() => toggleSection('dental')}
+                >
+                  <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                    <Circle className="h-5 w-5 mr-2" />
+                    Dental Chart
+                  </h3>
+                  {expandedSections.dental ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
+                </div>
+                {expandedSections.dental && (
+                  <div className="mt-4 p-4 bg-white border border-gray-200 rounded-lg">
+                    <DentalChart
+                      patientId={selectedVisit?.patientId}
+                      visitId={selectedVisit?.id}
+                      doctorId={currentUser?.id}
+                      initialData={dentalRecord}
+                      onSave={(record) => setDentalRecord(record)}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Orders Section */}
             <div className="card">

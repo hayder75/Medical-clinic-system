@@ -5,17 +5,23 @@ const { checkVisitInvestigationCompletion } = require('../utils/investigationUti
 // Validation schemas
 const fillReportSchema = z.object({
   orderId: z.number(),
-  result: z.string(),
-  additionalNotes: z.string().optional(),
-  attachments: z.array(z.object({
-    path: z.string(),
-    type: z.string(),
-    originalName: z.string()
-  })).optional(),
+  testResults: z.array(z.object({
+    testTypeId: z.number(),
+    resultText: z.string(),
+    additionalNotes: z.string().optional(),
+    attachments: z.array(z.object({
+      path: z.string(),
+      type: z.string(),
+      originalName: z.string()
+    })).optional()
+  }))
 });
 
 exports.getOrders = async (req, res) => {
   try {
+    const currentUser = req.user;
+    const isDentalDoctor = currentUser.specialties && currentUser.specialties.includes('Dentist');
+
     // Get batch orders instead of individual radiology orders
     const batchOrders = await prisma.batchOrder.findMany({
       where: {
@@ -63,7 +69,29 @@ exports.getOrders = async (req, res) => {
         { createdAt: 'asc' } // First come, first served
       ]
     });
-    res.json({ batchOrders });
+
+    // Only filter dental orders for non-dental doctors (not for radiology staff)
+    const filteredOrders = batchOrders.filter(order => {
+      // If user is radiology staff, show all orders
+      if (currentUser.role === 'RADIOLOGIST') {
+        return true;
+      }
+      
+      // If user is a dental doctor, show all orders
+      if (isDentalDoctor) {
+        return true;
+      }
+      
+      // For other non-dental doctors, hide orders that contain dental services
+      const hasDentalServices = order.services.some(service => 
+        service.service?.code?.startsWith('DENTAL_') || 
+        service.investigationType?.name?.toLowerCase().includes('dental')
+      );
+      
+      return !hasDentalServices;
+    });
+
+    res.json({ batchOrders: filteredOrders });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -71,7 +99,7 @@ exports.getOrders = async (req, res) => {
 
 exports.fillReport = async (req, res) => {
   try {
-    const { orderId, result, additionalNotes, attachments } = fillReportSchema.parse(req.body);
+    const { orderId, testResults } = req.body;
     const radiologistId = req.user.id;
 
     // Check if batch order exists and is in correct status
@@ -109,12 +137,46 @@ exports.fillReport = async (req, res) => {
       return res.status(400).json({ error: 'Order is not in queue for processing' });
     }
 
-    // Update batch order with result
+    // Create individual radiology results for each test
+    const createdResults = [];
+    for (const testResult of testResults) {
+      const { testTypeId, resultText, additionalNotes, attachments } = testResult;
+      
+      // Create radiology result
+      const radiologyResult = await prisma.radiologyResult.create({
+        data: {
+          batchOrderId: orderId,
+          testTypeId: testTypeId,
+          resultText: resultText || 'No result provided',
+          additionalNotes: additionalNotes || '',
+          status: 'COMPLETED'
+        }
+      });
+
+      // Handle file attachments for this specific test
+      if (attachments && attachments.length > 0) {
+        for (const attachment of attachments) {
+          // For now, we'll store the attachment info and create a placeholder file record
+          // In a real implementation, you'd want to handle the actual file upload
+          await prisma.radiologyResultFile.create({
+            data: {
+              resultId: radiologyResult.id,
+              fileUrl: attachment.path || 'placeholder', // This should be the actual file path
+              fileName: attachment.originalName || 'uploaded_file',
+              fileType: attachment.type || 'image/png',
+              uploadedBy: radiologistId
+            }
+          });
+        }
+      }
+
+      createdResults.push(radiologyResult);
+    }
+
+    // Update batch order status to completed
     const updatedBatchOrder = await prisma.batchOrder.update({
       where: { id: orderId },
       data: {
-        result: result || 'No result provided',
-        additionalNotes: additionalNotes || '',
         status: 'COMPLETED',
         updatedAt: new Date()
       },
@@ -152,15 +214,14 @@ exports.fillReport = async (req, res) => {
       await prisma.batchOrderService.update({
         where: { id: service.id },
         data: {
-          result: result || 'No result provided',
           status: 'COMPLETED'
         }
       });
     }
 
-    // Handle file attachments if provided
-    if (attachments && attachments.length > 0) {
-      for (const attachment of attachments) {
+    // Handle legacy file attachments if provided (for backward compatibility)
+    if (req.body.attachments && req.body.attachments.length > 0) {
+      for (const attachment of req.body.attachments) {
         await prisma.file.create({
           data: {
             patientId: batchOrder.patientId,
@@ -185,8 +246,11 @@ exports.fillReport = async (req, res) => {
           type: 'RADIOLOGY_RESULT',
           batchOrderId: batchOrder.id,
           services: batchOrder.services.map(s => s.investigationType?.name).join(', '),
-          result: result,
-          additionalNotes: additionalNotes,
+          testResults: createdResults.map(r => ({
+            testType: r.testTypeId,
+            result: r.resultText,
+            notes: r.additionalNotes
+          })),
           completedAt: new Date(),
           completedBy: radiologistId
         })
@@ -204,8 +268,11 @@ exports.fillReport = async (req, res) => {
           batchOrderId: batchOrder.id,
           patientId: batchOrder.patientId,
           services: batchOrder.services.map(s => s.investigationType?.name).join(', '),
-          result: result,
-          additionalNotes: additionalNotes
+          testResults: createdResults.map(r => ({
+            testType: r.testTypeId,
+            result: r.resultText,
+            notes: r.additionalNotes
+          }))
         }),
         ip: req.ip,
         userAgent: req.get('User-Agent')
@@ -311,6 +378,45 @@ exports.uploadAttachment = async (req, res) => {
       file: fileRecord
     });
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+exports.uploadBatchAttachment = async (req, res) => {
+  try {
+    const { batchOrderId } = req.params;
+    const file = req.file;
+
+    if (!file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    // Check if batch order exists
+    const batchOrder = await prisma.batchOrder.findUnique({
+      where: { id: parseInt(batchOrderId) }
+    });
+
+    if (!batchOrder) {
+      return res.status(404).json({ error: 'Batch order not found' });
+    }
+
+    // Create file record
+    const fileRecord = await prisma.file.create({
+      data: {
+        patientId: batchOrder.patientId,
+        batchOrderId: parseInt(batchOrderId),
+        path: file.path,
+        type: file.mimetype,
+        accessLog: [`Uploaded by ${req.user.fullname || req.user.id} at ${new Date().toISOString()}`]
+      }
+    });
+
+    res.json({
+      message: 'File uploaded successfully',
+      file: fileRecord
+    });
+  } catch (error) {
+    console.error('Error uploading batch attachment:', error);
     res.status(500).json({ error: error.message });
   }
 };

@@ -302,6 +302,9 @@ async function updateLabOrderStatus(labOrderId) {
 
 exports.getOrders = async (req, res) => {
   try {
+    const currentUser = req.user;
+    const isDentalDoctor = currentUser.specialties && currentUser.specialties.includes('Dentist');
+
     // Get batch orders instead of individual lab orders
     const batchOrders = await prisma.batchOrder.findMany({
       where: {
@@ -352,7 +355,28 @@ exports.getOrders = async (req, res) => {
       orderBy: { createdAt: 'asc' }
     });
 
-    res.json({ batchOrders });
+    // Only filter dental orders for non-dental doctors (not for lab staff)
+    const filteredOrders = batchOrders.filter(order => {
+      // If user is lab staff, show all orders
+      if (currentUser.role === 'LAB_TECHNICIAN') {
+        return true;
+      }
+      
+      // If user is a dental doctor, show all orders
+      if (isDentalDoctor) {
+        return true;
+      }
+      
+      // For other non-dental doctors, hide orders that contain dental services
+      const hasDentalServices = order.services.some(service => 
+        service.service?.code?.startsWith('DENTAL_') || 
+        service.investigationType?.name?.toLowerCase().includes('dental')
+      );
+      
+      return !hasDentalServices;
+    });
+
+    res.json({ batchOrders: filteredOrders });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

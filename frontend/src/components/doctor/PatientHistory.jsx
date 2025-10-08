@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { User, Search, FileText, Calendar, TestTube, Scan, Pill, Heart, Clock, CheckCircle, AlertTriangle, Download, Eye } from 'lucide-react';
+import { User, Search, FileText, Calendar, TestTube, Scan, Pill, Heart, Clock, CheckCircle, AlertTriangle, Download, Eye, Circle } from 'lucide-react';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
+import DentalChartDisplay from '../common/DentalChartDisplay';
 
 const PatientHistory = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -10,6 +11,7 @@ const PatientHistory = () => {
   const [patientHistory, setPatientHistory] = useState(null);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('visits');
+  const [selectedVisitId, setSelectedVisitId] = useState(null);
 
   const searchPatients = async () => {
     if (!searchTerm.trim()) return;
@@ -40,7 +42,13 @@ const PatientHistory = () => {
 
   const handlePatientSelect = (patient) => {
     setSelectedPatient(patient);
+    setSelectedVisitId(null); // Reset selected visit when switching patients
     fetchPatientHistory(patient.id);
+  };
+
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    setSelectedVisitId(null); // Reset selected visit when switching tabs
   };
 
   const getStatusColor = (status) => {
@@ -150,18 +158,25 @@ const PatientHistory = () => {
           <div className="card">
             <div className="flex space-x-4">
               <button
-                onClick={() => setActiveTab('patient-info')}
+                onClick={() => handleTabChange('patient-info')}
                 className={`btn ${activeTab === 'patient-info' ? 'btn-primary' : 'btn-outline'}`}
               >
                 <User className="h-4 w-4 mr-2" />
                 Patient Information
               </button>
               <button
-                onClick={() => setActiveTab('visits')}
+                onClick={() => handleTabChange('visits')}
                 className={`btn ${activeTab === 'visits' ? 'btn-primary' : 'btn-outline'}`}
               >
                 <Calendar className="h-4 w-4 mr-2" />
                 Visit Details
+              </button>
+              <button
+                onClick={() => handleTabChange('dental')}
+                className={`btn ${activeTab === 'dental' ? 'btn-primary' : 'btn-outline'}`}
+              >
+                <Circle className="h-4 w-4 mr-2" />
+                Dental History
               </button>
             </div>
           </div>
@@ -204,37 +219,73 @@ const PatientHistory = () => {
             {/* Visit Details Tab */}
             {activeTab === 'visits' && (
               <div className="p-6">
-                <div className="space-y-6">
-                  {patientHistory.visits?.map((visit) => (
-                    <div key={visit.id} className="border border-gray-200 rounded-lg p-6">
-                      <div className="flex justify-between items-start mb-4">
-                        <div>
-                          <h4 className="text-lg font-semibold text-gray-900">Visit #{visit.visitUid}</h4>
-                          <p className="text-sm text-gray-500">{formatDate(visit.createdAt)}</p>
-                          <p className="text-sm text-gray-500">Created by: {visit.createdBy?.fullname || 'System'}</p>
-                        </div>
-                        <span className={`badge ${getVisitStatusColor(visit.status)}`}>
-                          {visit.status.replace(/_/g, ' ')}
-                        </span>
-                      </div>
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Visit Details</h3>
+                
+                {/* Visit Selection */}
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Select Visit
+                  </label>
+                  <select
+                    value={selectedVisitId || ''}
+                    onChange={(e) => setSelectedVisitId(e.target.value ? parseInt(e.target.value) : null)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">Choose a visit...</option>
+                    {patientHistory.visits?.map((visit) => (
+                      <option key={visit.id} value={visit.id}>
+                        {visit.visitUid} - {formatDate(visit.createdAt)} ({visit.status.replace(/_/g, ' ')})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Selected Visit Details */}
+                {selectedVisitId && patientHistory.visits ? (
+                  <div className="space-y-6">
+                    {(() => {
+                      const visit = patientHistory.visits.find(v => v.id === selectedVisitId);
+                      if (!visit) return null;
                       
+                      return (
+                        <div className="border border-gray-200 rounded-lg p-6">
+                          <div className="flex justify-between items-start mb-4">
+                            <div>
+                              <h4 className="text-lg font-semibold text-gray-900">Visit #{visit.visitUid}</h4>
+                              <p className="text-sm text-gray-500">{formatDate(visit.createdAt)}</p>
+                              <p className="text-sm text-gray-500">Created by: {visit.createdBy?.fullname || 'System'}</p>
+                            </div>
+                            <span className={`badge ${getVisitStatusColor(visit.status)}`}>
+                              {visit.status.replace(/_/g, ' ')}
+                            </span>
+                          </div>
+                      
+                      {/* Final Diagnosis Section */}
+                      <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                        <h5 className="text-md font-semibold text-blue-900 mb-2 flex items-center">
+                          <FileText className="h-4 w-4 mr-2" />
+                          Final Diagnosis
+                        </h5>
+                        {visit.diagnosis ? (
+                          <>
+                            <p className="text-blue-800 font-medium">{visit.diagnosis}</p>
+                            {visit.diagnosisDetails && (
+                              <div className="mt-3">
+                                <p className="text-sm font-medium text-blue-700 mb-1">Diagnosis Details</p>
+                                <p className="text-sm text-blue-600">{visit.diagnosisDetails}</p>
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <p className="text-blue-600 italic">No diagnosis recorded for this visit</p>
+                        )}
+                      </div>
+
                       {/* Visit Details */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                        {visit.diagnosis && (
-                          <div>
-                            <p className="text-sm font-medium text-gray-500">Diagnosis</p>
-                            <p className="text-sm text-gray-900">{visit.diagnosis}</p>
-                          </div>
-                        )}
-                        {visit.diagnosisDetails && (
-                          <div>
-                            <p className="text-sm font-medium text-gray-500">Details</p>
-                            <p className="text-sm text-gray-900">{visit.diagnosisDetails}</p>
-                          </div>
-                        )}
                         {visit.instructions && (
                           <div>
-                            <p className="text-sm font-medium text-gray-500">Instructions</p>
+                            <p className="text-sm font-medium text-gray-500">Patient Instructions</p>
                             <p className="text-sm text-gray-900">{visit.instructions}</p>
                           </div>
                         )}
@@ -405,6 +456,19 @@ const PatientHistory = () => {
                         </div>
                       )}
 
+                      {/* Dental Chart Section */}
+                      <div className="mb-6">
+                        <h5 className="text-md font-semibold text-gray-900 mb-3 flex items-center">
+                          <Circle className="h-4 w-4 mr-2 text-blue-600" />
+                          Dental Chart
+                        </h5>
+                        <DentalChartDisplay 
+                          patientId={selectedPatient.id}
+                          visitId={visit.id}
+                          showHistory={false}
+                        />
+                      </div>
+
                       {/* Vitals for this visit */}
                       {visit.vitals && visit.vitals.length > 0 && (
                         <div className="mb-4">
@@ -437,9 +501,28 @@ const PatientHistory = () => {
                           </div>
                         </div>
                       )}
-                    </div>
-                  ))}
-                </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <Calendar className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                    <p>Please select a visit to view its details</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Dental History Tab */}
+            {activeTab === 'dental' && (
+              <div className="p-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Dental History</h3>
+                <DentalChartDisplay 
+                  patientId={selectedPatient.id}
+                  visitId={null}
+                  showHistory={true}
+                />
               </div>
             )}
 

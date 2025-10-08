@@ -6,7 +6,7 @@ const router = express.Router();
 
 router.get('/orders', radiologyController.getOrders);
 router.post('/orders/:orderId/report', radiologyController.fillReport);
-router.post('/orders/:orderId/attachment', fileUpload.single('file'), radiologyController.uploadAttachment);
+router.post('/batch-orders/:batchOrderId/attachment', fileUpload.single('file'), radiologyController.uploadBatchAttachment);
 router.get('/investigation-types', radiologyController.getInvestigationTypes);
 
 // New per-test result routes

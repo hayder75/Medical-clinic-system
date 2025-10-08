@@ -3,6 +3,8 @@ import { FileText, TestTube, Scan, CheckCircle, Clock, User, Calendar, Eye, Aler
 import api from '../../services/api';
 import toast from 'react-hot-toast';
 import EnhancedPrescription from './EnhancedPrescription';
+import ImageViewer from '../common/ImageViewer';
+import DentalChartDisplay from '../common/DentalChartDisplay';
 
 // Component to display detailed lab results
 const LabResultsDisplay = ({ batchOrder }) => {
@@ -16,6 +18,7 @@ const LabResultsDisplay = ({ batchOrder }) => {
   const fetchDetailedResults = async () => {
     try {
       const response = await api.get(`/labs/orders/${batchOrder.id}/detailed-results`);
+      console.log('Lab results response:', response.data);
       setDetailedResults(response.data.detailedResults || []);
     } catch (error) {
       console.error('Error fetching detailed lab results:', error);
@@ -26,10 +29,13 @@ const LabResultsDisplay = ({ batchOrder }) => {
 
   if (loading) {
     return (
-      <div className="border rounded-lg p-3">
+      <div className="bg-white rounded-lg border border-gray-200 p-6">
         <div className="animate-pulse">
-          <div className="h-4 bg-gray-200 rounded w-1/4 mb-2"></div>
-          <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+          <div className="h-6 bg-gray-200 rounded w-1/3 mb-4"></div>
+          <div className="space-y-3">
+            <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+            <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+          </div>
         </div>
       </div>
     );
@@ -37,61 +43,122 @@ const LabResultsDisplay = ({ batchOrder }) => {
 
   if (detailedResults.length === 0) {
     return (
-      <div className="border rounded-lg p-3">
-        <div className="text-sm text-gray-500">
-          <TestTube className="h-4 w-4 inline mr-2" />
-          No detailed lab results available
+      <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+        <div className="bg-gradient-to-r from-yellow-50 to-orange-50 px-6 py-4 border-b border-gray-200">
+          <div className="flex items-center space-x-3">
+            <div className="p-2 bg-yellow-100 rounded-lg">
+              <TestTube className="h-6 w-6 text-yellow-600" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Lab Results</h3>
+              <p className="text-sm text-gray-600">No detailed results available</p>
+            </div>
+          </div>
+        </div>
+        <div className="p-6">
+          <div className="text-center py-8">
+            <TestTube className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-500">Detailed lab results are not available for this test.</p>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      {detailedResults.map((result, index) => (
-        <div key={result.id} className="border rounded-lg p-4">
-          <div className="flex justify-between items-start mb-3">
-            <h6 className="font-medium text-gray-900 flex items-center">
-              <TestTube className="h-4 w-4 mr-2 text-blue-600" />
-              {result.template.name}
-            </h6>
-            <span className="badge badge-success">Completed</span>
-          </div>
-          
-          <div className="space-y-3">
-            {/* Display detailed results */}
-            <div className="bg-white rounded-lg p-3">
-              <div className="text-sm font-medium text-gray-900 mb-2">
-                Test Results:
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
-                {Object.entries(result.results).map(([key, value]) => (
-                  <div key={key} className="flex justify-between">
-                    <span className="text-gray-600 capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}:</span>
-                    <span className="text-gray-900 font-medium">{value}</span>
-                  </div>
-                ))}
-              </div>
+    <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-green-50 to-emerald-50 px-6 py-4 border-b border-gray-200">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <div className="p-2 bg-green-100 rounded-lg">
+              <TestTube className="h-6 w-6 text-green-600" />
             </div>
-            
-            {result.additionalNotes && (
-              <div className="text-sm text-gray-600">
-                <strong>Notes:</strong> {result.additionalNotes}
-              </div>
-            )}
-
-            <div className="text-xs text-gray-500">
-              Verified by: Lab Technician | {new Date(result.verifiedAt).toLocaleString()}
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Laboratory Results</h3>
+              <p className="text-sm text-gray-600">
+                {detailedResults.length} test{detailedResults.length > 1 ? 's' : ''} completed
+              </p>
             </div>
           </div>
+          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
+            <CheckCircle className="h-4 w-4 mr-1" />
+            Completed
+          </span>
         </div>
-      ))}
+      </div>
+
+      {/* Individual Test Results */}
+      <div className="p-6 space-y-6">
+        {detailedResults.map((result, index) => (
+          <div key={result.id} className="border border-gray-200 rounded-lg p-5 bg-gray-50">
+            {/* Test Header */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center space-x-3">
+                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                <h4 className="text-lg font-semibold text-gray-900">
+                  {result.template?.name || 'Laboratory Test'}
+                </h4>
+              </div>
+              <span className="text-sm text-gray-500">
+                Test #{index + 1}
+              </span>
+            </div>
+
+            {/* Test Results */}
+            <div className="space-y-4">
+              {/* Detailed Results */}
+              <div className="bg-white rounded-lg p-4 border border-gray-200">
+                <h5 className="text-sm font-medium text-gray-700 mb-3 flex items-center">
+                  <FileText className="h-4 w-4 mr-2 text-gray-500" />
+                  Test Results
+                </h5>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {Object.entries(result.results).map(([key, value]) => (
+                    <div key={key} className="flex flex-col space-y-1 p-3 bg-gray-50 rounded-lg">
+                      <span className="text-xs font-medium text-gray-600 uppercase tracking-wide">
+                        {key.replace(/([A-Z])/g, ' $1').trim()}
+                      </span>
+                      <span className="text-sm font-semibold text-gray-900">
+                        {value || 'N/A'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              
+              {/* Additional Notes */}
+              {result.additionalNotes && (
+                <div className="bg-white rounded-lg p-4 border border-gray-200">
+                  <h5 className="text-sm font-medium text-gray-700 mb-2 flex items-center">
+                    <FileText className="h-4 w-4 mr-2 text-gray-500" />
+                    Additional Notes
+                  </h5>
+                  <p className="text-gray-700 leading-relaxed">
+                    {result.additionalNotes}
+                  </p>
+                </div>
+              )}
+
+              {/* Verification Info */}
+              <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
+                <div className="flex items-center space-x-2 text-sm text-blue-700">
+                  <CheckCircle className="h-4 w-4" />
+                  <span>Verified by: Lab Technician</span>
+                  <span>•</span>
+                  <span>{new Date(result.verifiedAt).toLocaleString()}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 };
 
 // Component to display per-test radiology results
-const RadiologyResultsDisplay = ({ batchOrder }) => {
+const RadiologyResultsDisplay = ({ batchOrder, onImageClick }) => {
   const [radiologyResults, setRadiologyResults] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -102,7 +169,20 @@ const RadiologyResultsDisplay = ({ batchOrder }) => {
   const fetchRadiologyResults = async () => {
     try {
       const response = await api.get(`/radiologies/batch-orders/${batchOrder.id}/results`);
+      console.log('Radiology results response:', response.data);
       setRadiologyResults(response.data.radiologyResults || []);
+      
+      // Debug: Check if any results have attachments
+      const results = response.data.radiologyResults || [];
+      console.log('🔍 All radiology results:', results);
+      results.forEach((result, index) => {
+        console.log(`🔍 Result ${index}:`, {
+          testType: result.testType?.name,
+          attachments: result.attachments,
+          attachmentsLength: result.attachments?.length,
+          hasAttachments: !!result.attachments && result.attachments.length > 0
+        });
+      });
     } catch (error) {
       console.error('Error fetching radiology results:', error);
     } finally {
@@ -110,138 +190,210 @@ const RadiologyResultsDisplay = ({ batchOrder }) => {
     }
   };
 
+
   if (loading) {
     return (
-      <div className="border rounded-lg p-3">
+      <div className="bg-white rounded-lg border border-gray-200 p-6">
         <div className="animate-pulse">
-          <div className="h-4 bg-gray-200 rounded w-1/4 mb-2"></div>
-          <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+          <div className="h-6 bg-gray-200 rounded w-1/3 mb-4"></div>
+          <div className="space-y-3">
+            <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+            <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+          </div>
         </div>
       </div>
     );
   }
 
-  if (radiologyResults.length === 0) {
+  // If we have individual results, show them in a professional format
+  if (radiologyResults.length > 0) {
     return (
-      <div className="border rounded-lg p-4 bg-green-50">
-        <div className="flex justify-between items-start mb-3">
-          <h6 className="font-medium text-gray-900 text-lg">Radiology Tests</h6>
-          <span className="badge badge-success">Completed</span>
+      <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+        {/* Header */}
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-4 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <Scan className="h-6 w-6 text-blue-600" />
         </div>
-        
-        {/* Main Report */}
-        <div className="bg-white rounded-lg p-3 mb-3">
-          <div className="text-sm text-gray-700 mb-2">
-            <strong>Report:</strong> {batchOrder.result || 'No report provided'}
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Radiology Results</h3>
+                <p className="text-sm text-gray-600">
+                  {radiologyResults.length} test{radiologyResults.length > 1 ? 's' : ''} completed
+                </p>
           </div>
-          {batchOrder.additionalNotes && (
-            <div className="text-sm text-gray-600">
-              <strong>Notes:</strong> {batchOrder.additionalNotes}
             </div>
-          )}
+            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
+              <CheckCircle className="h-4 w-4 mr-1" />
+              Completed
+            </span>
+          </div>
         </div>
 
-        {/* Tests Performed */}
-        {batchOrder.services && batchOrder.services.length > 0 && (
-          <div className="bg-white rounded-lg p-3 mb-3">
-            <div className="text-sm font-medium text-gray-900 mb-2">
-              Tests Performed:
-            </div>
-            <div className="space-y-2">
-              {batchOrder.services.map((service, serviceIndex) => (
-                <div key={serviceIndex} className="flex justify-between items-center text-sm">
-                  <span className="text-gray-700">
-                    • {service.investigationType?.name || service.service?.name || 'Test'}
-                  </span>
-                  <span className="text-xs text-gray-500">
-                    {service.result || 'No individual result'}
-                  </span>
+        {/* Individual Test Results */}
+        <div className="p-6 space-y-6">
+          {radiologyResults.map((result, index) => (
+            <div key={result.id} className="border border-gray-200 rounded-lg p-5 bg-gray-50">
+              {/* Test Header */}
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center space-x-3">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                  <h4 className="text-lg font-semibold text-gray-900">
+                    {result.testType?.name || 'Radiology Test'}
+                  </h4>
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Attachments */}
-        {batchOrder.attachments && batchOrder.attachments.length > 0 && (
-          <div className="bg-white rounded-lg p-3">
-            <div className="text-sm font-medium text-gray-900 mb-2">
-              Attached Images:
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              {batchOrder.attachments.map((file, fileIndex) => (
-                <div key={fileIndex} className="relative group">
-                  <img 
-                    src={`http://localhost:3000/${file.path}`} 
-                    alt="Radiology image" 
-                    className="w-full h-24 object-cover rounded border cursor-pointer hover:opacity-80 transition-opacity"
-                    onClick={() => window.open(`http://localhost:3000/${file.path}`, '_blank')}
-                  />
-                  <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-200 rounded flex items-center justify-center">
-                    <span className="text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity">
-                      Click to view
+                <span className="text-sm text-gray-500">
+                  Test #{index + 1}
                     </span>
                   </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
 
-  return (
-    <div className="space-y-4">
-      {radiologyResults.map((result, index) => (
-        <div key={result.id} className="border rounded-lg p-4">
-          <div className="flex justify-between items-start mb-3">
-            <h6 className="font-medium text-gray-900 flex items-center">
-              <Scan className="h-4 w-4 mr-2 text-blue-600" />
-              {result.testType.name}
-            </h6>
-            <span className="badge badge-success">Completed</span>
+              {/* Test Results */}
+              <div className="space-y-4">
+                {/* Result Text */}
+                <div className="bg-white rounded-lg p-4 border border-gray-200">
+                  <h5 className="text-sm font-medium text-gray-700 mb-2 flex items-center">
+                    <FileText className="h-4 w-4 mr-2 text-gray-500" />
+                    Test Result
+                  </h5>
+                  <p className="text-gray-900 leading-relaxed">
+                    {result.resultText || 'No result provided'}
+                  </p>
           </div>
           
-          <div className="space-y-3">
-            <div className="text-sm text-gray-700">
-              <strong>Result:</strong> {result.resultText || 'No result provided'}
-            </div>
-            
+                {/* Additional Notes */}
             {result.additionalNotes && (
-              <div className="text-sm text-gray-600">
-                <strong>Notes:</strong> {result.additionalNotes}
+                  <div className="bg-white rounded-lg p-4 border border-gray-200">
+                    <h5 className="text-sm font-medium text-gray-700 mb-2 flex items-center">
+                      <FileText className="h-4 w-4 mr-2 text-gray-500" />
+                      Additional Notes
+                    </h5>
+                    <p className="text-gray-700 leading-relaxed">
+                      {result.additionalNotes}
+                    </p>
               </div>
             )}
 
-            {result.attachments && result.attachments.length > 0 && (
-              <div className="mt-3">
-                <strong className="text-sm text-gray-700 block mb-2">Attached Images:</strong>
-                <div className="grid grid-cols-2 gap-3">
+                {/* Attached Images */}
+                {console.log('🔍 Checking attachments for result:', result.testType?.name, 'attachments:', result.attachments)}
+                {result.attachments && result.attachments.length > 0 ? (
+                  <div className="bg-white rounded-lg p-4 border border-gray-200">
+                    <h5 className="text-sm font-medium text-gray-700 mb-3 flex items-center">
+                      <Image className="h-4 w-4 mr-2 text-gray-500" />
+                      Attached Images ({result.attachments.length})
+                    </h5>
+                    {console.log('🖼️ Rendering images for result:', result.testType?.name, 'with', result.attachments.length, 'attachments')}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {result.attachments.map((file, fileIndex) => (
                     <div key={fileIndex} className="relative group">
+                          <div className="bg-gray-100 rounded-lg overflow-hidden">
                       <img 
                         src={`http://localhost:3000/${file.fileUrl}`} 
-                        alt="Radiology image" 
-                        className="w-full h-32 object-cover rounded border cursor-pointer hover:opacity-80 transition-opacity"
-                        onClick={() => window.open(`http://localhost:3000/${file.fileUrl}`, '_blank')}
-                      />
-                      <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-200 rounded flex items-center justify-center">
-                        <span className="text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity">
-                          Click to view full size
-                        </span>
-                      </div>
-                      <div className="absolute bottom-1 left-1 right-1 bg-black bg-opacity-50 text-white text-xs p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
-                        {file.fileName || 'Image'}
+                              alt={file.fileName || 'Radiology image'} 
+                              className="w-full h-64 object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                console.log('🖼️ Image clicked directly!', { 
+                                  attachments: result.attachments, 
+                                  fileIndex,
+                                  hasAttachments: !!result.attachments,
+                                  attachmentsLength: result.attachments?.length
+                                });
+                                onImageClick(file, result.attachments, fileIndex);
+                              }}
+                            />
+                          </div>
+                          
+                          {/* Clickable Eye Icon Button */}
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              console.log('👁️ Eye button clicked!', { 
+                                attachments: result.attachments, 
+                                fileIndex,
+                                hasAttachments: !!result.attachments,
+                                attachmentsLength: result.attachments?.length
+                              });
+                              onImageClick(file, result.attachments, fileIndex);
+                            }}
+                            className="absolute top-2 right-2 bg-white bg-opacity-90 hover:bg-opacity-100 rounded-full p-2 shadow-lg transition-all duration-200 opacity-0 group-hover:opacity-100 hover:scale-110"
+                            title="View full screen"
+                          >
+                            <Eye className="h-5 w-5 text-gray-700" />
+                          </button>
+                          <div className="mt-3">
+                            <p className="text-sm text-gray-700 font-medium truncate">
+                              {file.fileName || 'Radiology Image'}
+                            </p>
+                            
+                            {/* View Full Screen Button */}
+                            <button
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                console.log('🔍 View button clicked!', { 
+                                  attachments: result.attachments, 
+                                  fileIndex,
+                                  hasAttachments: !!result.attachments,
+                                  attachmentsLength: result.attachments?.length
+                                });
+                                onImageClick(file, result.attachments, fileIndex);
+                              }}
+                              className="mt-2 w-full bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium py-2 px-3 rounded-lg transition-colors duration-200 flex items-center justify-center space-x-1"
+                            >
+                              <Eye className="h-4 w-4" />
+                              <span>View Full Screen</span>
+                            </button>
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
+            ) : (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <p className="text-yellow-800 text-sm">
+                  No images attached to this result
+                </p>
+                <p className="text-yellow-600 text-xs mt-1">
+                  Attachments: {JSON.stringify(result.attachments)}
+                </p>
+              </div>
             )}
           </div>
         </div>
       ))}
+        </div>
+      </div>
+    );
+  }
+
+  // Fallback for old format (should not happen with new system)
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+      <div className="bg-gradient-to-r from-yellow-50 to-orange-50 px-6 py-4 border-b border-gray-200">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <div className="p-2 bg-yellow-100 rounded-lg">
+              <Scan className="h-6 w-6 text-yellow-600" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Radiology Tests</h3>
+              <p className="text-sm text-gray-600">Legacy format - results pending</p>
+            </div>
+          </div>
+          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800">
+            Processing
+          </span>
+        </div>
+      </div>
+      
+      <div className="p-6">
+        <div className="text-center py-8">
+          <Scan className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+          <p className="text-gray-500">Individual test results are being processed...</p>
+        </div>
+      </div>
     </div>
   );
 };
@@ -252,6 +404,14 @@ const ResultsQueue = () => {
   const [selectedVisit, setSelectedVisit] = useState(null);
   const [showResultsForm, setShowResultsForm] = useState(false);
   const [showPrescriptionForm, setShowPrescriptionForm] = useState(false);
+  const [imageViewerOpen, setImageViewerOpen] = useState(false);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [currentImages, setCurrentImages] = useState([]);
+
+  // Debug: Monitor state changes
+  useEffect(() => {
+    console.log('🔄 ImageViewer state changed:', { imageViewerOpen, currentImages: currentImages.length, currentImageIndex });
+  }, [imageViewerOpen, currentImages, currentImageIndex]);
   const [formData, setFormData] = useState({
     diagnosis: '',
     diagnosisDetails: '',
@@ -341,6 +501,26 @@ const ResultsQueue = () => {
     fetchResultsQueue();
   };
 
+  const handleImageClick = (image, allImages, index) => {
+    console.log('🖼️ Image clicked!', { image, allImages, index });
+    console.log('🖼️ Single image:', image);
+    console.log('🖼️ All images array:', allImages);
+    console.log('🖼️ Current index:', index);
+    
+    console.log('🖼️ Setting state...');
+    setCurrentImages(allImages); // Pass all images for navigation
+    setCurrentImageIndex(index); // Set the clicked image index
+    setImageViewerOpen(true);
+    
+    console.log('🖼️ State set - should trigger useEffect');
+    
+    // Force a re-render by updating state again
+    setTimeout(() => {
+      console.log('🖼️ Delayed state check:', { imageViewerOpen, currentImages: currentImages.length, currentImageIndex });
+    }, 100);
+  };
+
+
   const handleCompleteVisit = async (e) => {
     e.preventDefault();
     try {
@@ -393,8 +573,10 @@ const ResultsQueue = () => {
               <h2 className="text-2xl font-bold text-gray-900">Results Queue</h2>
               <p className="text-gray-600">Patients with completed investigations ready for review</p>
             </div>
-            <div className="text-sm text-gray-500">
-              {visits.length} patients with results ready
+            <div className="flex items-center space-x-4">
+              <div className="text-sm text-gray-500">
+                {visits.length} patients with results ready
+              </div>
             </div>
           </div>
 
@@ -484,14 +666,10 @@ const ResultsQueue = () => {
           </div>
 
           {/* Results Display */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="space-y-8">
             {/* Lab Results */}
             {selectedVisit.batchOrders?.some(order => order.type === 'LAB' && order.status === 'COMPLETED') && (
-              <div className="card">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                  <TestTube className="h-5 w-5 mr-2" />
-                  Lab Results
-                </h3>
+              <div>
                 <div className="space-y-4">
                   {selectedVisit.batchOrders
                     .filter(order => order.type === 'LAB' && order.status === 'COMPLETED')
@@ -504,20 +682,23 @@ const ResultsQueue = () => {
 
             {/* Radiology Results */}
             {selectedVisit.batchOrders?.some(order => order.type === 'RADIOLOGY' && order.status === 'COMPLETED') && (
-              <div className="card">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                  <Scan className="h-5 w-5 mr-2" />
-                  Radiology Results
-                </h3>
+              <div>
                 <div className="space-y-4">
                   {selectedVisit.batchOrders
                     .filter(order => order.type === 'RADIOLOGY' && order.status === 'COMPLETED')
                     .map((order, index) => (
-                      <RadiologyResultsDisplay key={index} batchOrder={order} />
+                      <RadiologyResultsDisplay key={index} batchOrder={order} onImageClick={handleImageClick} />
                     ))}
                 </div>
               </div>
             )}
+
+            {/* Dental Chart */}
+            <DentalChartDisplay 
+              patientId={selectedVisit.patient.id}
+              visitId={selectedVisit.id}
+              showHistory={false}
+            />
           </div>
 
           {/* Diagnosis and Treatment Form */}
@@ -624,6 +805,15 @@ const ResultsQueue = () => {
           </form>
         </div>
       )}
+
+
+      {/* Image Viewer Modal */}
+      <ImageViewer
+        isOpen={imageViewerOpen}
+        onClose={() => setImageViewerOpen(false)}
+        images={currentImages}
+        currentIndex={currentImageIndex}
+      />
     </div>
   );
 };

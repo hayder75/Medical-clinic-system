@@ -11,7 +11,7 @@ const RadiologyOrders = () => {
   const [testResults, setTestResults] = useState({});
   const [uploadingFiles, setUploadingFiles] = useState({});
   const [expandedTests, setExpandedTests] = useState({});
-  const [statusFilter, setStatusFilter] = useState('PENDING');
+  const [statusFilter, setStatusFilter] = useState('ALL');
 
   useEffect(() => {
     fetchOrders();
@@ -112,150 +112,96 @@ const RadiologyOrders = () => {
         return;
       }
 
-      // If result already exists, upload to the existing result
-      if (testResult.resultId) {
-        const formData = new FormData();
-        formData.append('file', file);
-
-        const response = await api.post(
-          `/radiologies/batch-orders/${selectedOrder.id}/results/${testResult.resultId}/file`,
-          formData,
-          {
-            headers: {
-              'Content-Type': 'multipart/form-data',
-            },
-          }
-        );
-
-        // Update the test result with the new file
-        updateTestResult(testId, 'files', [...(testResult.files || []), response.data.file]);
-        toast.success('File uploaded successfully');
-      } else {
-        // If no result exists yet, store the file locally and upload when result is submitted
-        const fileData = {
-          id: Date.now(), // Temporary ID
-          originalName: file.name,
-          fileType: file.type,
-          size: file.size,
-          file: file, // Store the actual file object
-          uploaded: false
-        };
-        
-        updateTestResult(testId, 'files', [...(testResult.files || []), fileData]);
-        toast.success('File added. Will be uploaded when you submit the result.');
-      }
+      // Store the file info locally (will be uploaded with the test result)
+      const fileData = {
+        id: `temp_${Date.now()}_${Math.random()}`,
+        originalName: file.name,
+        fileType: file.type,
+        size: file.size,
+        uploaded: false,
+        file: file // Store the actual file object
+      };
+      
+      updateTestResult(testId, 'files', [...(testResult.files || []), fileData]);
+      toast.success('File added successfully - will be uploaded with results');
     } catch (error) {
-      console.error('Error uploading file:', error);
-      toast.error('Failed to upload file');
+      console.error('Error adding file:', error);
+      toast.error('Failed to add file');
     } finally {
       setUploadingFiles(prev => ({ ...prev, [testId]: false }));
     }
   };
 
-  const handleSubmitTestResult = async (testId) => {
-    try {
-      const testResult = testResults[testId];
-      if (!testResult || !testResult.resultText) {
-        toast.error('Please enter result text');
-        return;
-      }
-
-      // Check if result already exists
-      if (testResult.completed) {
-        toast.error('Result already submitted for this test');
-        return;
-      }
-
-      console.log('Submitting test result:', {
-        testTypeId: parseInt(testId),
-        resultText: testResult.resultText,
-        additionalNotes: testResult.additionalNotes || ''
-      });
-
-      // Create radiology result
-      const response = await api.post(`/radiologies/batch-orders/${selectedOrder.id}/results`, {
-        testTypeId: parseInt(testId),
-        resultText: testResult.resultText,
-        additionalNotes: testResult.additionalNotes || ''
-      });
-
-      console.log('Test result submitted:', response.data);
-
-      const resultId = response.data.radiologyResult.id;
-
-      // Upload any pending files
-      const pendingFiles = testResult.files?.filter(file => !file.uploaded) || [];
-      const uploadedFiles = testResult.files?.filter(file => file.uploaded) || [];
-
-      for (const fileData of pendingFiles) {
-        try {
-          const formData = new FormData();
-          formData.append('file', fileData.file);
-
-          const uploadResponse = await api.post(
-            `/radiologies/batch-orders/${selectedOrder.id}/results/${resultId}/file`,
-            formData,
-            {
-              headers: {
-                'Content-Type': 'multipart/form-data',
-              },
-            }
-          );
-
-          // Mark file as uploaded
-          fileData.uploaded = true;
-          fileData.id = uploadResponse.data.file.id;
-          fileData.originalName = uploadResponse.data.file.originalName;
-          fileData.fileType = uploadResponse.data.file.type;
-        } catch (uploadError) {
-          console.error('Error uploading file:', uploadError);
-          toast.error(`Failed to upload ${fileData.originalName}`);
-        }
-      }
-
-      // Mark as completed locally
-      updateTestResult(testId, 'completed', true);
-      updateTestResult(testId, 'resultId', resultId);
-
-      toast.success('Test result submitted successfully');
-    } catch (error) {
-      console.error('Error submitting test result:', error);
-      if (error.response?.data?.error) {
-        const errorMessage = error.response.data.error;
-        if (errorMessage.includes('already exists')) {
-          // If result already exists, mark it as completed locally
-          updateTestResult(testId, 'completed', true);
-          toast.error('Result already exists for this test');
-        } else {
-          toast.error(errorMessage);
-        }
-      } else {
-        toast.error('Failed to submit test result');
-      }
-    }
-  };
+  // Individual submit function removed - only batch submission allowed
 
   const handleCompleteBatchOrder = async () => {
     try {
-      // Check if all tests are completed
-      const allTestsCompleted = Object.values(testResults).every(result => result.completed);
-      if (!allTestsCompleted) {
-        toast.error('Please complete all tests before marking the batch as completed');
+      // Check if all tests have result text
+      const allTestsHaveResults = Object.values(testResults).every(result => result.resultText && result.resultText.trim());
+      if (!allTestsHaveResults) {
+        toast.error('Please enter result text for all tests before submitting');
         return;
       }
 
-      // Mark the entire batch order as completed
-      const response = await api.put(`/radiologies/batch-orders/${selectedOrder.id}/results`, {
-        result: 'All radiology tests completed',
-        additionalNotes: 'Batch order completed by radiology technician'
+      // First, upload all files and get their paths
+      const uploadedFiles = {};
+      
+      for (const [testId, result] of Object.entries(testResults)) {
+        if (result.files && result.files.length > 0) {
+          const testUploadedFiles = [];
+          
+          for (const fileData of result.files) {
+            if (fileData.file) {
+              // Upload the file to batch attachment endpoint
+              const formData = new FormData();
+              formData.append('file', fileData.file);
+              
+              const uploadResponse = await api.post(
+                `/radiologies/batch-orders/${selectedOrder.id}/attachment`,
+                formData,
+                {
+                  headers: {
+                    'Content-Type': 'multipart/form-data',
+                  },
+                }
+              );
+              
+              testUploadedFiles.push({
+                path: uploadResponse.data.file.path,
+                type: fileData.fileType,
+                originalName: fileData.originalName
+              });
+            }
+          }
+          
+          uploadedFiles[testId] = testUploadedFiles;
+        }
+      }
+
+      // Prepare test results for batch submission
+      const testResultsArray = Object.entries(testResults).map(([testId, result]) => ({
+        testTypeId: parseInt(testId),
+        resultText: result.resultText,
+        additionalNotes: result.additionalNotes || '',
+        attachments: uploadedFiles[testId] || []
+      }));
+
+      console.log('Submitting batch results:', testResultsArray);
+
+      // Submit all test results at once
+      const response = await api.post(`/radiologies/orders/${selectedOrder.id}/report`, {
+        orderId: selectedOrder.id,
+        testResults: testResultsArray
       });
 
       console.log('Batch order completed:', response.data);
-      toast.success('Batch order completed successfully');
+      toast.success('All radiology tests completed successfully');
       
       // Close the form and refresh orders
       setShowReportForm(false);
       setSelectedOrder(null);
+      setTestResults({});
+      setExpandedTests({});
       fetchOrders();
     } catch (error) {
       console.error('Error completing batch order:', error);
@@ -298,6 +244,13 @@ const RadiologyOrders = () => {
       default:
         return 'bg-gray-100 text-gray-800';
     }
+  };
+
+  const isDentalOrder = (order) => {
+    return order.services?.some(service => 
+      service.service?.code?.startsWith('DENTAL_') || 
+      service.investigationType?.name?.toLowerCase().includes('dental')
+    );
   };
 
   if (loading) {
@@ -366,9 +319,16 @@ const RadiologyOrders = () => {
                 <div className="flex items-center space-x-3">
                   {getStatusIcon(order.status)}
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900">
-                      Order #{order.id} – {order.patient.name}
-                    </h3>
+                    <div className="flex items-center space-x-2">
+                      <h3 className="text-lg font-semibold text-gray-900">
+                        Order #{order.id} – {order.patient.name}
+                      </h3>
+                      {isDentalOrder(order) && (
+                        <span className="px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800">
+                          🦷 Dental
+                        </span>
+                      )}
+                    </div>
                     <p className="text-sm text-gray-600">
                       {order.services
                         .filter(service => service.investigationType?.category === 'RADIOLOGY')
@@ -377,9 +337,11 @@ const RadiologyOrders = () => {
                     </p>
                   </div>
                 </div>
-                <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(order.status)}`}>
-                  {order.status}
-                </span>
+                <div className="flex items-center space-x-2">
+                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(order.status)}`}>
+                    {order.status}
+                  </span>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
@@ -573,17 +535,7 @@ const RadiologyOrders = () => {
                               )}
                             </div>
 
-                            {!isCompleted && (
-                              <div className="flex justify-end">
-                                <button
-                                  onClick={() => handleSubmitTestResult(testId)}
-                                  disabled={!testResult.resultText}
-                                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                  Submit Result
-                                </button>
-                              </div>
-                            )}
+                            {/* Individual submit button removed - use batch submission only */}
                           </div>
                         )}
                       </div>

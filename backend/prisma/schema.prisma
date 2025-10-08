@@ -32,6 +32,7 @@ model User {
   batchOrders   BatchOrder[]     // batch orders created by this doctor
   visits        Visit[]
   nurseAdministrations NurseAdministration[]
+  dentalRecords DentalRecord[]
 
   @@index([role])
   @@index([availability])
@@ -146,6 +147,7 @@ model Visit {
   medicationOrders MedicationOrder[]
   bills           Billing[]
   pharmacyInvoices PharmacyInvoice[]
+  dentalRecords   DentalRecord[]
   completedAt    DateTime?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
@@ -434,6 +436,10 @@ model DentalRecord {
   id            Int      @id @default(autoincrement())
   patientId     String
   patient       Patient  @relation(fields: [patientId], references: [id])
+  visitId       Int?
+  visit         Visit?   @relation(fields: [visitId], references: [id])
+  doctorId      String?
+  doctor        User?    @relation(fields: [doctorId], references: [id])
   toothId       Int?
   tooth         Tooth?   @relation(fields: [toothId], references: [id])
   conditions    String[] // JSON array
@@ -441,6 +447,15 @@ model DentalRecord {
   eruptionStart Int?     // Months
   eruptionEnd   Int?     // Months
   rootCompletion Int?    // Years
+  
+  // Enhanced dental chart data
+  toothChart    Json?    // Complete 32-tooth chart: {"11": {"status": "HEALTHY", "notes": ""}}
+  painFlags     Json?    // Pain indicators per tooth
+  gumCondition  String?  // Overall gum health
+  oralHygiene   String?  // Patient's oral hygiene assessment
+  treatmentPlan Json?    // Planned treatments
+  notes         String?  // General dental notes
+  
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }
