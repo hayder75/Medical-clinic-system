@@ -4,6 +4,7 @@ import Layout from '../../components/common/Layout';
 import TriageQueue from '../../components/nurse/TriageQueue';
 import DailyTasks from '../../components/nurse/DailyTasks';
 import DoctorAssignment from '../../components/nurse/DoctorAssignment';
+import ContinuousVitals from '../../components/nurse/ContinuousVitals';
 import { 
   Stethoscope, 
   Calendar, 
@@ -116,6 +117,15 @@ const NurseDashboard = () => {
                 </div>
               </div>
             </button>
+            <button className="w-full text-left p-3 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
+              <div className="flex items-center">
+                <Activity className="h-5 w-5 text-orange-500 mr-3" />
+                <div>
+                  <p className="font-medium">Continuous Vitals</p>
+                  <p className="text-sm text-gray-500">Monitor hospitalized patients</p>
+                </div>
+              </div>
+            </button>
           </div>
         </div>
 
@@ -190,6 +200,7 @@ const NurseDashboard = () => {
         <Route path="/queue" element={<TriageQueue />} />
         <Route path="/tasks" element={<DailyTasks />} />
         <Route path="/assign" element={<DoctorAssignment />} />
+        <Route path="/continuous-vitals" element={<ContinuousVitals />} />
       </Routes>
     </Layout>
   );

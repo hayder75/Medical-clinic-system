@@ -26,6 +26,8 @@ const adminRoutes = require('./src/routes/admin');
 const schedulesRoutes = require('./src/routes/schedules');
 const walkInSalesRoutes = require('./src/routes/walkInSales');
 const dentalRoutes = require('./src/routes/dental');
+const dentalPhotosRoutes = require('./src/routes/dentalPhotos');
+const patientAttachedImagesRoutes = require('./src/routes/patientAttachedImages');
 
 // Middleware
 const authMiddleware = require('./src/middleware/auth');
@@ -73,6 +75,8 @@ app.use('/api/admin', authMiddleware, roleGuard(['ADMIN']), adminRoutes);
 app.use('/api/schedules', authMiddleware, schedulesRoutes);
 app.use('/api/walk-in-sales', authMiddleware, roleGuard(['PHARMACIST', 'PHARMACY_BILLING_OFFICER', 'ADMIN']), walkInSalesRoutes);
 app.use('/api/dental', dentalRoutes);
+app.use('/api/dental-photos', authMiddleware, roleGuard(['DOCTOR', 'ADMIN']), dentalPhotosRoutes);
+app.use('/api/patient-attached-images', authMiddleware, patientAttachedImagesRoutes);
 
 // Cron for inactivity (run daily)
 cron.schedule('0 0 * * *', async () => {

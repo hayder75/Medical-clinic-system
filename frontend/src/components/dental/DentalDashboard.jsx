@@ -48,7 +48,10 @@ const DentalDashboard = ({ patientId, visitId, onComplete }) => {
           setDentalRecord(dentalResponse.data.dentalRecord);
         } catch (error) {
           // No existing dental record, that's okay
-          console.log('No existing dental record found');
+          if (error.response?.status !== 404) {
+            console.error('Error fetching dental record:', error);
+          }
+          setDentalRecord(null);
         }
       }
     } catch (error) {

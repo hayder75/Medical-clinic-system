@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
 
-const DentalChart = ({ patientId, visitId, onSave, initialData = null }) => {
+const DentalChart = forwardRef(({ patientId, visitId, onSave, initialData = null }, ref) => {
   const [toothChart, setToothChart] = useState({});
   const [selectedTeeth, setSelectedTeeth] = useState([]);
   const [painFlags, setPainFlags] = useState({});
@@ -44,6 +44,17 @@ const DentalChart = ({ patientId, visitId, onSave, initialData = null }) => {
     18: ['Mesial', 'Distal', 'Buccal', 'Lingual', 'Occlusal'],
     // Add more tooth-specific surfaces as needed
   };
+
+  // Expose methods to parent component
+  useImperativeHandle(ref, () => ({
+    getCurrentData: () => ({
+      toothChart,
+      painFlags,
+      gumCondition,
+      oralHygiene,
+      notes
+    })
+  }));
 
   useEffect(() => {
     if (initialData) {
@@ -159,7 +170,7 @@ const DentalChart = ({ patientId, visitId, onSave, initialData = null }) => {
         }}
       >
         {/* Tooth number */}
-        <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 text-xs font-bold text-gray-700">
+        <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 text-xs font-bold text-gray-700">
           {toothNumber}
         </div>
         
@@ -249,10 +260,10 @@ const DentalChart = ({ patientId, visitId, onSave, initialData = null }) => {
       </div>
 
       {/* Dental Chart */}
-      <div className="space-y-4">
+      <div className="space-y-16">
         {/* Upper jaw */}
         <div className="text-center">
-          <h4 className="text-sm font-medium text-gray-700 mb-2">Upper Jaw</h4>
+          <h4 className="text-sm font-medium text-gray-700 mb-10">Upper Jaw</h4>
           <div className="flex justify-center space-x-1">
             {toothNumbers.slice(0, 16).map(renderTooth)}
           </div>
@@ -260,7 +271,7 @@ const DentalChart = ({ patientId, visitId, onSave, initialData = null }) => {
 
         {/* Lower jaw */}
         <div className="text-center">
-          <h4 className="text-sm font-medium text-gray-700 mb-2">Lower Jaw</h4>
+          <h4 className="text-sm font-medium text-gray-700 mb-10">Lower Jaw</h4>
           <div className="flex justify-center space-x-1">
             {toothNumbers.slice(16, 32).map(renderTooth)}
           </div>
@@ -329,7 +340,7 @@ const DentalChart = ({ patientId, visitId, onSave, initialData = null }) => {
       )}
     </div>
   );
-};
+});
 
 // Tooth Status Modal Component
 const ToothStatusModal = ({ toothNumber, currentData, onClose, onSave, surfaces }) => {

@@ -4,6 +4,7 @@ import Layout from '../../components/common/Layout';
 import PatientQueue from '../../components/doctor/PatientQueue';
 import PatientHistory from '../../components/doctor/PatientHistory';
 import ResultsQueue from '../../components/doctor/ResultsQueue';
+import UnifiedQueue from '../../components/doctor/UnifiedQueue';
 import { 
   Stethoscope, 
   FileText, 
@@ -37,28 +38,28 @@ const DoctorDashboard = () => {
       title: 'Waiting Patients',
       value: stats.waitingPatients,
       icon: Users,
-      color: 'bg-blue-500',
+      color: '#10367D',
       description: 'Patients waiting for consultation'
     },
     {
       title: 'Completed Today',
       value: stats.completedVisits,
       icon: CheckCircle,
-      color: 'bg-green-500',
+      color: '#10B981',
       description: 'Visits completed today'
     },
     {
       title: 'Pending Orders',
       value: stats.pendingOrders,
       icon: FileText,
-      color: 'bg-yellow-500',
+      color: '#F59E0B',
       description: 'Lab/radiology orders pending'
     },
     {
       title: 'Appointments',
       value: stats.todayAppointments,
       icon: Clock,
-      color: 'bg-purple-500',
+      color: '#EA2E00',
       description: 'Scheduled appointments today'
     }
   ];
@@ -71,15 +72,15 @@ const DoctorDashboard = () => {
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {statCards.map((stat, index) => (
-          <div key={index} className="card">
+          <div key={index} className="card hover:shadow-lg transition-shadow duration-200">
             <div className="flex items-center">
-              <div className={`p-3 rounded-lg ${stat.color}`}>
+              <div className="p-3 rounded-lg shadow-sm" style={{ backgroundColor: stat.color }}>
                 <stat.icon className="h-6 w-6 text-white" />
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">{stat.title}</p>
-                <p className="text-2xl font-semibold text-gray-900">{stat.value}</p>
-                <p className="text-xs text-gray-500">{stat.description}</p>
+                <p className="text-sm font-medium" style={{ color: '#10367D' }}>{stat.title}</p>
+                <p className="text-2xl font-semibold" style={{ color: '#0C0E0B' }}>{stat.value}</p>
+                <p className="text-xs" style={{ color: '#10367D' }}>{stat.description}</p>
               </div>
             </div>
           </div>
@@ -89,44 +90,44 @@ const DoctorDashboard = () => {
       {/* Quick Actions */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="card">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Quick Actions</h3>
+          <h3 className="text-lg font-medium mb-4" style={{ color: '#0C0E0B' }}>Quick Actions</h3>
           <div className="space-y-3">
-            <button className="w-full text-left p-3 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
+            <button 
+              onClick={() => navigate('/doctor/queue')}
+              className="w-full text-left p-3 rounded-lg border transition-all duration-200 hover:shadow-md" 
+              style={{ borderColor: '#10367D', backgroundColor: 'transparent' }} 
+              onMouseEnter={(e) => e.target.style.backgroundColor = '#F8FAFC'} 
+              onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+            >
               <div className="flex items-center">
-                <Stethoscope className="h-5 w-5 text-blue-500 mr-3" />
+                <Stethoscope className="h-5 w-5 mr-3" style={{ color: '#10367D' }} />
                 <div>
-                  <p className="font-medium">Review Patient</p>
-                  <p className="text-sm text-gray-500">Start consultation with next patient</p>
+                  <p className="font-medium" style={{ color: '#0C0E0B' }}>Patient Queue</p>
+                  <p className="text-sm" style={{ color: '#10367D' }}>View unified patient queue with priority</p>
                 </div>
               </div>
             </button>
             <button 
-              onClick={() => navigate('/doctor/results')}
-              className="w-full text-left p-3 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+              onClick={() => navigate('/doctor/history')}
+              className="w-full text-left p-3 rounded-lg border transition-all duration-200 hover:shadow-md"
+              style={{ borderColor: '#10367D', backgroundColor: 'transparent' }}
+              onMouseEnter={(e) => e.target.style.backgroundColor = '#F8FAFC'}
+              onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
             >
               <div className="flex items-center">
-                <FileText className="h-5 w-5 text-green-500 mr-3" />
+                <FileText className="h-5 w-5 mr-3" style={{ color: '#10367D' }} />
                 <div>
-                  <p className="font-medium">Review Results</p>
-                  <p className="text-sm text-gray-500">Review completed investigations</p>
+                  <p className="font-medium" style={{ color: '#0C0E0B' }}>View Patient History</p>
+                  <p className="text-sm" style={{ color: '#10367D' }}>Access complete patient records</p>
                 </div>
               </div>
             </button>
-            <button className="w-full text-left p-3 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
+            <button className="w-full text-left p-3 rounded-lg border transition-all duration-200 hover:shadow-md" style={{ borderColor: '#10367D', backgroundColor: 'transparent' }} onMouseEnter={(e) => e.target.style.backgroundColor = '#F8FAFC'} onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}>
               <div className="flex items-center">
-                <FileText className="h-5 w-5 text-purple-500 mr-3" />
+                <Clock className="h-5 w-5 mr-3" style={{ color: '#EA2E00' }} />
                 <div>
-                  <p className="font-medium">View Patient History</p>
-                  <p className="text-sm text-gray-500">Access complete patient records</p>
-                </div>
-              </div>
-            </button>
-            <button className="w-full text-left p-3 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
-              <div className="flex items-center">
-                <Clock className="h-5 w-5 text-purple-500 mr-3" />
-                <div>
-                  <p className="font-medium">Schedule Appointment</p>
-                  <p className="text-sm text-gray-500">Book follow-up appointments</p>
+                  <p className="font-medium" style={{ color: '#0C0E0B' }}>Schedule Appointment</p>
+                  <p className="text-sm" style={{ color: '#10367D' }}>Book follow-up appointments</p>
                 </div>
               </div>
             </button>
@@ -134,35 +135,35 @@ const DoctorDashboard = () => {
         </div>
 
         <div className="card">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Recent Activity</h3>
+          <h3 className="text-lg font-medium mb-4" style={{ color: '#0C0E0B' }}>Recent Activity</h3>
           <div className="space-y-3">
-            <div className="flex items-center justify-between py-2 border-b border-gray-100">
+            <div className="flex items-center justify-between py-2 border-b" style={{ borderColor: '#E5E7EB' }}>
               <div className="flex items-center">
-                <div className="h-2 w-2 bg-green-500 rounded-full mr-3"></div>
-                <span className="text-sm text-gray-600">Completed visit for John Doe</span>
+                <div className="h-2 w-2 rounded-full mr-3" style={{ backgroundColor: '#10B981' }}></div>
+                <span className="text-sm" style={{ color: '#0C0E0B' }}>Completed visit for John Doe</span>
               </div>
-              <span className="text-xs text-gray-400">5 minutes ago</span>
+              <span className="text-xs" style={{ color: '#10367D' }}>5 minutes ago</span>
             </div>
-            <div className="flex items-center justify-between py-2 border-b border-gray-100">
+            <div className="flex items-center justify-between py-2 border-b" style={{ borderColor: '#E5E7EB' }}>
               <div className="flex items-center">
-                <div className="h-2 w-2 bg-blue-500 rounded-full mr-3"></div>
-                <span className="text-sm text-gray-600">Ordered lab tests for Patient #123</span>
+                <div className="h-2 w-2 rounded-full mr-3" style={{ backgroundColor: '#10367D' }}></div>
+                <span className="text-sm" style={{ color: '#0C0E0B' }}>Ordered lab tests for Patient #123</span>
               </div>
-              <span className="text-xs text-gray-400">15 minutes ago</span>
+              <span className="text-xs" style={{ color: '#10367D' }}>15 minutes ago</span>
             </div>
-            <div className="flex items-center justify-between py-2 border-b border-gray-100">
+            <div className="flex items-center justify-between py-2 border-b" style={{ borderColor: '#E5E7EB' }}>
               <div className="flex items-center">
-                <div className="h-2 w-2 bg-yellow-500 rounded-full mr-3"></div>
-                <span className="text-sm text-gray-600">New patient assigned</span>
+                <div className="h-2 w-2 rounded-full mr-3" style={{ backgroundColor: '#F59E0B' }}></div>
+                <span className="text-sm" style={{ color: '#0C0E0B' }}>New patient assigned</span>
               </div>
-              <span className="text-xs text-gray-400">30 minutes ago</span>
+              <span className="text-xs" style={{ color: '#10367D' }}>30 minutes ago</span>
             </div>
-            <div className="flex items-center justify-between py-2 border-b border-gray-100">
+            <div className="flex items-center justify-between py-2 border-b" style={{ borderColor: '#E5E7EB' }}>
               <div className="flex items-center">
-                <div className="h-2 w-2 bg-purple-500 rounded-full mr-3"></div>
-                <span className="text-sm text-gray-600">Appointment scheduled for tomorrow</span>
+                <div className="h-2 w-2 rounded-full mr-3" style={{ backgroundColor: '#EA2E00' }}></div>
+                <span className="text-sm" style={{ color: '#0C0E0B' }}>Emergency appointment scheduled</span>
               </div>
-              <span className="text-xs text-gray-400">1 hour ago</span>
+              <span className="text-xs" style={{ color: '#10367D' }}>1 hour ago</span>
             </div>
           </div>
         </div>
@@ -175,8 +176,9 @@ const DoctorDashboard = () => {
     <Layout title="Doctor Dashboard" subtitle="Patient consultation and medical orders">
       <Routes>
         <Route path="/" element={<DashboardOverview />} />
-        <Route path="/queue" element={<PatientQueue />} />
-        <Route path="/results" element={<ResultsQueue />} />
+        <Route path="/queue" element={<UnifiedQueue />} />
+        <Route path="/legacy-queue" element={<PatientQueue />} />
+        <Route path="/legacy-results" element={<ResultsQueue />} />
         <Route path="/history" element={<PatientHistory />} />
       </Routes>
     </Layout>

@@ -1,8 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { Stethoscope, User, Clock, FileText, TestTube, Scan, Pill, CheckCircle, Eye, Printer, History, ChevronDown, ChevronRight, Plus, Circle } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Stethoscope, User, Clock, FileText, TestTube, Scan, Pill, CheckCircle, Eye, Printer, History, ChevronDown, ChevronRight, Plus, Circle, Camera, Upload } from 'lucide-react';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
 import DentalChart from '../dental/DentalChart';
+import DentalPhotosSection from '../dental/DentalPhotosSection';
+import PatientAttachedImagesSection from '../common/PatientAttachedImagesSection';
+import ImageViewer from '../common/ImageViewer';
 import { useAuth } from '../../contexts/AuthContext';
 
 const PatientQueue = () => {
@@ -12,6 +15,10 @@ const PatientQueue = () => {
   const [selectedVisit, setSelectedVisit] = useState(null);
   const [showPatientForm, setShowPatientForm] = useState(false);
   const [dentalRecord, setDentalRecord] = useState(null);
+  const dentalChartRef = useRef(null);
+  const [imageViewerOpen, setImageViewerOpen] = useState(false);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [currentImages, setCurrentImages] = useState([]);
   const [expandedSections, setExpandedSections] = useState({
     vitals: true,
     chiefComplaint: true,
@@ -19,7 +26,9 @@ const PatientQueue = () => {
     physicalExam: false,
     assessment: false,
     orders: false,
-    dental: true // Default to expanded for dentists
+    dental: true, // Default to expanded for dentists
+    beforePhotos: true, // Default to expanded for dentists
+    attachedImages: true // Default to expanded
   });
   const [formData, setFormData] = useState({
     // Chief Complaint & History
@@ -91,10 +100,6 @@ const PatientQueue = () => {
     fetchInvestigationTypes();
   }, []);
 
-  // Debug: Log when currentUser changes
-  useEffect(() => {
-    console.log('PatientQueue: currentUser changed:', currentUser);
-  }, [currentUser]);
 
   const fetchDentalRecord = async (patientId, visitId) => {
     try {
@@ -102,7 +107,9 @@ const PatientQueue = () => {
       setDentalRecord(response.data.dentalRecord);
     } catch (error) {
       // If no dental record exists, that's okay - we'll create one
-      console.log('No existing dental record found, will create new one');
+      if (error.response?.status !== 404) {
+        console.error('Error fetching dental record:', error);
+      }
       setDentalRecord(null);
     }
   };
@@ -195,7 +202,10 @@ const PatientQueue = () => {
         neurologicalExam: vitalsData.neurologicalExam || ''
       }));
     } catch (error) {
-      console.error('Error fetching vitals data:', error);
+      // Don't show error for 404 - just means no vitals recorded yet
+      if (error.response?.status !== 404) {
+        console.error('Error fetching vitals data:', error);
+      }
       // Continue with empty form if vitals fetch fails
     }
     
@@ -247,6 +257,63 @@ const PatientQueue = () => {
       fetchVisits();
     } catch (error) {
       toast.error(error.response?.data?.error || 'Failed to update patient information');
+    }
+  };
+
+  const handleImageClick = (images, index) => {
+    setCurrentImages(images);
+    setCurrentImageIndex(index);
+    setImageViewerOpen(true);
+  };
+
+  const handleCompleteVisit = async () => {
+    try {
+      // First update the visit with current form data
+      await api.put(`/doctors/visits/${selectedVisit.id}`, {
+        diagnosis: formData.primaryDiagnosis,
+        diagnosisDetails: formData.differentialDiagnosis,
+        instructions: formData.instructions || `${formData.secondaryDiagnosis ? `Secondary: ${formData.secondaryDiagnosis}` : ''}`
+      });
+
+      // Save dental chart data if it exists and hasn't been saved yet
+      if (dentalChartRef.current && dentalChartRef.current.getCurrentData) {
+        try {
+          const currentDentalData = dentalChartRef.current.getCurrentData();
+          if (currentDentalData && Object.keys(currentDentalData.toothChart || {}).length > 0) {
+            const dentalData = {
+              patientId: selectedVisit.patientId,
+              visitId: selectedVisit.id,
+              toothChart: currentDentalData.toothChart,
+              painFlags: currentDentalData.painFlags || {},
+              gumCondition: currentDentalData.gumCondition || '',
+              oralHygiene: currentDentalData.oralHygiene || '',
+              notes: currentDentalData.notes || ''
+            };
+
+            await api.post('/dental/records', dentalData);
+            console.log('Dental chart saved automatically during visit completion');
+          }
+        } catch (dentalError) {
+          console.error('Error saving dental chart during visit completion:', dentalError);
+          // Don't fail the entire visit completion if dental save fails
+        }
+      }
+
+      // Then set status to DIRECT_COMPLETE (for medication prescription)
+      await api.post('/doctors/direct-complete', {
+        visitId: selectedVisit.id,
+        diagnosis: formData.primaryDiagnosis,
+        diagnosisDetails: formData.differentialDiagnosis,
+        instructions: formData.instructions || `${formData.secondaryDiagnosis ? `Secondary: ${formData.secondaryDiagnosis}` : ''}`,
+        finalNotes: formData.notes || 'Visit completed without additional tests'
+      });
+
+      toast.success('Visit consultation completed! Patient moved to Results Queue for medication prescription.');
+      setShowPatientForm(false);
+      setSelectedVisit(null);
+      fetchVisits();
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Failed to complete visit');
     }
   };
 
@@ -912,18 +979,8 @@ const PatientQueue = () => {
               )}
             </div>
 
-            {/* Debug Section - Always show for testing */}
-            <div className="card bg-yellow-50 border-yellow-200">
-              <div className="p-4">
-                <h3 className="text-lg font-semibold text-yellow-800 mb-2">Debug Info</h3>
-                <p className="text-sm text-yellow-700">Current User: {JSON.stringify(currentUser)}</p>
-                <p className="text-sm text-yellow-700">Specialties: {JSON.stringify(currentUser?.specialties)}</p>
-                <p className="text-sm text-yellow-700">Is Dentist: {String(currentUser?.specialties?.includes('Dentist'))}</p>
-              </div>
-            </div>
 
             {/* Dental Chart Section - Only for Dentists */}
-            {console.log('Current user:', currentUser, 'Specialties:', currentUser?.specialties, 'Is dentist:', currentUser?.specialties?.includes('Dentist'))}
             {currentUser?.specialties?.includes('Dentist') && (
               <div className="card">
                 <div 
@@ -939,11 +996,65 @@ const PatientQueue = () => {
                 {expandedSections.dental && (
                   <div className="mt-4 p-4 bg-white border border-gray-200 rounded-lg">
                     <DentalChart
+                      ref={dentalChartRef}
                       patientId={selectedVisit?.patientId}
                       visitId={selectedVisit?.id}
                       doctorId={currentUser?.id}
                       initialData={dentalRecord}
                       onSave={(record) => setDentalRecord(record)}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Attached Images Section */}
+            <div className="card">
+              <div 
+                className="flex items-center justify-between cursor-pointer"
+                onClick={() => toggleSection('attachedImages')}
+              >
+                <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                  <Upload className="h-5 w-5 mr-2" />
+                  Patient Attached Images
+                </h3>
+                {expandedSections.attachedImages ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
+              </div>
+              {expandedSections.attachedImages && selectedVisit && (
+                <div className="mt-4">
+                  <PatientAttachedImagesSection
+                    visitId={selectedVisit.id}
+                    patientId={selectedVisit.patientId}
+                    title="Medical Documents from Other Hospitals"
+                    canUpload={false}
+                    onImageClick={handleImageClick}
+                    imageViewerOpen={imageViewerOpen}
+                    setImageViewerOpen={setImageViewerOpen}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Before Photos Section - Only for Dentists */}
+            {currentUser?.specialties?.includes('Dentist') && (
+              <div className="card">
+                <div 
+                  className="flex items-center justify-between cursor-pointer"
+                  onClick={() => toggleSection('beforePhotos')}
+                >
+                  <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                    <Camera className="h-5 w-5 mr-2" />
+                    Before Photos
+                  </h3>
+                  {expandedSections.beforePhotos ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
+                </div>
+                {expandedSections.beforePhotos && selectedVisit && (
+                  <div className="mt-4">
+                    <DentalPhotosSection
+                      visitId={selectedVisit.id}
+                      patientId={selectedVisit.patientId}
+                      photoType="BEFORE"
+                      title="Before Treatment Photos"
                     />
                   </div>
                 )}
@@ -1212,12 +1323,26 @@ const PatientQueue = () => {
               >
                 Save & Continue
               </button>
+              <button
+                type="button"
+                onClick={handleCompleteVisit}
+                className="btn btn-success"
+              >
+                Complete Visit
+              </button>
             </div>
           </form>
         </div>
       )}
 
 
+      {/* Image Viewer Modal */}
+      <ImageViewer
+        isOpen={imageViewerOpen}
+        onClose={() => setImageViewerOpen(false)}
+        images={currentImages}
+        currentIndex={currentImageIndex}
+      />
     </div>
   );
 };

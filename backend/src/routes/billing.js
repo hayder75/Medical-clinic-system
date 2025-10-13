@@ -6,6 +6,7 @@ const router = express.Router();
 
 router.post('/register', fileUpload.single('idDoc'), billingController.registerPatient);
 router.post('/create-visit', billingController.createVisitForExistingPatient);
+router.delete('/visit/:visitId', billingController.deleteVisit);
 router.get('/check-visit-status/:patientId', billingController.checkPatientVisitStatus);
 router.post('/', billingController.createBilling);
 router.get('/', billingController.getBillings);

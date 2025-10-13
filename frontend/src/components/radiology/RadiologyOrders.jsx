@@ -21,7 +21,6 @@ const RadiologyOrders = () => {
     try {
       setLoading(true);
       const response = await api.get('/radiologies/orders');
-      console.log('Fetched orders:', response.data);
       setOrders(response.data.batchOrders || []);
     } catch (error) {
       toast.error('Failed to fetch radiology orders');
@@ -43,7 +42,6 @@ const RadiologyOrders = () => {
   const fetchExistingResults = async (batchOrderId) => {
     try {
       const response = await api.get(`/radiologies/batch-orders/${batchOrderId}/results`);
-      console.log('Existing results:', response.data);
       const existingResults = {};
       
       if (response.data && response.data.radiologyResults) {
@@ -66,7 +64,6 @@ const RadiologyOrders = () => {
   };
 
   const handleOrderClick = async (order) => {
-    console.log('Order clicked:', order);
     setSelectedOrder(order);
     setShowReportForm(true);
     
@@ -88,7 +85,6 @@ const RadiologyOrders = () => {
     const existingResults = await fetchExistingResults(order.id);
     const mergedResults = { ...initialResults, ...existingResults };
     
-    console.log('Merged results:', mergedResults);
     setTestResults(mergedResults);
   };
 
@@ -186,15 +182,12 @@ const RadiologyOrders = () => {
         attachments: uploadedFiles[testId] || []
       }));
 
-      console.log('Submitting batch results:', testResultsArray);
-
       // Submit all test results at once
       const response = await api.post(`/radiologies/orders/${selectedOrder.id}/report`, {
         orderId: selectedOrder.id,
         testResults: testResultsArray
       });
 
-      console.log('Batch order completed:', response.data);
       toast.success('All radiology tests completed successfully');
       
       // Close the form and refresh orders

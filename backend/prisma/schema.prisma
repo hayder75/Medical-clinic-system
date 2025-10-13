@@ -33,6 +33,8 @@ model User {
   visits        Visit[]
   nurseAdministrations NurseAdministration[]
   dentalRecords DentalRecord[]
+  dentalPhotos  DentalPhoto[]
+  attachedImages PatientAttachedImage[]
 
   @@index([role])
   @@index([availability])
@@ -116,6 +118,8 @@ model Patient {
   appointments    Appointment[]
   files           File[]
   dentalRecords   DentalRecord[]
+  dentalPhotos    DentalPhoto[]
+  attachedImages  PatientAttachedImage[]
   visits          Visit[]
   pharmacyInvoices PharmacyInvoice[]
 
@@ -148,6 +152,8 @@ model Visit {
   bills           Billing[]
   pharmacyInvoices PharmacyInvoice[]
   dentalRecords   DentalRecord[]
+  dentalPhotos    DentalPhoto[]
+  attachedImages  PatientAttachedImage[]
   completedAt    DateTime?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
@@ -744,6 +750,7 @@ enum VisitStatus {
   AWAITING_LAB_RESULTS
   AWAITING_RADIOLOGY_RESULTS
   AWAITING_RESULTS_REVIEW
+  DIRECT_COMPLETE
   SENT_TO_PHARMACY
   COMPLETED
   CANCELLED
@@ -888,4 +895,55 @@ model DetailedLabResult {
   updatedAt       DateTime @updatedAt
 
   @@unique([labOrderId, templateId])
+}
+
+// Dental Photos for Before/After Documentation
+model DentalPhoto {
+  id          String      @id @default(uuid())
+  visitId     Int
+  visit       Visit       @relation(fields: [visitId], references: [id])
+  patientId   String
+  patient     Patient     @relation(fields: [patientId], references: [id])
+  doctorId    String
+  doctor      User        @relation(fields: [doctorId], references: [id])
+  photoType   PhotoType   // BEFORE or AFTER
+  filePath    String      // Path to the uploaded image file
+  fileName    String      // Original filename
+  fileSize    Int?        // File size in bytes
+  mimeType    String      // MIME type (image/jpeg, image/png, etc.)
+  description String?     // Optional description of the photo
+  uploadedAt  DateTime    @default(now())
+  uploadedBy  String      // User ID who uploaded the photo
+  
+  @@index([visitId])
+  @@index([patientId])
+  @@index([doctorId])
+  @@index([photoType])
+}
+
+enum PhotoType {
+  BEFORE
+  AFTER
+}
+
+// Patient Attached Images for External Medical Documents
+model PatientAttachedImage {
+  id          String   @id @default(uuid())
+  visitId     Int
+  visit       Visit    @relation(fields: [visitId], references: [id])
+  patientId   String
+  patient     Patient  @relation(fields: [patientId], references: [id])
+  doctorId    String?  // Assigned doctor (can be null if not assigned yet)
+  doctor      User?    @relation(fields: [doctorId], references: [id])
+  fileName    String
+  filePath    String
+  fileSize    Int
+  mimeType    String
+  description String?  // "X-ray", "CT Scan", "Lab Report", "Previous Diagnosis", etc.
+  uploadedAt  DateTime @default(now())
+  uploadedBy  String   // User ID who uploaded (BILLING_OFFICER)
+  
+  @@index([visitId])
+  @@index([patientId])
+  @@index([doctorId])
 }

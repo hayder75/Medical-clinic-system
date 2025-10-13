@@ -19,7 +19,8 @@ import {
   TestTube,
   Scan,
   ShoppingCart,
-  CheckCircle
+  CheckCircle,
+  Activity
 } from 'lucide-react';
 
 const Layout = ({ children, title, subtitle }) => {
@@ -66,7 +67,6 @@ const Layout = ({ children, title, subtitle }) => {
         return [
           ...baseItems,
           { name: 'Patient Queue', href: '/doctor/queue', icon: Stethoscope },
-          { name: 'Results Queue', href: '/doctor/results', icon: CheckCircle },
           { name: 'Patient History', href: '/doctor/history', icon: FileText },
           { name: 'Appointments', href: '/appointments', icon: Calendar },
         ];
@@ -77,6 +77,7 @@ const Layout = ({ children, title, subtitle }) => {
           { name: 'Triage Queue', href: '/nurse/queue', icon: Stethoscope },
           { name: 'Doctor Assignment', href: '/nurse/assign', icon: Users },
           { name: 'Daily Tasks', href: '/nurse/tasks', icon: Calendar },
+          { name: 'Continuous Vitals', href: '/nurse/continuous-vitals', icon: Activity },
         ];
       
       case 'BILLING_OFFICER':
@@ -116,17 +117,17 @@ const Layout = ({ children, title, subtitle }) => {
   const navigationItems = getNavigationItems();
 
   return (
-    <div className="h-screen flex overflow-hidden bg-gray-100">
+    <div className="h-screen flex overflow-hidden" style={{ backgroundColor: '#FFFFFF' }}>
       {/* Sidebar */}
-      <div className={`fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0`}>
-        <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200">
+      <div className={`fixed inset-y-0 left-0 z-50 w-64 shadow-xl transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0`} style={{ backgroundColor: '#10367D' }}>
+        <div className="flex items-center justify-between h-16 px-4 border-b" style={{ borderColor: '#EA2E00' }}>
           <div className="flex items-center">
-            <Stethoscope className="h-8 w-8 text-primary-600" />
-            <span className="ml-2 text-xl font-bold text-gray-900">MedClinic</span>
+            <Stethoscope className="h-8 w-8 text-white" />
+            <span className="ml-2 text-xl font-bold text-white">MedClinic</span>
           </div>
           <button
             onClick={() => setSidebarOpen(false)}
-            className="lg:hidden p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100"
+            className="lg:hidden p-2 rounded-md text-white hover:bg-opacity-20 hover:bg-white transition-colors"
           >
             <X className="h-6 w-6" />
           </button>
@@ -137,15 +138,18 @@ const Layout = ({ children, title, subtitle }) => {
             <button
               key={item.name}
               onClick={() => handleNavigation(item.href)}
-              className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md w-full text-left ${
+              className={`group flex items-center px-3 py-3 text-sm font-medium rounded-lg w-full text-left transition-all duration-200 ${
                 isCurrentPage(item.href)
-                  ? 'bg-primary-100 text-primary-900'
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                  ? 'text-white shadow-lg'
+                  : 'text-gray-200 hover:text-white hover:bg-opacity-20 hover:bg-white'
               }`}
+              style={{
+                backgroundColor: isCurrentPage(item.href) ? '#EA2E00' : 'transparent'
+              }}
             >
               <item.icon
-                className={`mr-3 h-5 w-5 ${
-                  isCurrentPage(item.href) ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'
+                className={`mr-3 h-5 w-5 transition-colors ${
+                  isCurrentPage(item.href) ? 'text-white' : 'text-gray-300 group-hover:text-white'
                 }`}
               />
               {item.name}
@@ -157,42 +161,48 @@ const Layout = ({ children, title, subtitle }) => {
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top navigation */}
-        <header className="bg-white shadow-sm border-b border-gray-200">
+        <header className="shadow-lg border-b" style={{ backgroundColor: '#FFFFFF', borderColor: '#10367D' }}>
           <div className="flex items-center justify-between h-16 px-4 sm:px-6 lg:px-8">
             <div className="flex items-center">
               <button
                 onClick={() => setSidebarOpen(true)}
-                className="lg:hidden p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100"
+                className="lg:hidden p-2 rounded-md transition-colors"
+                style={{ color: '#0C0E0B' }}
+                onMouseEnter={(e) => e.target.style.backgroundColor = '#10367D'}
+                onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
               >
                 <Menu className="h-6 w-6" />
               </button>
               <div className="ml-4 lg:ml-0">
-                <h1 className="text-xl font-semibold text-gray-900">{title}</h1>
+                <h1 className="text-xl font-semibold" style={{ color: '#0C0E0B' }}>{title}</h1>
                 {subtitle && (
-                  <p className="text-sm text-gray-500">{subtitle}</p>
+                  <p className="text-sm" style={{ color: '#10367D' }}>{subtitle}</p>
                 )}
               </div>
             </div>
 
             <div className="flex items-center space-x-4">
-              <button className="p-2 text-gray-400 hover:text-gray-500">
+              <button className="p-2 rounded-md transition-colors" style={{ color: '#0C0E0B' }} onMouseEnter={(e) => e.target.style.backgroundColor = '#10367D'} onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}>
                 <Bell className="h-6 w-6" />
               </button>
               
               <div className="relative">
                 <div className="flex items-center space-x-3">
                   <div className="flex-shrink-0">
-                    <div className="h-8 w-8 rounded-full bg-primary-100 flex items-center justify-center">
-                      <User className="h-5 w-5 text-primary-600" />
+                    <div className="h-8 w-8 rounded-full flex items-center justify-center" style={{ backgroundColor: '#10367D' }}>
+                      <User className="h-5 w-5 text-white" />
                     </div>
                   </div>
                   <div className="hidden md:block">
-                    <p className="text-sm font-medium text-gray-900">{user?.name || user?.username}</p>
-                    <p className="text-xs text-gray-500 capitalize">{user?.role?.toLowerCase().replace('_', ' ')}</p>
+                    <p className="text-sm font-medium" style={{ color: '#0C0E0B' }}>{user?.name || user?.username}</p>
+                    <p className="text-xs" style={{ color: '#10367D' }}>{user?.role?.toLowerCase().replace('_', ' ')}</p>
                   </div>
                   <button
                     onClick={handleLogout}
-                    className="p-2 text-gray-400 hover:text-gray-500"
+                    className="p-2 rounded-md transition-colors"
+                    style={{ color: '#0C0E0B' }}
+                    onMouseEnter={(e) => e.target.style.backgroundColor = '#EA2E00'}
+                    onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
                     title="Logout"
                   >
                     <LogOut className="h-5 w-5" />
@@ -204,7 +214,7 @@ const Layout = ({ children, title, subtitle }) => {
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto bg-gray-50">
+        <main className="flex-1 overflow-y-auto" style={{ backgroundColor: '#FFFFFF' }}>
           <div className="py-6">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
               {children}
@@ -219,7 +229,7 @@ const Layout = ({ children, title, subtitle }) => {
           className="fixed inset-0 z-40 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         >
-          <div className="absolute inset-0 bg-gray-600 opacity-75"></div>
+          <div className="absolute inset-0 opacity-75" style={{ backgroundColor: '#10367D' }}></div>
         </div>
       )}
     </div>

@@ -3,7 +3,7 @@ import { TestTube, Search, Filter, Plus } from 'lucide-react';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
 
-const LabTemplateSelector = ({ labOrderId, onTemplateSelect, onClose, isDraft = false, excludedTemplateIds = [] }) => {
+const LabTemplateSelector = ({ labOrderId, onTemplateSelect, onClose, isDraft = false, excludedTemplateIds = [], orderedServices = [] }) => {
   const [templates, setTemplates] = useState([]);
   const [filteredTemplates, setFilteredTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -11,13 +11,72 @@ const LabTemplateSelector = ({ labOrderId, onTemplateSelect, onClose, isDraft = 
   const [selectedCategory, setSelectedCategory] = useState('');
   const [categories, setCategories] = useState([]);
 
+  // Mapping between investigation types and lab templates
+  const getRelevantTemplates = (allTemplates, services) => {
+    if (!services || services.length === 0) {
+      return allTemplates; // If no services specified, show all templates
+    }
+
+    // Create a mapping of investigation type names to template categories/names
+    const investigationToTemplateMap = {
+      'Basic Metabolic Panel': ['Blood Chemistry'],
+      'Blood Chemistry Panel': ['Blood Chemistry'],
+      'Complete Blood Count': ['Hematology', 'CBC'],
+      'Bacteriology Examination': ['Bacteriology'],
+      'Serology Panel': ['Serology'],
+      'Stool Examination': ['Stool'],
+      'Urinalysis': ['Urinalysis']
+    };
+
+    const relevantTemplateIds = new Set();
+    
+    services.forEach(service => {
+      const investigationName = service.investigationType?.name || service.service?.name || '';
+      
+      // Find matching templates based on investigation name
+      const templateKeywords = investigationToTemplateMap[investigationName] || [];
+      
+      allTemplates.forEach(template => {
+        // Check if template matches the investigation type
+        const templateName = template.name?.toLowerCase() || '';
+        const templateCategory = template.category?.toLowerCase() || '';
+        const investigationNameLower = investigationName.toLowerCase();
+        
+        // Direct name match
+        if (templateName.includes(investigationNameLower) || investigationNameLower.includes(templateName)) {
+          relevantTemplateIds.add(template.id);
+        }
+        
+        // Category/keyword match
+        templateKeywords.forEach(keyword => {
+          if (templateCategory.includes(keyword.toLowerCase()) || templateName.includes(keyword.toLowerCase())) {
+            relevantTemplateIds.add(template.id);
+          }
+        });
+        
+        // Additional specific mappings
+        if (investigationNameLower.includes('metabolic') && templateCategory.toLowerCase().includes('chemistry')) {
+          relevantTemplateIds.add(template.id);
+        }
+        if (investigationNameLower.includes('blood chemistry') && templateCategory.toLowerCase().includes('chemistry')) {
+          relevantTemplateIds.add(template.id);
+        }
+        if (investigationNameLower.includes('cbc') && templateName.toLowerCase().includes('blood count')) {
+          relevantTemplateIds.add(template.id);
+        }
+      });
+    });
+
+    return allTemplates.filter(template => relevantTemplateIds.has(template.id));
+  };
+
   useEffect(() => {
     fetchTemplates();
   }, []);
 
   useEffect(() => {
     filterTemplates();
-  }, [templates, searchTerm, selectedCategory, excludedTemplateIds]);
+  }, [templates, searchTerm, selectedCategory, excludedTemplateIds, orderedServices]);
 
   const fetchTemplates = async () => {
     try {
@@ -40,8 +99,10 @@ const LabTemplateSelector = ({ labOrderId, onTemplateSelect, onClose, isDraft = 
   };
 
   const filterTemplates = () => {
-    const source = Array.isArray(templates) ? templates : [];
-    let filtered = source;
+    // First filter by ordered services to get relevant templates
+    const relevantTemplates = getRelevantTemplates(templates, orderedServices);
+    
+    let filtered = relevantTemplates;
 
     // Exclude already used templates (drafts + submitted)
     const excludeSet = new Set(Array.isArray(excludedTemplateIds) ? excludedTemplateIds : []);
@@ -82,9 +143,16 @@ const LabTemplateSelector = ({ labOrderId, onTemplateSelect, onClose, isDraft = 
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center">
           <TestTube className="w-6 h-6 text-blue-600 mr-2" />
-          <h2 className="text-xl font-semibold text-gray-800">
-            {isDraft ? 'Save Draft Results' : 'Select Lab Test Template'}
-          </h2>
+          <div>
+            <h2 className="text-xl font-semibold text-gray-800">
+              {isDraft ? 'Save Draft Results' : 'Select Lab Test Template'}
+            </h2>
+            {orderedServices && orderedServices.length > 0 && (
+              <p className="text-sm text-gray-600 mt-1">
+                Showing templates for: {orderedServices.map(s => s.investigationType?.name || s.service?.name).join(', ')}
+              </p>
+            )}
+          </div>
         </div>
         <button
           onClick={onClose}

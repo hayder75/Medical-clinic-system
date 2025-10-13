@@ -1286,3 +1286,186 @@ exports.processEmergencyPayment = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+// Delete a visit (for billing officers to correct mistakes)
+exports.deleteVisit = async (req, res) => {
+  try {
+    const { visitId } = req.params;
+    const billingOfficerId = req.user.id;
+
+    if (!visitId) {
+      return res.status(400).json({ error: 'Visit ID is required' });
+    }
+
+    // Find the visit with all related data
+    const visit = await prisma.visit.findUnique({
+      where: { id: parseInt(visitId) },
+      include: {
+        patient: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
+        bills: true,
+        vitals: true,
+        labOrders: true,
+        radiologyOrders: true,
+        medicationOrders: true,
+        dentalRecords: true,
+        dentalPhotos: true,
+        attachedImages: true
+      }
+    });
+
+    if (!visit) {
+      return res.status(404).json({ error: 'Visit not found' });
+    }
+
+    // Only allow deletion of visits that haven't progressed too far
+    // Allow deletion if visit is still in early stages
+    const deletableStatuses = [
+      'WAITING_FOR_TRIAGE',
+      'TRIAGED'
+    ];
+
+    if (!deletableStatuses.includes(visit.status)) {
+      return res.status(400).json({ 
+        error: 'Cannot delete visit that has progressed beyond triage stage',
+        currentStatus: visit.status,
+        allowedStatuses: deletableStatuses
+      });
+    }
+
+    // Check if there are any paid bills (we don't want to delete paid visits)
+    const paidBills = visit.bills.filter(bill => bill.status === 'PAID');
+    if (paidBills.length > 0) {
+      return res.status(400).json({ 
+        error: 'Cannot delete visit with paid bills',
+        paidBills: paidBills.map(bill => ({
+          id: bill.id,
+          totalAmount: bill.totalAmount,
+          status: bill.status
+        }))
+      });
+    }
+
+    // Start a transaction to delete all related records
+    await prisma.$transaction(async (tx) => {
+      // Delete related records in correct order (respecting foreign key constraints)
+      
+      // 1. Delete patient attached images
+      if (visit.attachedImages.length > 0) {
+        await tx.patientAttachedImage.deleteMany({
+          where: { visitId: parseInt(visitId) }
+        });
+      }
+
+      // 2. Delete dental photos
+      if (visit.dentalPhotos.length > 0) {
+        await tx.dentalPhoto.deleteMany({
+          where: { visitId: parseInt(visitId) }
+        });
+      }
+
+      // 3. Delete dental records
+      if (visit.dentalRecords.length > 0) {
+        await tx.dentalRecord.deleteMany({
+          where: { visitId: parseInt(visitId) }
+        });
+      }
+
+      // 4. Delete assignments (if any exist for this patient)
+      const assignments = await tx.assignment.findMany({
+        where: { patientId: visit.patientId }
+      });
+      if (assignments.length > 0) {
+        await tx.assignment.deleteMany({
+          where: { patientId: visit.patientId }
+        });
+      }
+
+      // 5. Delete medication orders
+      if (visit.medicationOrders.length > 0) {
+        await tx.medicationOrder.deleteMany({
+          where: { visitId: parseInt(visitId) }
+        });
+      }
+
+      // 6. Delete radiology orders
+      if (visit.radiologyOrders.length > 0) {
+        await tx.radiologyOrder.deleteMany({
+          where: { visitId: parseInt(visitId) }
+        });
+      }
+
+      // 7. Delete lab orders
+      if (visit.labOrders.length > 0) {
+        await tx.labOrder.deleteMany({
+          where: { visitId: parseInt(visitId) }
+        });
+      }
+
+      // 8. Delete vitals
+      if (visit.vitals.length > 0) {
+        await tx.vitalSign.deleteMany({
+          where: { visitId: parseInt(visitId) }
+        });
+      }
+
+      // 9. Delete bills (should be unpaid at this point)
+      if (visit.bills.length > 0) {
+        // First delete billing services for each bill
+        for (const bill of visit.bills) {
+          await tx.billingService.deleteMany({
+            where: { billingId: bill.id }
+          });
+        }
+        // Then delete the bills
+        await tx.billing.deleteMany({
+          where: { visitId: parseInt(visitId) }
+        });
+      }
+
+      // 10. Finally delete the visit
+      await tx.visit.delete({
+        where: { id: parseInt(visitId) }
+      });
+    });
+
+    // Create audit log
+    await prisma.auditLog.create({
+      data: {
+        userId: billingOfficerId,
+        action: 'DELETE_VISIT',
+        entity: 'Visit',
+        entityId: parseInt(visitId),
+        details: JSON.stringify({
+          visitUid: visit.visitUid,
+          patientId: visit.patientId,
+          patientName: visit.patient.name,
+          visitStatus: visit.status,
+          deletedAt: new Date().toISOString(),
+          reason: 'Billing officer correction - visit recreation needed'
+        }),
+        ip: req.ip,
+        userAgent: req.get('User-Agent')
+      }
+    });
+
+    res.json({
+      message: 'Visit deleted successfully',
+      deletedVisit: {
+        id: visit.id,
+        visitUid: visit.visitUid,
+        patientId: visit.patientId,
+        patientName: visit.patient.name,
+        status: visit.status
+      }
+    });
+
+  } catch (error) {
+    console.error('Error deleting visit:', error);
+    res.status(500).json({ error: error.message });
+  }
+};

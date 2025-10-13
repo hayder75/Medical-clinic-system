@@ -410,6 +410,7 @@ const EnhancedLabQueue = () => {
               onClose={() => setShowTemplateSelector(false)}
               isDraft={true}
               excludedTemplateIds={selectedOrder ? getExcludedTemplateIds(selectedOrder.id) : []}
+              orderedServices={selectedOrder?.services || []}
             />
           </div>
         </div>

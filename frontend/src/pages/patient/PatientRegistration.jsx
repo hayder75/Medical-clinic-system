@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form';
 import { User, Phone, Mail, MapPin, Heart, Calendar, CreditCard, Search, UserPlus, Clock, CheckCircle } from 'lucide-react';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
+import PatientAttachedImagesSection from '../../components/common/PatientAttachedImagesSection';
 
 const PatientRegistration = () => {
   const [loading, setLoading] = useState(false);
@@ -218,7 +219,6 @@ const PatientRegistration = () => {
         notes: `Payment method: ${paymentMethod}`
       };
 
-      console.log('Sending payment data:', paymentData);
       const response = await api.post('/billing/payments', paymentData);
 
       toast.success('Payment processed successfully!');
@@ -800,6 +800,20 @@ const PatientRegistration = () => {
                 {paymentErrors.insuranceId && (
                   <p className="text-red-500 text-sm mt-1">{paymentErrors.insuranceId}</p>
                 )}
+              </div>
+            )}
+
+            {/* Attached Medical Images Section */}
+            {visit && patient && (
+              <div className="mt-8 p-4 bg-blue-50 rounded-lg">
+                <PatientAttachedImagesSection
+                  visitId={visit.id}
+                  patientId={patient.id}
+                  title="Attached Medical Images (Optional)"
+                />
+                <p className="text-xs text-gray-600 mt-2">
+                  Upload X-rays, lab reports, or other medical documents the patient brought from other hospitals
+                </p>
               </div>
             )}
 

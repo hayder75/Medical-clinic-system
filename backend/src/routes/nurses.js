@@ -4,6 +4,8 @@ const nurseController = require('../controllers/nurseController');
 const router = express.Router();
 
 router.post('/vitals', nurseController.recordVitals);
+router.post('/continuous-vitals', nurseController.recordContinuousVitals);
+router.get('/patient-vitals/:patientId', nurseController.getPatientVitals);
 router.post('/assignments', nurseController.assignDoctor);
 router.get('/queue', nurseController.getPatientQueue);
 router.get('/doctors', nurseController.getDoctors);

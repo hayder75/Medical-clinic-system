@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CreditCard, User, Clock, CheckCircle, AlertTriangle, DollarSign, Search } from 'lucide-react';
+import { CreditCard, User, Clock, CheckCircle, AlertTriangle, DollarSign, Search, Trash2 } from 'lucide-react';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
 
@@ -125,8 +125,6 @@ const BillingQueue = () => {
         notes: paymentForm.notes || null
       };
       
-      console.log('Sending payment data:', paymentData);
-      
       await api.post('/billing/payments', paymentData);
 
       toast.success('Payment processed successfully!');
@@ -164,6 +162,37 @@ const BillingQueue = () => {
     });
     setFormErrors({});
     setShowPaymentForm(true);
+  };
+
+  const deleteVisit = async (billing) => {
+    if (!billing.visitId) {
+      toast.error('No visit found for this billing');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Are you sure you want to delete this visit?\n\n` +
+      `Patient: ${billing.patient.name}\n` +
+      `Visit ID: ${billing.visitId}\n\n` +
+      `This will permanently delete the visit and all associated data. ` +
+      `You can then create a new visit for this patient.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setLoading(true);
+      await api.delete(`/billing/visit/${billing.visitId}`);
+      
+      toast.success('Visit deleted successfully. You can now create a new visit for this patient.');
+      fetchBillings(); // Refresh the list
+      
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Failed to delete visit');
+      console.error('Delete visit error:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getStatusColor = (status) => {
@@ -323,6 +352,14 @@ const BillingQueue = () => {
                   >
                     <CreditCard className="h-4 w-4 mr-1" />
                     Process Payment
+                  </button>
+                  <button
+                    onClick={() => deleteVisit(billing)}
+                    className="btn btn-outline btn-sm flex items-center text-red-600 hover:bg-red-50 hover:border-red-300"
+                    title="Delete visit to allow recreation"
+                  >
+                    <Trash2 className="h-4 w-4 mr-1" />
+                    Delete Visit
                   </button>
                 </div>
               )}

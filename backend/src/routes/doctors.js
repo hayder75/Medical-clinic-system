@@ -5,6 +5,7 @@ const router = express.Router();
 
 router.get('/queue', doctorController.getQueue);
 router.get('/results-queue', doctorController.getResultsQueue);
+router.get('/unified-queue', doctorController.getUnifiedQueue);
 router.get('/patient-history/:patientId', doctorController.getPatientHistory);
 router.get('/vitals/:visitId', doctorController.getPatientVitals);
 router.get('/order-status/:visitId', doctorController.getVisitOrderStatus);
@@ -19,5 +20,6 @@ router.post('/medication-orders', doctorController.createMedicationOrder);
 router.post('/prescriptions/batch', doctorController.createBatchPrescription);
 router.get('/prescriptions/:visitId', doctorController.getPrescriptionHistory);
 router.post('/complete', doctorController.completeVisit);
+router.post('/direct-complete', doctorController.directCompleteVisit);
 
 module.exports = router;

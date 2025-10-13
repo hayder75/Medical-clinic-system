@@ -44,6 +44,49 @@ const vitalsSchema = z.object({
   neurologicalExam: z.string().optional(),
 });
 
+// Schema for continuous vitals (visitId is optional)
+const continuousVitalsSchema = z.object({
+  patientId: z.string(),
+  visitId: z.number().optional(),
+  bloodPressure: z.string().optional(),
+  temperature: z.number().optional(),
+  tempUnit: z.enum(['C', 'F']).default('C'),
+  heartRate: z.number().optional(),
+  respirationRate: z.number().optional(),
+  height: z.number().optional(),
+  weight: z.number().optional(),
+  oxygenSaturation: z.number().optional(),
+  condition: z.string().optional(),
+  notes: z.string().optional(),
+  painScoreRest: z.number().optional(),
+  painScoreMovement: z.number().optional(),
+  sedationScore: z.number().optional(),
+  gcsEyes: z.number().optional(),
+  gcsVerbal: z.number().optional(),
+  gcsMotor: z.number().optional(),
+  bloodPressureSystolic: z.number().optional(),
+  bloodPressureDiastolic: z.number().optional(),
+  
+  // Chief Complaint & History (Optional)
+  chiefComplaint: z.string().optional(),
+  historyOfPresentIllness: z.string().optional(),
+  onsetOfSymptoms: z.string().optional(),
+  durationOfSymptoms: z.string().optional(),
+  severityOfSymptoms: z.string().optional(),
+  associatedSymptoms: z.string().optional(),
+  relievingFactors: z.string().optional(),
+  aggravatingFactors: z.string().optional(),
+  
+  // Physical Examination (Optional)
+  generalAppearance: z.string().optional(),
+  headAndNeck: z.string().optional(),
+  cardiovascularExam: z.string().optional(),
+  respiratoryExam: z.string().optional(),
+  abdominalExam: z.string().optional(),
+  extremities: z.string().optional(),
+  neurologicalExam: z.string().optional(),
+});
+
 const assignmentSchema = z.object({
   patientId: z.string(),
   visitId: z.number(),
@@ -591,6 +634,167 @@ exports.administerTask = async (req, res) => {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: 'Validation error', details: error.errors });
     }
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Record continuous vitals (not tied to a specific visit)
+exports.recordContinuousVitals = async (req, res) => {
+  try {
+    const data = continuousVitalsSchema.parse(req.body);
+    
+    // Auto-calculate BMI if height and weight are provided
+    if (data.weight && data.height) {
+      data.bmi = data.weight / (data.height ** 2);
+    }
+
+    // Verify patient exists
+    const patient = await prisma.patient.findUnique({
+      where: { id: data.patientId }
+    });
+
+    if (!patient) {
+      return res.status(404).json({ error: 'Patient not found' });
+    }
+
+    // Set visitId to null for continuous vitals
+    data.visitId = null;
+
+    const vital = await prisma.vitalSign.create({ 
+      data,
+      include: {
+        patient: {
+          select: {
+            id: true,
+            name: true,
+            type: true
+          }
+        }
+      }
+    });
+
+    // Create audit log
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user.id,
+        action: 'RECORD_CONTINUOUS_VITALS',
+        entity: 'VitalSign',
+        entityId: vital.id,
+        details: JSON.stringify({
+          patientId: data.patientId,
+          bloodPressure: data.bloodPressure,
+          temperature: data.temperature,
+          heartRate: data.heartRate,
+          bmi: data.bmi,
+          type: 'continuous'
+        }),
+        ip: req.ip,
+        userAgent: req.get('User-Agent')
+      }
+    });
+
+    res.json({
+      message: 'Continuous vitals recorded successfully',
+      vital
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Validation error', details: error.errors });
+    }
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Get all vitals for a patient (including continuous vitals)
+exports.getPatientVitals = async (req, res) => {
+  try {
+    const { patientId } = req.params;
+
+    // Verify patient exists
+    const patient = await prisma.patient.findUnique({
+      where: { id: patientId },
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        mobile: true,
+        email: true,
+        dob: true,
+        gender: true
+      }
+    });
+
+    if (!patient) {
+      return res.status(404).json({ error: 'Patient not found' });
+    }
+
+    // Get all vitals for this patient (both visit-based and continuous)
+    const vitals = await prisma.vitalSign.findMany({
+      where: {
+        patientId: patientId
+      },
+      orderBy: {
+        createdAt: 'desc'
+      },
+      include: {
+        visit: {
+          select: {
+            id: true,
+            visitUid: true,
+            status: true,
+            createdAt: true
+          }
+        }
+      }
+    });
+
+    res.json({
+      patient,
+      vitals: vitals.map(vital => ({
+        id: vital.id,
+        bloodPressure: vital.bloodPressure,
+        bloodPressureSystolic: vital.bloodPressureSystolic,
+        bloodPressureDiastolic: vital.bloodPressureDiastolic,
+        temperature: vital.temperature,
+        tempUnit: vital.tempUnit,
+        heartRate: vital.heartRate,
+        respirationRate: vital.respirationRate,
+        height: vital.height,
+        weight: vital.weight,
+        bmi: vital.bmi,
+        oxygenSaturation: vital.oxygenSaturation,
+        condition: vital.condition,
+        notes: vital.notes,
+        painScoreRest: vital.painScoreRest,
+        painScoreMovement: vital.painScoreMovement,
+        sedationScore: vital.sedationScore,
+        gcsEyes: vital.gcsEyes,
+        gcsVerbal: vital.gcsVerbal,
+        gcsMotor: vital.gcsMotor,
+        chiefComplaint: vital.chiefComplaint,
+        historyOfPresentIllness: vital.historyOfPresentIllness,
+        onsetOfSymptoms: vital.onsetOfSymptoms,
+        durationOfSymptoms: vital.durationOfSymptoms,
+        severityOfSymptoms: vital.severityOfSymptoms,
+        associatedSymptoms: vital.associatedSymptoms,
+        relievingFactors: vital.relievingFactors,
+        aggravatingFactors: vital.aggravatingFactors,
+        generalAppearance: vital.generalAppearance,
+        headAndNeck: vital.headAndNeck,
+        cardiovascularExam: vital.cardiovascularExam,
+        respiratoryExam: vital.respiratoryExam,
+        abdominalExam: vital.abdominalExam,
+        extremities: vital.extremities,
+        neurologicalExam: vital.neurologicalExam,
+        createdAt: vital.createdAt,
+        updatedAt: vital.updatedAt,
+        visitId: vital.visitId,
+        visit: vital.visit,
+        isContinuous: vital.visitId === null
+      }))
+    });
+  } catch (error) {
+    console.error('Error fetching patient vitals:', error);
     res.status(500).json({ error: error.message });
   }
 };

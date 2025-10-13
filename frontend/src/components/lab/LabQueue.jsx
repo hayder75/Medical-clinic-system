@@ -96,8 +96,6 @@ const LabQueue = () => {
         serviceResults: serviceResults
       };
 
-      console.log('Submitting lab result:', payload);
-      
       const response = await api.put(`/batch-orders/${selectedOrder.id}/results`, payload);
       
       toast.success('Lab results recorded successfully!');
@@ -135,8 +133,6 @@ const LabQueue = () => {
   const handleFileUpload = async (file) => {
     if (!file) return;
 
-    console.log('Uploading file:', file.name, 'to order:', selectedOrder.id);
-
     const formData = new FormData();
     formData.append('file', file);
 
@@ -148,7 +144,6 @@ const LabQueue = () => {
         },
       });
 
-      console.log('Upload response:', response.data);
       toast.success('File uploaded successfully!');
       
       // Add to attachments list

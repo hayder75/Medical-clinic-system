@@ -43,16 +43,16 @@ const LoginPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-50 to-medical-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8" style={{ backgroundColor: '#FFFFFF' }}>
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
-          <div className="mx-auto h-16 w-16 bg-primary-600 rounded-full flex items-center justify-center">
+          <div className="mx-auto h-16 w-16 rounded-full flex items-center justify-center shadow-lg" style={{ backgroundColor: '#10367D' }}>
             <Stethoscope className="h-8 w-8 text-white" />
           </div>
-          <h2 className="mt-6 text-3xl font-bold text-gray-900">
+          <h2 className="mt-6 text-3xl font-bold" style={{ color: '#0C0E0B' }}>
             Medical Clinic System
           </h2>
-          <p className="mt-2 text-sm text-gray-600">
+          <p className="mt-2 text-sm" style={{ color: '#10367D' }}>
             Sign in to your account
           </p>
         </div>
@@ -60,7 +60,7 @@ const LoginPage = () => {
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div className="space-y-4">
             <div>
-              <label htmlFor="username" className="label">
+              <label htmlFor="username" className="block text-sm font-medium mb-2" style={{ color: '#0C0E0B' }}>
                 Username
               </label>
               <input
@@ -68,7 +68,11 @@ const LoginPage = () => {
                 name="username"
                 type="text"
                 required
-                className="input"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all duration-200"
+                style={{ 
+                  borderColor: '#10367D',
+                  focusRingColor: '#10367D'
+                }}
                 placeholder="Enter your username"
                 value={formData.username}
                 onChange={handleChange}
@@ -76,7 +80,7 @@ const LoginPage = () => {
             </div>
 
             <div>
-              <label htmlFor="password" className="label">
+              <label htmlFor="password" className="block text-sm font-medium mb-2" style={{ color: '#0C0E0B' }}>
                 Password
               </label>
               <div className="relative">
@@ -85,7 +89,11 @@ const LoginPage = () => {
                   name="password"
                   type={showPassword ? 'text' : 'password'}
                   required
-                  className="input pr-10"
+                  className="w-full px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all duration-200"
+                  style={{ 
+                    borderColor: '#10367D',
+                    focusRingColor: '#10367D'
+                  }}
                   placeholder="Enter your password"
                   value={formData.password}
                   onChange={handleChange}
@@ -96,9 +104,9 @@ const LoginPage = () => {
                   onClick={() => setShowPassword(!showPassword)}
                 >
                   {showPassword ? (
-                    <EyeOff className="h-5 w-5 text-gray-400" />
+                    <EyeOff className="h-5 w-5" style={{ color: '#10367D' }} />
                   ) : (
-                    <Eye className="h-5 w-5 text-gray-400" />
+                    <Eye className="h-5 w-5" style={{ color: '#10367D' }} />
                   )}
                 </button>
               </div>
@@ -109,7 +117,14 @@ const LoginPage = () => {
             <button
               type="submit"
               disabled={loading}
-              className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl"
+              style={{ 
+                backgroundColor: '#10367D',
+                focusRingColor: '#EA2E00',
+                hoverBackgroundColor: '#0C0E0B'
+              }}
+              onMouseEnter={(e) => e.target.style.backgroundColor = '#0C0E0B'}
+              onMouseLeave={(e) => e.target.style.backgroundColor = '#10367D'}
             >
               {loading ? (
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
@@ -120,7 +135,7 @@ const LoginPage = () => {
           </div>
 
           <div className="text-center">
-            <p className="text-sm text-gray-600">
+            <p className="text-sm" style={{ color: '#10367D' }}>
               Demo credentials: admin / admin123
             </p>
           </div>

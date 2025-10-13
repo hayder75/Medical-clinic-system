@@ -6,18 +6,9 @@ const ImageViewer = ({ isOpen, onClose, images, currentIndex = 0 }) => {
   const [rotation, setRotation] = useState(0);
   const [imageIndex, setImageIndex] = useState(currentIndex);
 
-  console.log('🖼️ ImageViewer props:', { isOpen, images, currentIndex });
-  console.log('🖼️ ImageViewer isOpen:', isOpen);
-  console.log('🖼️ ImageViewer images length:', images?.length);
-
   useEffect(() => {
-    console.log('🖼️ ImageViewer useEffect - currentIndex changed:', currentIndex);
     setImageIndex(currentIndex);
   }, [currentIndex]);
-
-  useEffect(() => {
-    console.log('🖼️ ImageViewer useEffect - isOpen changed:', isOpen);
-  }, [isOpen]);
 
   useEffect(() => {
     if (isOpen) {
@@ -25,7 +16,7 @@ const ImageViewer = ({ isOpen, onClose, images, currentIndex = 0 }) => {
     } else {
       document.body.style.overflow = 'unset';
     }
-    
+
     return () => {
       document.body.style.overflow = 'unset';
     };
@@ -67,14 +58,9 @@ const ImageViewer = ({ isOpen, onClose, images, currentIndex = 0 }) => {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, images.length, onClose]);
 
-  console.log('🖼️ ImageViewer render check:', { isOpen, images, imagesLength: images?.length });
-  
   if (!isOpen || !images || images.length === 0) {
-    console.log('🖼️ ImageViewer not rendering:', { isOpen, hasImages: !!images, imagesLength: images?.length });
     return null;
   }
-
-  console.log('🖼️ ImageViewer rendering with:', { isOpen, images, currentIndex });
 
   const currentImage = images[imageIndex];
 
@@ -154,7 +140,7 @@ const ImageViewer = ({ isOpen, onClose, images, currentIndex = 0 }) => {
       {/* Image Container */}
       <div className="relative max-w-full max-h-full p-20">
         <img
-          src={`http://localhost:3000/${currentImage.fileUrl}`}
+          src={currentImage.fileUrl}
           alt={currentImage.fileName || 'Radiology image'}
           className="max-w-full max-h-full object-contain transition-transform duration-200"
           style={{

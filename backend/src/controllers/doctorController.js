@@ -375,6 +375,183 @@ exports.getResultsQueue = async (req, res) => {
   }
 };
 
+// Unified Queue - combines patient queue and results queue with priority system
+exports.getUnifiedQueue = async (req, res) => {
+  try {
+    const doctorId = req.user.id;
+    console.log('🔍 getUnifiedQueue - Doctor ID:', doctorId);
+    
+    // Get doctor assignments
+    const doctorAssignments = await prisma.doctorAssignment.findMany({
+      where: { doctorId: doctorId },
+      select: { id: true }
+    });
+    
+    const assignmentIds = doctorAssignments.map(a => a.id);
+    
+    // Get all visits assigned to this doctor (both new consultations and results)
+    const allVisits = await prisma.visit.findMany({
+      where: { 
+        status: {
+          in: ['WAITING_FOR_DOCTOR', 'UNDER_DOCTOR_REVIEW', 'AWAITING_RESULTS_REVIEW']
+        },
+        OR: [
+          { assignmentId: { not: null } },
+          { batchOrders: { some: { doctorId: doctorId } } }
+        ]
+      },
+      include: {
+        patient: { 
+          select: { 
+            id: true, 
+            name: true, 
+            type: true,
+            mobile: true,
+            email: true,
+            dob: true,
+            gender: true,
+            bloodType: true
+          } 
+        },
+        assignments: {
+          where: { doctorId: doctorId },
+          include: { doctor: true }
+        },
+        vitals: {
+          orderBy: { createdAt: 'desc' },
+          take: 1
+        },
+        labOrders: {
+          include: {
+            type: true,
+            labResults: {
+              include: {
+                testType: true,
+                attachments: true
+              }
+            }
+          }
+        },
+        radiologyOrders: {
+          include: {
+            type: true,
+            radiologyResults: {
+              include: {
+                testType: true,
+                attachments: true
+              }
+            }
+          }
+        },
+        batchOrders: {
+          include: {
+            services: {
+              include: {
+                service: true,
+                investigationType: true
+              }
+            },
+            attachments: true
+          }
+        },
+        medicationOrders: true,
+        bills: {
+          include: {
+            services: {
+              include: {
+                service: true
+              }
+            },
+            payments: true
+          }
+        },
+        dentalRecords: true
+      },
+      orderBy: { createdAt: 'asc' }
+    });
+
+    // Filter to only include visits assigned to this specific doctor
+    const filteredVisits = allVisits.filter(visit => {
+      const hasAssignment = visit.assignments.some(assignment => 
+        assignmentIds.includes(assignment.id)
+      );
+      return hasAssignment;
+    });
+
+    // Add priority and queue type to each visit
+    const unifiedQueue = filteredVisits.map(visit => {
+      let priority = 3; // Default: New consultation
+      let queueType = 'NEW_CONSULTATION';
+      let priorityReason = 'New consultation';
+
+      // Determine priority based on status and urgency
+      if (visit.status === 'AWAITING_RESULTS_REVIEW') {
+        priority = 2;
+        queueType = 'RESULTS_READY';
+        priorityReason = 'Results ready for review';
+      }
+
+      // Check for urgent cases (high triage priority)
+      if (visit.vitals && visit.vitals.length > 0) {
+        const latestVitals = visit.vitals[0];
+        if (latestVitals.triagePriority === 'High' || 
+            (latestVitals.bloodPressure && latestVitals.bloodPressure.includes('High')) ||
+            (latestVitals.temperature && latestVitals.temperature > 38.5) ||
+            (latestVitals.heartRate && latestVitals.heartRate > 100)) {
+          priority = 1;
+          queueType = 'URGENT';
+          priorityReason = 'Urgent case - high priority';
+        }
+      }
+
+      return {
+        ...visit,
+        priority,
+        queueType,
+        priorityReason,
+        // Add timestamp for sorting within same priority
+        priorityTimestamp: visit.status === 'AWAITING_RESULTS_REVIEW' 
+          ? visit.updatedAt || visit.createdAt 
+          : visit.createdAt
+      };
+    });
+
+    // Sort by priority (1=urgent, 2=results, 3=new), then by timestamp
+    unifiedQueue.sort((a, b) => {
+      if (a.priority !== b.priority) {
+        return a.priority - b.priority;
+      }
+      return new Date(a.priorityTimestamp) - new Date(b.priorityTimestamp);
+    });
+
+    console.log('🔍 Unified queue count:', unifiedQueue.length);
+    console.log('🔍 Queue breakdown:', {
+      urgent: unifiedQueue.filter(v => v.priority === 1).length,
+      results: unifiedQueue.filter(v => v.priority === 2).length,
+      new: unifiedQueue.filter(v => v.priority === 3).length
+    });
+
+    res.json({
+      success: true,
+      queue: unifiedQueue,
+      stats: {
+        total: unifiedQueue.length,
+        urgent: unifiedQueue.filter(v => v.priority === 1).length,
+        results: unifiedQueue.filter(v => v.priority === 2).length,
+        new: unifiedQueue.filter(v => v.priority === 3).length
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching unified queue:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch unified queue',
+      details: error.message
+    });
+  }
+};
+
 exports.selectVisit = async (req, res) => {
   try {
     const { visitId } = selectVisitSchema.parse(req.body);
@@ -2451,6 +2628,63 @@ exports.getPrescriptionHistory = async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to fetch prescription history',
+      details: error.message
+    });
+  }
+};
+
+// Direct complete visit (for patients who don't need lab/radiology orders)
+exports.directCompleteVisit = async (req, res) => {
+  try {
+    const { visitId } = req.params;
+    const doctorId = req.user.id;
+
+    // Check if doctor is assigned to this visit
+    const visit = await prisma.visit.findUnique({
+      where: { id: parseInt(visitId) },
+      include: {
+        assignments: {
+          where: {
+            doctorId: doctorId,
+            status: { in: ['Active', 'Pending'] }
+          }
+        }
+      }
+    });
+
+    if (!visit) {
+      return res.status(404).json({
+        success: false,
+        error: 'Visit not found'
+      });
+    }
+
+    if (visit.assignments.length === 0) {
+      return res.status(403).json({
+        success: false,
+        error: 'You are not assigned to this patient'
+      });
+    }
+
+    // Update visit status to AWAITING_RESULTS_REVIEW
+    await prisma.visit.update({
+      where: { id: parseInt(visitId) },
+      data: {
+        status: 'AWAITING_RESULTS_REVIEW',
+        updatedAt: new Date()
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'Visit moved to results queue for medication prescription'
+    });
+
+  } catch (error) {
+    console.error('Error completing visit directly:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to complete visit',
       details: error.message
     });
   }

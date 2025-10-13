@@ -92,8 +92,6 @@ const StaffManagement = () => {
         }
       });
 
-      console.log('Sending data:', cleanedData); // Debug log
-      
       if (editingStaff) {
         await api.put(`/admin/users/${editingStaff.id}`, cleanedData);
         toast.success('Staff member updated successfully');
