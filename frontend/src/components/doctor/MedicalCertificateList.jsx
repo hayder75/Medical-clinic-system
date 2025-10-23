@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { Search, Plus, Edit, Trash2, Eye, Download, Calendar, User, FileText } from 'lucide-react';
+import { Search, Plus, Edit, Trash2, Eye, Download, Calendar, User, FileText, Printer } from 'lucide-react';
 import api from '../../services/api';
 import MedicalCertificateForm from './MedicalCertificateForm';
 
@@ -95,6 +95,197 @@ const MedicalCertificateList = () => {
     }
   };
 
+  const handlePrint = (certificate) => {
+    // Create a temporary print component
+    const printWindow = window.open('', '_blank');
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Medical Certificate - ${certificate.certificateNo}</title>
+          <style>
+            * {
+              -webkit-print-color-adjust: exact !important;
+              color-adjust: exact !important;
+            }
+            
+            body {
+              margin: 0 !important;
+              padding: 0 !important;
+              background: white !important;
+              font-family: Arial, sans-serif !important;
+            }
+            
+            @page {
+              margin: 0.25in;
+              size: A4;
+            }
+            
+            .certificate-content {
+              page-break-inside: avoid;
+              margin: 0;
+              padding: 10px;
+              max-width: none;
+              height: 100vh;
+              overflow: hidden;
+            }
+            
+            h1, h2, h3, p, span, div {
+              color: black !important;
+            }
+            
+            .text-center { text-align: center; }
+            .text-lg { font-size: 18px; }
+            .text-3xl { font-size: 30px; }
+            .font-bold { font-weight: bold; }
+            .font-semibold { font-weight: 600; }
+            .uppercase { text-transform: uppercase; }
+            .underline { text-decoration: underline; }
+            .border-b { border-bottom: 1px solid #ccc; }
+            .border-gray-300 { border-color: #ccc; }
+            .py-8 { padding-top: 16px; padding-bottom: 16px; }
+            .py-6 { padding-top: 12px; padding-bottom: 12px; }
+            .py-4 { padding-top: 8px; padding-bottom: 8px; }
+            .py-2 { padding-top: 4px; padding-bottom: 4px; }
+            .mb-4 { margin-bottom: 8px; }
+            .mb-2 { margin-bottom: 4px; }
+            .mb-1 { margin-bottom: 2px; }
+            .space-y-2 > * + * { margin-top: 4px; }
+            .space-y-4 > * + * { margin-top: 8px; }
+            
+            /* Compact layout for single page */
+            .text-3xl { font-size: 24px; }
+            .text-lg { font-size: 14px; }
+            .text-sm { font-size: 12px; }
+          </style>
+        </head>
+        <body>
+          <div class="certificate-content">
+            ${generateCertificateHTML(certificate)}
+          </div>
+          <script>
+            window.onload = function() {
+              window.print();
+              window.onafterprint = function() {
+                window.close();
+              };
+            };
+          </script>
+        </body>
+      </html>
+    `;
+    
+    printWindow.document.write(printContent);
+    printWindow.document.close();
+  };
+
+  const generateCertificateHTML = (certificate) => {
+    const formatDate = (dateString) => {
+      return new Date(dateString).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    };
+
+    const calculateAge = (dob) => {
+      if (!dob) return '';
+      const today = new Date();
+      const birthDate = new Date(dob);
+      let age = today.getFullYear() - birthDate.getFullYear();
+      const monthDiff = today.getMonth() - birthDate.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+      }
+      return age;
+    };
+
+    const calculateTotalDays = (startDate, endDate) => {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      const diffTime = Math.abs(end - start);
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return diffDays + 1;
+    };
+
+    return `
+      <!-- Header -->
+      <div class="text-center py-4 border-b border-gray-300">
+        <h1 class="text-3xl font-bold text-black mb-1">Dr. Nigussie</h1>
+        <p class="text-lg text-black mb-1">Piassa Awash Bank Building, Hawassa, Hawassa, Ethiopia</p>
+        <p class="text-lg text-black">Phone: 0462126023 | Email: drnigussie@gmail.com</p>
+      </div>
+
+      <!-- Certificate Title -->
+      <div class="text-center py-4 border-b border-gray-300">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div style="flex: 1;"></div>
+          <h2 class="text-3xl font-bold text-black uppercase">MEDICAL CERTIFICATE</h2>
+          <div style="flex: 1; text-align: right;">
+            <p class="text-lg text-black">Certificate No.: ${certificate.certificateNo}</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Patient Information -->
+      <div class="py-3 border-b border-gray-300">
+        <h3 class="text-lg font-bold text-black underline mb-2">Patient Information</h3>
+        <div class="space-y-2">
+          <p class="text-black"><strong>Name:</strong> ${certificate.patient.name}</p>
+          <p class="text-black"><strong>Gender:</strong> ${certificate.patient.gender || 'Not specified'}</p>
+          <p class="text-black"><strong>Age:</strong> ${calculateAge(certificate.patient.dob)} years</p>
+        </div>
+      </div>
+
+      <!-- Certificate Details -->
+      <div class="py-3 border-b border-gray-300">
+        <h3 class="text-lg font-bold text-black underline mb-2">Certificate Details</h3>
+        <div class="space-y-2">
+          <p class="text-black"><strong>Date Issued:</strong> ${formatDate(certificate.certificateDate)}</p>
+        </div>
+      </div>
+
+      <!-- Medical Information -->
+      <div class="py-3 border-b border-gray-300">
+        <h3 class="text-lg font-bold text-black underline mb-2">Medical Information</h3>
+        <div class="space-y-2">
+          <p class="text-black"><strong>Diagnosis:</strong> ${certificate.diagnosis}</p>
+          <p class="text-black"><strong>Treatment:</strong> ${certificate.treatment}</p>
+          <p class="text-black"><strong>Recommendations:</strong> ${certificate.recommendations}</p>
+        </div>
+      </div>
+
+      <!-- Rest Period -->
+      <div class="py-3 border-b border-gray-300">
+        <h3 class="text-lg font-bold text-black underline text-center mb-2">Rest Period</h3>
+        <div class="text-center">
+          <p class="text-lg text-black mb-1">
+            From ${formatDate(certificate.restStartDate)} to ${formatDate(certificate.restEndDate)}
+          </p>
+          <p class="text-lg text-black">
+            (Total of ${calculateTotalDays(certificate.restStartDate, certificate.restEndDate)} days)
+          </p>
+        </div>
+      </div>
+
+      <!-- Issued By -->
+      <div class="py-3">
+        <h3 class="text-lg font-bold text-black underline mb-2">Issued By</h3>
+        <div class="space-y-2">
+          <p class="text-black"><strong>Name:</strong> ${certificate.doctor.fullname}</p>
+          <p class="text-black"><strong>Specialization:</strong> ${certificate.doctor.specialties || 'General Doctor'}</p>
+        </div>
+      </div>
+
+      <!-- Footer Line -->
+      <div class="border-t border-gray-300 pt-2">
+        <div class="text-center text-sm text-gray-600">
+          <p>This certificate is issued for medical purposes only.</p>
+        </div>
+      </div>
+    `;
+  };
+
   const handleFormSave = (certificate) => {
     setShowForm(false);
     setEditingCertificate(null);
@@ -143,7 +334,7 @@ const MedicalCertificateList = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: '#0C0E0B' }}>
+          <h1 className="text-2xl font-bold" style={{ color: 'var(--dark)' }}>
             Medical Certificates
           </h1>
           <p className="text-gray-600 mt-1">
@@ -153,11 +344,11 @@ const MedicalCertificateList = () => {
         <button
           onClick={handleCreateNew}
           className="px-4 py-2 text-white rounded-md transition-colors flex items-center space-x-2"
-          style={{ backgroundColor: '#2e13d1' }}
-          onMouseEnter={(e) => e.target.style.backgroundColor = '#0D2A5A'}
-          onMouseLeave={(e) => e.target.style.backgroundColor = '#2e13d1'}
+          style={{ backgroundColor: 'var(--primary)' }}
+          onMouseEnter={(e) => e.target.style.backgroundColor = 'var(--secondary)'}
+          onMouseLeave={(e) => e.target.style.backgroundColor = 'var(--primary)'}
         >
-          <Plus className="h-4 w-4" />
+          <Plus className="h-5 w-5" />
           <span>Create Certificate</span>
         </button>
       </div>
@@ -171,17 +362,20 @@ const MedicalCertificateList = () => {
               placeholder="Search by certificate number, patient name, or diagnosis..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full px-3 py-2 pl-10 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              style={{ borderColor: '#E5E7EB' }}
+              className="w-full px-3 py-2 pl-10 border rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2"
+              style={{ 
+                borderColor: 'var(--primary)',
+                '--tw-ring-color': 'var(--primary)'
+              }}
             />
             <Search className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
           </div>
           <button
             type="submit"
             className="px-4 py-2 text-white rounded-md transition-colors"
-            style={{ backgroundColor: '#2e13d1' }}
-            onMouseEnter={(e) => e.target.style.backgroundColor = '#0D2A5A'}
-            onMouseLeave={(e) => e.target.style.backgroundColor = '#2e13d1'}
+            style={{ backgroundColor: 'var(--primary)' }}
+            onMouseEnter={(e) => e.target.style.backgroundColor = 'var(--secondary)'}
+            onMouseLeave={(e) => e.target.style.backgroundColor = 'var(--primary)'}
           >
             Search
           </button>
@@ -192,7 +386,7 @@ const MedicalCertificateList = () => {
       <div className="bg-white rounded-lg shadow-md">
         {loading ? (
           <div className="p-8 text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 mx-auto" style={{ borderColor: '#2e13d1' }}></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 mx-auto" style={{ borderColor: 'var(--primary)' }}></div>
             <p className="mt-2 text-gray-600">Loading certificates...</p>
           </div>
         ) : certificates.length === 0 ? (
@@ -234,7 +428,7 @@ const MedicalCertificateList = () => {
                     <tr key={certificate.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div>
-                          <div className="text-sm font-medium" style={{ color: '#0C0E0B' }}>
+                          <div className="text-sm font-medium" style={{ color: 'var(--dark)' }}>
                             {certificate.certificateNo}
                           </div>
                           <div className="text-sm text-gray-500">
@@ -244,7 +438,7 @@ const MedicalCertificateList = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div>
-                          <div className="text-sm font-medium" style={{ color: '#0C0E0B' }}>
+                          <div className="text-sm font-medium" style={{ color: 'var(--dark)' }}>
                             {certificate.patient.name}
                           </div>
                           <div className="text-sm text-gray-500">
@@ -253,13 +447,13 @@ const MedicalCertificateList = () => {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm" style={{ color: '#0C0E0B' }}>
+                        <div className="text-sm" style={{ color: 'var(--dark)' }}>
                           {certificate.doctor.fullname}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div>
-                          <div className="text-sm" style={{ color: '#0C0E0B' }}>
+                          <div className="text-sm" style={{ color: 'var(--dark)' }}>
                             {formatDate(certificate.restStartDate)} - {formatDate(certificate.restEndDate)}
                           </div>
                           <div className="text-sm text-gray-500">
@@ -275,25 +469,32 @@ const MedicalCertificateList = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex space-x-2">
                           <button
-                            onClick={() => handleGeneratePDF(certificate)}
+                            onClick={() => handlePrint(certificate)}
                             className="text-blue-600 hover:text-blue-900 transition-colors"
+                            title="Print Certificate"
+                          >
+                            <Printer className="h-5 w-5" />
+                          </button>
+                          <button
+                            onClick={() => handleGeneratePDF(certificate)}
+                            className="text-green-600 hover:text-green-900 transition-colors"
                             title="Generate PDF"
                           >
-                            <Download className="h-4 w-4" />
+                            <Download className="h-5 w-5" />
                           </button>
                           <button
                             onClick={() => handleEdit(certificate)}
                             className="text-indigo-600 hover:text-indigo-900 transition-colors"
                             title="Edit"
                           >
-                            <Edit className="h-4 w-4" />
+                            <Edit className="h-5 w-5" />
                           </button>
                           <button
                             onClick={() => handleDelete(certificate)}
                             className="text-red-600 hover:text-red-900 transition-colors"
                             title="Delete"
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <Trash2 className="h-5 w-5" />
                           </button>
                         </div>
                       </td>

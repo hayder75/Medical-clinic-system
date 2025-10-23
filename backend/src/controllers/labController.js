@@ -30,13 +30,31 @@ exports.getOrders = async (req, res) => {
   try {
     const batchOrders = await prisma.batchOrder.findMany({
       where: {
-        OR: [
-          { type: 'LAB' },
-          { type: 'MIXED' }
-        ],
-        status: {
-          in: ['PAID', 'QUEUED', 'IN_PROGRESS', 'COMPLETED']
-        }
+        AND: [
+          {
+            OR: [
+              { type: 'LAB' },
+              { type: 'MIXED' }
+            ]
+          },
+          {
+            OR: [
+              // Regular orders that are paid
+              {
+                status: {
+                  in: ['PAID', 'QUEUED', 'IN_PROGRESS', 'COMPLETED']
+                }
+              },
+              // Emergency orders that are unpaid (treated as pre-paid)
+              {
+                status: 'UNPAID',
+                visit: {
+                  isEmergency: true
+                }
+              }
+            ]
+          }
+        ]
       },
       include: {
         services: {
@@ -65,7 +83,8 @@ exports.getOrders = async (req, res) => {
           select: {
             id: true,
             visitUid: true,
-            status: true
+            status: true,
+            isEmergency: true
           }
         },
         attachments: true,
@@ -134,6 +153,7 @@ exports.saveIndividualLabResult = async (req, res) => {
     const existingResult = await prisma.detailedLabResult.findFirst({
       where: {
         labOrderId: data.labOrderId,
+        serviceId: data.serviceId,
         templateId: data.templateId
       }
     });
@@ -158,6 +178,7 @@ exports.saveIndividualLabResult = async (req, res) => {
       const newResult = await prisma.detailedLabResult.create({
         data: {
           labOrderId: data.labOrderId,
+          serviceId: data.serviceId,
           templateId: data.templateId,
           results: data.results,
           additionalNotes: data.additionalNotes
@@ -170,13 +191,11 @@ exports.saveIndividualLabResult = async (req, res) => {
       });
     }
 
-    // Update service status to IN_PROGRESS if it was QUEUED
-    if (service.status === 'QUEUED') {
-      await prisma.batchOrderService.update({
-        where: { id: data.serviceId },
-        data: { status: 'IN_PROGRESS' }
-      });
-    }
+    // Update service status to COMPLETED when result is saved
+    await prisma.batchOrderService.update({
+      where: { id: data.serviceId },
+      data: { status: 'COMPLETED' }
+    });
 
   } catch (error) {
     console.error('Error saving lab result:', error);
@@ -229,12 +248,27 @@ exports.sendToDoctor = async (req, res) => {
     }
 
     // Check if all services have results
-    const allServicesHaveResults = batchOrder.services.every(service => {
-      return service.status === 'COMPLETED' || service.status === 'IN_PROGRESS';
-    });
+    // For emergency patients, allow sending if at least one service has results
+    // For regular patients, require all services to have results
+    let allServicesHaveResults;
+    
+    if (batchOrder.visit.isEmergency) {
+      // Emergency patients: at least one service must have results
+      allServicesHaveResults = batchOrder.services.some(service => {
+        return service.status === 'COMPLETED' || service.status === 'IN_PROGRESS';
+      });
+    } else {
+      // Regular patients: all services must have results
+      allServicesHaveResults = batchOrder.services.every(service => {
+        return service.status === 'COMPLETED' || service.status === 'IN_PROGRESS';
+      });
+    }
 
     if (!allServicesHaveResults) {
-      return res.status(400).json({ error: 'All services must have results before sending to doctor' });
+      const errorMessage = batchOrder.visit.isEmergency 
+        ? 'At least one service must have results before sending to doctor' 
+        : 'All services must have results before sending to doctor';
+      return res.status(400).json({ error: errorMessage });
     }
 
     // Update batch order status to COMPLETED

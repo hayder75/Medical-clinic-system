@@ -37,6 +37,13 @@ model User {
   attachedImages PatientAttachedImage[]
   medicalCertificates MedicalCertificate[]
   diagnosisNotes DiagnosisNotes[]
+  
+  // Cash Management Relations
+  cashSessionsCreated DailyCashSession[]
+  cashSessionsReset DailyCashSession[] @relation("CashSessionReset")
+  cashTransactions CashTransaction[]
+  bankDeposits BankDeposit[]
+  cashExpenses CashExpense[]
   medicalHistories MedicalHistory[] @relation("DoctorHistory")
   nurseAssignments NurseServiceAssignment[] @relation("NurseAssignments")
   nurseAssignmentsBy NurseServiceAssignment[] @relation("NurseAssignmentsBy")
@@ -139,6 +146,7 @@ model Patient {
   medicalCertificates MedicalCertificate[]
   diagnosisNotes  DiagnosisNotes[]
   cardActivations CardActivation[]
+  cashTransactions CashTransaction[]
 
   @@index([status])
   @@index([type])
@@ -158,6 +166,7 @@ model Visit {
   date           DateTime  @default(now())        // creation timestamp
   status         VisitStatus @default(WAITING_FOR_TRIAGE)
   queueType      QueueType @default(CONSULTATION) // CONSULTATION or RESULTS_REVIEW
+  isEmergency    Boolean   @default(false)        // Emergency visit flag
   notes          String?
   diagnosis      String?
   diagnosisDetails String?  // Rich text diagnosis details
@@ -288,8 +297,10 @@ model Billing {
   services      BillingService[]
   payments      BillPayment[]
   cardActivations CardActivation[] @relation("CardActivationBilling")
+  cashTransactions CashTransaction[]
   totalAmount   Float
   status        BillingStatus @default(PENDING)
+  billingType   BillingType   @default(REGULAR)
   notes         String?
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
@@ -760,6 +771,12 @@ enum BillingStatus {
   REFUNDED
 }
 
+enum BillingType {
+  REGULAR
+  EMERGENCY
+  CARD_ACTIVATION
+}
+
 enum PaymentType {
   CASH
   BANK
@@ -787,6 +804,9 @@ enum ServiceCategory {
   PROCEDURE
   NURSE
   CONTINUOUS_INFUSION
+  EMERGENCY
+  DIAGNOSTIC
+  TREATMENT
   OTHER
 }
 
@@ -835,6 +855,8 @@ enum VisitStatus {
   WAITING_FOR_NURSE_SERVICE
   NURSE_SERVICES_ORDERED
   NURSE_SERVICES_COMPLETED
+  EMERGENCY_QUEUE
+  IN_PROGRESS
   COMPLETED
   CANCELLED
 }
@@ -922,6 +944,8 @@ model BatchOrderService {
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 
+  detailedResults DetailedLabResult[]
+
   @@unique([batchOrderId, serviceId])
 }
 
@@ -998,6 +1022,8 @@ model DetailedLabResult {
   id              String   @id @default(uuid())
   labOrderId      Int
   labOrder        BatchOrder @relation(fields: [labOrderId], references: [id])
+  serviceId       Int?     // Link to specific service in batch order
+  service         BatchOrderService? @relation(fields: [serviceId], references: [id])
   templateId      String
   template        LabTestTemplate @relation(fields: [templateId], references: [id])
   results         Json     // Structured results data
@@ -1008,7 +1034,7 @@ model DetailedLabResult {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  @@unique([labOrderId, templateId])
+  @@unique([labOrderId, serviceId, templateId])
 }
 
 // Dental Photos for Before/After Documentation
@@ -1127,6 +1153,157 @@ enum CertificateStatus {
   ACTIVE
   EXPIRED
   CANCELLED
+}
+
+// Daily Cash Management System
+model DailyCashSession {
+  id            String   @id @default(uuid())
+  sessionDate   DateTime @default(now())
+  startTime     DateTime @default(now())
+  endTime       DateTime?
+  
+  // Cash Tracking
+  startingCash  Float    @default(0)  // Cash at start of day
+  totalReceived Float    @default(0)  // Total money received today
+  totalExpenses Float    @default(0)  // Total expenses today
+  totalBankDeposit Float @default(0)  // Total deposited to bank
+  endingCash    Float?   // Cash at end of day
+  
+  // Status
+  status        CashSessionStatus @default(ACTIVE)
+  isReset       Boolean  @default(false)  // Whether admin has reset this session
+  
+  // Relationships
+  transactions  CashTransaction[]
+  bankDeposits  BankDeposit[]
+  expenses      CashExpense[]
+  
+  // Audit
+  createdById   String
+  createdBy     User     @relation(fields: [createdById], references: [id])
+  resetById     String?
+  resetBy       User?    @relation("CashSessionReset", fields: [resetById], references: [id])
+  resetAt       DateTime?
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@index([sessionDate])
+  @@index([status])
+  @@index([createdById])
+}
+
+enum CashSessionStatus {
+  ACTIVE
+  CLOSED
+  RESET
+}
+
+model CashTransaction {
+  id            String   @id @default(uuid())
+  sessionId     String
+  session       DailyCashSession @relation(fields: [sessionId], references: [id])
+  
+  // Transaction Details
+  type          TransactionType
+  amount        Float
+  description   String
+  paymentMethod PaymentType
+  
+  // Optional References
+  billingId     String?
+  billing       Billing? @relation(fields: [billingId], references: [id])
+  patientId     String?
+  patient       Patient? @relation(fields: [patientId], references: [id])
+  
+  // Audit
+  processedById String
+  processedBy   User     @relation(fields: [processedById], references: [id])
+  
+  createdAt     DateTime @default(now())
+  
+  @@index([sessionId])
+  @@index([type])
+  @@index([processedById])
+}
+
+enum TransactionType {
+  PAYMENT_RECEIVED
+  REFUND_GIVEN
+  CASH_ADJUSTMENT
+  OTHER
+}
+
+model BankDeposit {
+  id            String   @id @default(uuid())
+  sessionId     String
+  session       DailyCashSession @relation(fields: [sessionId], references: [id])
+  
+  // Deposit Details
+  amount        Float
+  bankName      String
+  accountNumber String?
+  depositDate   DateTime @default(now())
+  
+  // Receipt/Transaction Info
+  receiptImage  String?  // File path to uploaded receipt
+  transactionNumber String?
+  notes         String?
+  
+  // Status
+  status        DepositStatus @default(PENDING)
+  
+  // Audit
+  depositedById String
+  depositedBy   User     @relation(fields: [depositedById], references: [id])
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@index([sessionId])
+  @@index([status])
+  @@index([depositedById])
+}
+
+enum DepositStatus {
+  PENDING
+  CONFIRMED
+  VERIFIED
+}
+
+model CashExpense {
+  id            String   @id @default(uuid())
+  sessionId     String
+  session       DailyCashSession @relation(fields: [sessionId], references: [id])
+  
+  // Expense Details
+  amount        Float
+  category      ExpenseCategory
+  description   String
+  vendor        String?
+  
+  // Receipt
+  receiptImage  String?  // File path to uploaded receipt
+  
+  // Audit
+  recordedById  String
+  recordedBy    User     @relation(fields: [recordedById], references: [id])
+  
+  createdAt     DateTime @default(now())
+  
+  @@index([sessionId])
+  @@index([category])
+  @@index([recordedById])
+}
+
+enum ExpenseCategory {
+  OFFICE_SUPPLIES
+  MEDICAL_SUPPLIES
+  MAINTENANCE
+  UTILITIES
+  FOOD_BEVERAGE
+  TRANSPORTATION
+  OTHER
 }
 
 model DiagnosisNotes {

@@ -22,6 +22,7 @@ const ReceptionPatientRegistration = () => {
   const [searchLoading, setSearchLoading] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [showSearchResults, setShowSearchResults] = useState(false);
+  const [visitType, setVisitType] = useState('REGULAR'); // 'REGULAR' or 'EMERGENCY'
   
   // Age-based date generation
   const [dateInputType, setDateInputType] = useState('date'); // 'date' or 'age'
@@ -145,12 +146,14 @@ const ReceptionPatientRegistration = () => {
       // Create visit for existing patient
       const visitResponse = await api.post('/reception/visits', {
         patientId: patient.id,
-        notes: 'Returning patient visit',
-        queueType: 'CONSULTATION'
+        notes: visitType === 'EMERGENCY' ? 'Emergency visit for existing patient' : 'Returning patient visit',
+        queueType: 'CONSULTATION',
+        isEmergency: visitType === 'EMERGENCY'
       });
       
       setVisit(visitResponse.data.visit);
       setStep(3); // Skip to confirmation step
+      
       toast.success(visitResponse.data.message || 'Visit created successfully and sent to triage!');
       
     } catch (error) {
@@ -416,6 +419,7 @@ const ReceptionPatientRegistration = () => {
                 <select className="input" {...register('type', { required: 'Patient type is required' })}>
                   <option value="">Select Type</option>
                   <option value="REGULAR">Regular</option>
+                  <option value="EMERGENCY">Emergency</option>
                   <option value="STAFF">Staff</option>
                   <option value="CHARITY">Charity</option>
                 </select>
@@ -556,6 +560,7 @@ const ReceptionPatientRegistration = () => {
           </div>
 
           <div className="space-y-6">
+
             {/* Search Form */}
             <div className="bg-gray-50 rounded-lg p-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
@@ -597,6 +602,41 @@ const ReceptionPatientRegistration = () => {
                   </div>
                 </div>
               </div>
+            </div>
+
+            {/* Visit Type Selection */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <h3 className="text-lg font-semibold text-blue-900 mb-3">Visit Type</h3>
+              <div className="flex space-x-4">
+                <label className="flex items-center">
+                  <input
+                    type="radio"
+                    name="visitType"
+                    value="REGULAR"
+                    checked={visitType === 'REGULAR'}
+                    onChange={(e) => setVisitType(e.target.value)}
+                    className="mr-2"
+                  />
+                  <span className="text-blue-800">Regular Visit</span>
+                </label>
+                <label className="flex items-center">
+                  <input
+                    type="radio"
+                    name="visitType"
+                    value="EMERGENCY"
+                    checked={visitType === 'EMERGENCY'}
+                    onChange={(e) => setVisitType(e.target.value)}
+                    className="mr-2"
+                  />
+                  <span className="text-red-800 font-medium">Emergency Visit</span>
+                </label>
+              </div>
+              <p className="text-sm text-blue-700 mt-2">
+                {visitType === 'EMERGENCY' 
+                  ? 'Emergency visits bypass normal payment flow and go directly to emergency billing'
+                  : 'Regular visits follow normal billing and triage process'
+                }
+              </p>
             </div>
 
             {/* Search Results */}

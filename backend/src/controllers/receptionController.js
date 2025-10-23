@@ -25,7 +25,8 @@ const createVisitSchema = z.object({
   patientId: z.string(),
   suggestedDoctorId: z.string().nullable().optional(),
   notes: z.string().optional(),
-  queueType: z.enum(['CONSULTATION', 'RESULTS_REVIEW']).default('CONSULTATION')
+  queueType: z.enum(['CONSULTATION', 'RESULTS_REVIEW']).default('CONSULTATION'),
+  isEmergency: z.boolean().optional().default(false)
 });
 
 // Get all patients with card status
@@ -374,7 +375,7 @@ exports.createVisit = async (req, res) => {
     const validatedData = createVisitSchema.parse(req.body);
     const receptionistId = req.user.id;
     
-    // Check if patient exists and card is active
+    // Check if patient exists
     const patient = await prisma.patient.findUnique({
       where: { id: validatedData.patientId }
     });
@@ -383,6 +384,7 @@ exports.createVisit = async (req, res) => {
       return res.status(404).json({ error: 'Patient not found' });
     }
     
+    // Check if patient card is active
     if (patient.cardStatus !== 'ACTIVE') {
       return res.status(400).json({ 
         error: 'Patient card is not active. Please activate the card before creating a visit.',
@@ -403,7 +405,7 @@ exports.createVisit = async (req, res) => {
     const visitNumber = String(visitCount + 1).padStart(4, '0');
     const visitUid = `VISIT-${dateStr}-${visitNumber}`;
     
-    // Create visit - no billing needed, just send to triage
+    // Create visit
     const visit = await prisma.visit.create({
       data: {
         visitUid,
@@ -412,7 +414,8 @@ exports.createVisit = async (req, res) => {
         suggestedDoctorId: validatedData.suggestedDoctorId || null,
         notes: validatedData.notes || null,
         queueType: validatedData.queueType,
-        status: 'WAITING_FOR_TRIAGE' // Directly send to triage
+        isEmergency: validatedData.isEmergency,
+        status: 'WAITING_FOR_TRIAGE'
       }
     });
     

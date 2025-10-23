@@ -147,6 +147,7 @@ exports.registerPatient = async (req, res) => {
         visitUid: visitUid,
         patientId: patient.id,
         status: 'WAITING_FOR_TRIAGE',
+        isEmergency: type === 'EMERGENCY',
         notes: `Patient registered via ${type === 'EMERGENCY' ? 'emergency' : 'regular'} registration`
       }
     });
@@ -324,6 +325,7 @@ exports.createVisitForExistingPatient = async (req, res) => {
         visitUid: visitUid,
         patientId: patient.id,
         status: 'WAITING_FOR_TRIAGE',
+        isEmergency: type === 'EMERGENCY',
         notes: notes || `Returning patient visit - ${type || 'regular'}`
       }
     });
@@ -654,7 +656,7 @@ exports.processPayment = async (req, res) => {
   try {
     console.log('Payment request body:', JSON.stringify(req.body, null, 2));
     // Remove Zod validation completely for testing
-    const { billingId, amount, type, bankName, transNumber, insuranceId, notes } = req.body;
+    const { billingId, amount, type, bankName, transNumber, insuranceId, notes, isEmergency } = req.body;
     
     // Convert amount to number if it's a string
     const numericAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
@@ -743,12 +745,78 @@ exports.processPayment = async (req, res) => {
           bankName,
           transNumber,
           notes,
+          isEmergency,
           processedBy: req.user.fullname || req.user.username
         }),
         ip: req.ip,
         userAgent: req.get('User-Agent')
       }
     });
+
+    // If marked as emergency, copy services to emergency billing
+    if (isEmergency) {
+      console.log('Emergency service detected - copying to emergency billing');
+      
+      // Find or create emergency billing for this patient
+      let emergencyBilling = await prisma.billing.findFirst({
+        where: {
+          patientId: billing.patientId,
+          billingType: 'EMERGENCY',
+          status: 'EMERGENCY_PENDING'
+        }
+      });
+
+      if (!emergencyBilling) {
+        // Create new emergency billing
+        emergencyBilling = await prisma.billing.create({
+          data: {
+            patientId: billing.patientId,
+            visitId: billing.visitId,
+            totalAmount: 0,
+            status: 'EMERGENCY_PENDING',
+            billingType: 'EMERGENCY',
+            notes: 'Emergency services - payment deferred'
+          }
+        });
+      }
+
+      // Copy all services from this billing to emergency billing
+      for (const service of billing.services) {
+        // Check if service already exists in emergency billing
+        const existingService = await prisma.billingService.findFirst({
+          where: {
+            billingId: emergencyBilling.id,
+            serviceId: service.serviceId
+          }
+        });
+
+        if (!existingService) {
+          await prisma.billingService.create({
+            data: {
+              billingId: emergencyBilling.id,
+              serviceId: service.serviceId,
+              quantity: service.quantity,
+              unitPrice: service.unitPrice,
+              totalPrice: service.totalPrice
+            }
+          });
+        }
+      }
+
+      // Update emergency billing total
+      const emergencyServices = await prisma.billingService.findMany({
+        where: { billingId: emergencyBilling.id }
+      });
+      
+      const emergencyTotal = emergencyServices.reduce((sum, service) => sum + service.totalPrice, 0);
+      
+      await prisma.billing.update({
+        where: { id: emergencyBilling.id },
+        data: { totalAmount: emergencyTotal }
+      });
+
+      console.log(`Emergency billing updated: ${emergencyBilling.id}, Total: ${emergencyTotal}`);
+    }
 
     // Check if billing is fully paid
     const newTotalPaid = numericAmount; // For entry fees, this is the only payment
@@ -969,7 +1037,13 @@ exports.getBillings = async (req, res) => {
     }
 
     const billings = await prisma.billing.findMany({
-      where: whereClause,
+      where: {
+        ...whereClause,
+        // Exclude emergency billings from regular billing queue
+        NOT: {
+          billingType: 'EMERGENCY'
+        }
+      },
       include: { 
         patient: { 
           select: { 
@@ -996,7 +1070,8 @@ exports.getBillings = async (req, res) => {
           select: {
             id: true,
             visitUid: true,
-            status: true
+            status: true,
+            isEmergency: true
           }
         },
         insurance: {
@@ -1214,7 +1289,8 @@ exports.getUnpaidBillings = async (req, res) => {
           select: {
             id: true,
             visitUid: true,
-            status: true
+            status: true,
+            isEmergency: true
           }
         },
         insurance: {

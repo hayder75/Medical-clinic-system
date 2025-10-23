@@ -25,13 +25,31 @@ exports.getOrders = async (req, res) => {
     // Get batch orders instead of individual radiology orders
     const batchOrders = await prisma.batchOrder.findMany({
       where: {
-        OR: [
-          { type: 'RADIOLOGY' },
-          { type: 'MIXED' }
-        ],
-        status: {
-          in: ['PAID', 'QUEUED', 'IN_PROGRESS', 'COMPLETED']
-        }
+        AND: [
+          {
+            OR: [
+              { type: 'RADIOLOGY' },
+              { type: 'MIXED' }
+            ]
+          },
+          {
+            OR: [
+              // Regular orders that are paid
+              {
+                status: {
+                  in: ['PAID', 'QUEUED', 'IN_PROGRESS', 'COMPLETED']
+                }
+              },
+              // Emergency orders that are unpaid (treated as pre-paid)
+              {
+                status: 'UNPAID',
+                visit: {
+                  isEmergency: true
+                }
+              }
+            ]
+          }
+        ]
       },
       include: {
         services: {
@@ -60,7 +78,8 @@ exports.getOrders = async (req, res) => {
           select: {
             id: true,
             visitUid: true,
-            status: true
+            status: true,
+            isEmergency: true
           }
         },
         attachments: true

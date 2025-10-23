@@ -246,6 +246,7 @@ exports.assignDoctor = async (req, res) => {
       return res.status(404).json({ error: 'Visit not found' });
     }
 
+    // All patients must be triaged before assigning doctor
     if (visit.status !== 'TRIAGED') {
       return res.status(400).json({ error: 'Visit must be triaged before assigning doctor' });
     }
@@ -306,12 +307,13 @@ exports.assignDoctor = async (req, res) => {
       return res.status(404).json({ error: 'Consultation service not found. Please add consultation service to the catalog.' });
     }
 
-    // Create consultation billing
+    // Create consultation billing for all patients
+    const consultationPrice = doctor.consultationFee || consultationService.price;
     const billing = await prisma.billing.create({
       data: {
         patientId,
         visitId,
-        totalAmount: doctor.consultationFee || consultationService.price,
+        totalAmount: consultationPrice,
         status: 'PENDING',
         notes: 'Doctor consultation fee'
       }
@@ -323,8 +325,8 @@ exports.assignDoctor = async (req, res) => {
         billingId: billing.id,
         serviceId: consultationService.id,
         quantity: 1,
-        unitPrice: doctor.consultationFee || consultationService.price,
-        totalPrice: doctor.consultationFee || consultationService.price
+        unitPrice: consultationPrice,
+        totalPrice: consultationPrice
       }
     });
 

@@ -13,6 +13,8 @@ import DoctorDashboard from './pages/doctor/DoctorDashboard';
 import PatientConsultationPage from './pages/doctor/PatientConsultationPage';
 import BillingDashboard from './pages/billing/BillingDashboard';
 import PharmacyBillingDashboard from './pages/billing/PharmacyBillingDashboard';
+import EmergencyBilling from './pages/billing/EmergencyBilling';
+import DailyCashManagement from './pages/billing/DailyCashManagement';
 import DoctorQueueManagement from './pages/billing/DoctorQueueManagement';
 import RadiologyDashboard from './pages/radiology/RadiologyDashboard';
 import LabDashboard from './pages/lab/LabDashboard';
@@ -23,6 +25,7 @@ import ReceptionDashboard from './pages/reception/ReceptionDashboard';
 import ReceptionPatientRegistration from './pages/reception/ReceptionPatientRegistration';
 import PatientManagement from './pages/reception/PatientManagement';
 import PreRegistration from './pages/reception/PreRegistration';
+import ReceptionDoctorQueueManagement from './pages/reception/DoctorQueueManagement';
 
 // Protected Route Component
 const ProtectedRoute = ({ children, allowedRoles }) => {
@@ -78,6 +81,8 @@ const AppRoutes = () => {
         return '/pharmacy';
       case 'LAB_TECHNICIAN':
         return '/lab';
+      case 'RADIOLOGIST':
+        return '/radiology';
       default:
         return '/login';
     }
@@ -167,6 +172,17 @@ const AppRoutes = () => {
         />
         
         <Route 
+          path="/reception/doctor-queue" 
+          element={
+            <ProtectedRoute allowedRoles={['RECEPTIONIST', 'ADMIN']}>
+              <Layout title="Doctor Queue Management" subtitle="Monitor doctor availability and patient assignments">
+                <ReceptionDoctorQueueManagement />
+              </Layout>
+            </ProtectedRoute>
+          } 
+        />
+        
+        <Route 
           path="/doctor/dashboard" 
           element={
             <ProtectedRoute allowedRoles={['DOCTOR']}>
@@ -203,6 +219,28 @@ const AppRoutes = () => {
             <ProtectedRoute allowedRoles={['BILLING_OFFICER']}>
               <Layout title="Billing Dashboard" subtitle="Payment processing and financial management">
                 <BillingDashboard />
+              </Layout>
+            </ProtectedRoute>
+          } 
+        />
+        
+        <Route 
+          path="/emergency-billing" 
+          element={
+            <ProtectedRoute allowedRoles={['BILLING_OFFICER', 'ADMIN']}>
+              <Layout title="Emergency Billing" subtitle="Manage emergency patients and their running billing totals">
+                <EmergencyBilling />
+              </Layout>
+            </ProtectedRoute>
+          } 
+        />
+        
+        <Route 
+          path="/cash-management" 
+          element={
+            <ProtectedRoute allowedRoles={['BILLING_OFFICER', 'ADMIN']}>
+              <Layout title="Daily Cash Management" subtitle="Track daily cash flow, expenses, and bank deposits">
+                <DailyCashManagement />
               </Layout>
             </ProtectedRoute>
           } 

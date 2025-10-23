@@ -554,36 +554,22 @@ const PatientConsultationPage = () => {
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
                   {visit.attachedImages.map((image, index) => (
                     <div key={image.id} className="relative group">
-                      <img
-                        src={`http://localhost:3000/${image.filePath}`}
-                        alt={image.description || 'Medical image'}
-                        className="w-full h-48 object-cover rounded-lg border-2 border-gray-200 hover:border-blue-500 transition-colors cursor-pointer"
-                        onClick={() => {
-                          // Open ImageViewer with all images
-                          const allImages = visit.attachedImages.map(img => ({
-                            filePath: img.filePath,
-                            fileName: img.fileName,
-                            description: img.description
-                          }));
-                          openImageViewer(allImages, index);
-                        }}
-                        onError={(e) => {
-                          console.error('Image load error:', image.filePath);
-                          e.target.style.display = 'none';
-                          e.target.nextSibling.style.display = 'flex';
-                        }}
-                      />
-                      {/* Fallback for broken images */}
-                      <div className="hidden w-full h-48 bg-gray-200 rounded-lg border-2 border-gray-200 flex items-center justify-center">
-                        <div className="text-center text-gray-500">
-                          <Image className="h-8 w-8 mx-auto mb-2" />
-                          <p className="text-xs">Image not available</p>
-                        </div>
-                      </div>
-                      <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all rounded-lg flex items-center justify-center">
-                        <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                          <div className="bg-white rounded-full p-3">
-                            <Eye className="h-6 w-6" style={{ color: '#2e13d1' }} />
+                      <div className="w-full h-48 bg-gray-200 rounded-lg border-2 border-gray-200 overflow-hidden">
+                        <img
+                          src={`http://localhost:3000/${image.filePath}`}
+                          alt={image.description || 'Medical image'}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            console.error('Image load error:', image.filePath);
+                            e.target.style.display = 'none';
+                            e.target.nextSibling.style.display = 'flex';
+                          }}
+                        />
+                        {/* Fallback for broken images */}
+                        <div className="hidden w-full h-full flex items-center justify-center">
+                          <div className="text-center text-gray-500">
+                            <Image className="h-8 w-8 mx-auto mb-2" />
+                            <p className="text-xs">Image not available</p>
                           </div>
                         </div>
                       </div>
@@ -599,6 +585,21 @@ const PatientConsultationPage = () => {
                         <p className="text-xs text-gray-400">
                           {new Date(image.uploadedAt).toLocaleDateString()}
                         </p>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const allImages = visit.attachedImages.map(img => ({
+                              filePath: img.filePath,
+                              fileName: img.fileName,
+                              description: img.description
+                            }));
+                            openImageViewer(allImages, index);
+                          }}
+                          className="mt-2 w-full px-3 py-1.5 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 transition-colors flex items-center justify-center"
+                        >
+                          <Eye className="h-3 w-3 mr-1" />
+                          View Image
+                        </button>
                       </div>
                     </div>
                   ))}
@@ -964,7 +965,7 @@ const PatientConsultationPage = () => {
                                               onClick={() => {
                                                 console.debug('[ImageClick] Image clicked, preparing ImageViewer data');
                                                 const allImages = result.attachments.map(att => ({
-                                                  fileUrl: `http://localhost:3000/${att.fileUrl}`,
+                                                  fileUrl: att.fileUrl,
                                                   fileName: att.fileName
                                                 }));
                                                 console.debug('[ImageClick] Mapped images:', allImages);
@@ -1003,7 +1004,7 @@ const PatientConsultationPage = () => {
                                                     e.stopPropagation();
                                                     console.debug('[ViewButton] View button clicked');
                                                     const allImages = result.attachments.map(att => ({
-                                                      fileUrl: `http://localhost:3000/${att.fileUrl}`,
+                                                      fileUrl: att.fileUrl,
                                                       fileName: att.fileName
                                                     }));
                                                     console.debug('[ViewButton] Mapped images:', allImages);
@@ -1414,7 +1415,7 @@ const PatientConsultationPage = () => {
       {/* Image Viewer */}
       <ImageViewer
         isOpen={imageViewerOpen}
-        onClose={() => setImageViewerOpen(false)}
+        onClose={closeImageViewer}
         images={imageViewerImages}
         currentIndex={imageViewerIndex}
       />

@@ -363,29 +363,47 @@ exports.getResultsQueue = async (req, res) => {
             orderBy: { createdAt: 'desc' }
           });
 
-          // Convert detailed lab results to the expected format
-          const detailedResults = detailedLabResults.map(result => ({
-            id: result.id,
-            testType: {
-              name: result.template.name,
-              category: result.template.category
-            },
-            resultText: `Detailed results for ${result.template.name}`,
-            detailedResults: result.results, // Include the actual detailed results
-            additionalNotes: result.additionalNotes || '',
-            status: result.status,
-            attachments: [], // Detailed lab results don't have separate attachments
-            createdAt: result.createdAt,
-            verifiedBy: result.verifiedBy,
-            verifiedAt: result.verifiedAt,
-            template: result.template
-          }));
+          // Group results by service for better organization
+          const resultsByService = {};
+          detailedLabResults.forEach(result => {
+            const serviceKey = result.serviceId || 'unknown';
+            if (!resultsByService[serviceKey]) {
+              resultsByService[serviceKey] = [];
+            }
+            resultsByService[serviceKey].push(result);
+          });
 
-          // Add detailed results to labResults
-          labResults.push(...detailedResults);
+          // Convert detailed lab results to the expected format, grouped by service
+          Object.keys(resultsByService).forEach(serviceId => {
+            const serviceResults = resultsByService[serviceId];
+            serviceResults.forEach(result => {
+              // Get service name from batch order services
+              const service = batchOrder.services.find(s => s.id === parseInt(serviceId));
+              const serviceName = service ? service.service.name : 'Unknown Service';
+              
+              labResults.push({
+                id: result.id,
+                serviceId: result.serviceId,
+                serviceName: serviceName,
+                testType: {
+                  name: result.template.name,
+                  category: result.template.category
+                },
+                resultText: `Detailed results for ${result.template.name}`,
+                detailedResults: result.results, // Include the actual detailed results
+                additionalNotes: result.additionalNotes || '',
+                status: result.status,
+                attachments: [], // Detailed lab results don't have separate attachments
+                createdAt: result.createdAt,
+                verifiedBy: result.verifiedBy,
+                verifiedAt: result.verifiedAt,
+                template: result.template
+              });
+            });
+          });
 
           // If no detailed results, fall back to batch order result
-          if (detailedResults.length === 0) {
+          if (labResults.length === 0) {
             labResults.push({
               id: `batch-${batchOrder.id}`,
               testType: { name: 'Lab Tests' },
@@ -640,7 +658,8 @@ exports.getPatientAssignments = async (req, res) => {
 // Unified Queue - combines patient queue and results queue with priority system
 exports.getUnifiedQueue = async (req, res) => {
   try {
-    const doctorId = req.user.id;
+    // Use doctorId from query parameter if provided (for reception), otherwise use logged-in user's ID (for doctor)
+    const doctorId = req.query.doctorId || req.user.id;
     console.log('🔍 getUnifiedQueue - Doctor ID:', doctorId);
     
     // Get doctor assignments
@@ -652,15 +671,39 @@ exports.getUnifiedQueue = async (req, res) => {
     const assignmentIds = doctorAssignments.map(a => a.id);
     
     // Get all visits assigned to this doctor (both new consultations and results)
-    // EXCLUDE patients sent to lab/radiology - they should be removed from queue until results are back
+    // Include emergency patients and paid patients only
     const allVisits = await prisma.visit.findMany({
       where: { 
         status: {
-          in: ['WAITING_FOR_DOCTOR', 'UNDER_DOCTOR_REVIEW', 'NURSE_SERVICES_COMPLETED', 'AWAITING_RESULTS_REVIEW']
+          in: ['WAITING_FOR_DOCTOR', 'UNDER_DOCTOR_REVIEW', 'NURSE_SERVICES_COMPLETED', 'AWAITING_RESULTS_REVIEW', 'IN_DOCTOR_QUEUE']
         },
-        OR: [
-          { assignmentId: { in: assignmentIds } },
-          { batchOrders: { some: { doctorId: doctorId } } }
+        AND: [
+          {
+            OR: [
+              { assignmentId: { in: assignmentIds } },
+              { batchOrders: { some: { doctorId: doctorId } } }
+            ]
+          },
+          {
+            OR: [
+              { isEmergency: true }, // Emergency patients bypass payment check
+              { 
+                // Regular patients must have paid consultation fee
+                bills: {
+                  some: {
+                    status: 'PAID',
+                    services: {
+                      some: {
+                        service: {
+                          code: 'CONS001' // Consultation service code
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
         ]
       },
       include: {
@@ -2314,9 +2357,9 @@ exports.createDoctorServiceOrder = async (req, res) => {
       return res.status(404).json({ error: 'Visit not found' });
     }
 
-    // Allow orders to be created if visit is waiting for doctor, under doctor review, awaiting results review, or sent to radiology
-    if (!['WAITING_FOR_DOCTOR', 'UNDER_DOCTOR_REVIEW', 'AWAITING_RESULTS_REVIEW', 'SENT_TO_RADIOLOGY'].includes(visit.status)) {
-      return res.status(400).json({ error: 'Visit must be waiting for doctor, under doctor review, awaiting results review, or sent to radiology to create service orders' });
+    // Allow orders to be created if visit is waiting for doctor, under doctor review, awaiting results review, or sent to lab/radiology
+    if (!['WAITING_FOR_DOCTOR', 'UNDER_DOCTOR_REVIEW', 'AWAITING_RESULTS_REVIEW', 'SENT_TO_LAB', 'SENT_TO_RADIOLOGY', 'SENT_TO_BOTH'].includes(visit.status)) {
+      return res.status(400).json({ error: 'Visit must be waiting for doctor, under doctor review, awaiting results review, or sent to lab/radiology to create service orders' });
     }
 
     // Check if consultation fee has been paid

@@ -91,15 +91,18 @@ const Layout = ({ children, title, subtitle }) => {
           { name: 'Patient Registration', href: '/reception/register', icon: Calendar },
           { name: 'Patient Management', href: '/reception/patients', icon: Users },
           { name: 'Pre-Registration', href: '/reception/pre-registration', icon: Phone },
+          { name: 'Doctor Queue Management', href: '/reception/doctor-queue', icon: Stethoscope },
         ];
       
       case 'BILLING_OFFICER':
         return [
           ...baseItems,
           { name: 'Billing Queue', href: '/billing/queue', icon: CreditCard },
+          { name: 'Emergency Billing', href: '/emergency-billing', icon: Activity },
           { name: 'Pre-Registration', href: '/billing/pre-registration', icon: Phone },
           { name: 'Patient Registration', href: '/patient/register', icon: Users },
           { name: 'Doctor Queue Management', href: '/doctor-queue', icon: Stethoscope },
+          { name: 'Cash Management', href: '/cash-management', icon: BarChart3 },
         ];
       
       case 'PHARMACY_BILLING_OFFICER':
@@ -135,8 +138,8 @@ const Layout = ({ children, title, subtitle }) => {
   return (
     <div className="h-screen flex overflow-hidden" style={{ backgroundColor: '#FFFFFF' }}>
       {/* Sidebar */}
-      <div className={`fixed inset-y-0 left-0 z-50 w-64 shadow-xl transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0`} style={{ backgroundColor: '#2e13d1' }}>
-        <div className="flex items-center justify-between h-16 px-4 border-b" style={{ borderColor: '#EA2E00' }}>
+      <div className={`fixed inset-y-0 left-0 z-50 w-64 shadow-xl transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0`} style={{ backgroundColor: 'var(--primary)' }}>
+        <div className="flex items-center justify-between h-16 px-4 border-b" style={{ borderColor: 'var(--secondary)' }}>
           <div className="flex items-center">
             <Stethoscope className="h-8 w-8 text-white" />
             <span className="ml-2 text-xl font-bold text-white">Tenalesew Medical Center</span>
@@ -160,7 +163,7 @@ const Layout = ({ children, title, subtitle }) => {
                   : 'text-gray-200 hover:text-white hover:bg-opacity-20 hover:bg-white'
               }`}
               style={{
-                backgroundColor: isCurrentPage(item.href) ? '#EA2E00' : 'transparent'
+                backgroundColor: isCurrentPage(item.href) ? 'var(--secondary)' : 'transparent'
               }}
             >
               <item.icon
@@ -177,47 +180,47 @@ const Layout = ({ children, title, subtitle }) => {
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top navigation */}
-        <header className="shadow-lg border-b" style={{ backgroundColor: '#FFFFFF', borderColor: '#2e13d1' }}>
+        <header className="shadow-lg border-b" style={{ backgroundColor: '#FFFFFF', borderColor: 'var(--primary)' }}>
           <div className="flex items-center justify-between h-16 px-4 sm:px-6 lg:px-8">
             <div className="flex items-center">
               <button
                 onClick={() => setSidebarOpen(true)}
                 className="lg:hidden p-2 rounded-md transition-colors"
-                style={{ color: '#0C0E0B' }}
-                onMouseEnter={(e) => e.target.style.backgroundColor = '#2e13d1'}
+                style={{ color: 'var(--dark)' }}
+                onMouseEnter={(e) => e.target.style.backgroundColor = 'var(--primary)'}
                 onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
               >
                 <Menu className="h-6 w-6" />
               </button>
               <div className="ml-4 lg:ml-0">
-                <h1 className="text-xl font-semibold" style={{ color: '#0C0E0B' }}>{title}</h1>
+                <h1 className="text-xl font-semibold" style={{ color: 'var(--dark)' }}>{title}</h1>
                 {subtitle && (
-                  <p className="text-sm" style={{ color: '#2e13d1' }}>{subtitle}</p>
+                  <p className="text-sm" style={{ color: 'var(--primary)' }}>{subtitle}</p>
                 )}
               </div>
             </div>
 
             <div className="flex items-center space-x-4">
-              <button className="p-2 rounded-md transition-colors" style={{ color: '#0C0E0B' }} onMouseEnter={(e) => e.target.style.backgroundColor = '#2e13d1'} onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}>
+              <button className="p-2 rounded-md transition-colors" style={{ color: 'var(--dark)' }} onMouseEnter={(e) => e.target.style.backgroundColor = 'var(--primary)'} onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}>
                 <Bell className="h-6 w-6" />
               </button>
               
               <div className="relative">
                 <div className="flex items-center space-x-3">
                   <div className="flex-shrink-0">
-                    <div className="h-8 w-8 rounded-full flex items-center justify-center" style={{ backgroundColor: '#2e13d1' }}>
+                    <div className="h-8 w-8 rounded-full flex items-center justify-center" style={{ backgroundColor: 'var(--primary)' }}>
                       <User className="h-5 w-5 text-white" />
                     </div>
                   </div>
                   <div className="hidden md:block">
-                    <p className="text-sm font-medium" style={{ color: '#0C0E0B' }}>{user?.name || user?.username}</p>
-                    <p className="text-xs" style={{ color: '#2e13d1' }}>{user?.role?.toLowerCase().replace('_', ' ')}</p>
+                    <p className="text-sm font-medium" style={{ color: 'var(--dark)' }}>{user?.name || user?.username}</p>
+                    <p className="text-xs" style={{ color: 'var(--primary)' }}>{user?.role?.toLowerCase().replace('_', ' ')}</p>
                   </div>
                   <button
                     onClick={handleLogout}
                     className="p-2 rounded-md transition-colors"
-                    style={{ color: '#0C0E0B' }}
-                    onMouseEnter={(e) => e.target.style.backgroundColor = '#EA2E00'}
+                    style={{ color: 'var(--dark)' }}
+                    onMouseEnter={(e) => e.target.style.backgroundColor = 'var(--danger)'}
                     onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
                     title="Logout"
                   >

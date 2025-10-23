@@ -32,8 +32,25 @@ exports.createBatchOrder = async (req, res) => {
       return res.status(404).json({ error: 'Visit not found' });
     }
 
-    if (!['WAITING_FOR_DOCTOR', 'UNDER_DOCTOR_REVIEW', 'SENT_TO_LAB', 'SENT_TO_RADIOLOGY', 'SENT_TO_BOTH', 'NURSE_SERVICES_COMPLETED'].includes(visit.status)) {
+    // Allow emergency patients or visits in correct status
+    const allowedStatuses = ['WAITING_FOR_DOCTOR', 'UNDER_DOCTOR_REVIEW', 'SENT_TO_LAB', 'SENT_TO_RADIOLOGY', 'SENT_TO_BOTH', 'NURSE_SERVICES_COMPLETED'];
+    if (!visit.isEmergency && !allowedStatuses.includes(visit.status)) {
       return res.status(400).json({ error: 'Visit must be waiting for doctor, under doctor review, or sent to lab/radiology to create orders' });
+    }
+
+    // For emergency patients, use the assigned doctor's ID instead of requesting user's ID
+    let actualDoctorId = doctorId;
+    if (visit.isEmergency && visit.assignmentId) {
+      const assignment = await prisma.assignment.findUnique({
+        where: { id: visit.assignmentId },
+        select: { doctorId: true }
+      });
+      if (assignment) {
+        actualDoctorId = assignment.doctorId;
+        console.log(`Emergency patient - Using assigned doctor ID: ${actualDoctorId}`);
+      }
+    } else {
+      console.log(`Regular patient - Using requesting user ID: ${actualDoctorId}`);
     }
 
     // For nurse services, validate assigned nurse
@@ -89,22 +106,13 @@ exports.createBatchOrder = async (req, res) => {
       return total + price;
     }, 0);
 
-    // Create batch order with services
-    const batchOrder = await prisma.batchOrder.create({
-      data: {
-        visitId,
-        patientId,
-        doctorId,
-        type,
-        instructions,
-        status: 'UNPAID',
-        services: {
-          create: services.map(service => ({
-            serviceId: service.serviceId,
-            investigationTypeId: service.investigationTypeId || null,
-            instructions: service.instructions || null
-          }))
-        }
+    // Check if there's already a batch order for this visit and type
+    // For emergency patients, we want to group all orders together
+    const existingBatchOrder = await prisma.batchOrder.findFirst({
+      where: {
+        visitId: visitId,
+        type: type,
+        status: visit.isEmergency ? 'QUEUED' : { in: ['UNPAID', 'PAID', 'QUEUED', 'IN_PROGRESS', 'COMPLETED'] }
       },
       include: {
         services: {
@@ -112,122 +120,321 @@ exports.createBatchOrder = async (req, res) => {
             service: true,
             investigationType: true
           }
-        },
-        patient: {
-          select: {
-            id: true,
-            name: true,
-            type: true
-          }
-        },
-        doctor: {
-          select: {
-            id: true,
-            fullname: true
-          }
-        },
-        visit: {
-          select: {
-            id: true,
-            visitUid: true
-          }
         }
       }
     });
 
-    // Check if diagnostics billing already exists for this visit
-    let billing = await prisma.billing.findFirst({
-      where: {
-        visitId: visitId,
-        OR: [
-          { notes: { contains: 'diagnostics' } },
-          { notes: { contains: 'lab' } },
-          { notes: { contains: 'radiology' } },
-          { notes: { contains: 'Batch' } }
-        ],
-        status: 'PENDING'
-      }
-    });
+    let batchOrder;
+    let newServicesAdded = [];
 
-    if (!billing) {
-      // Create new diagnostics billing
-      billing = await prisma.billing.create({
+    if (existingBatchOrder) {
+      // Add services to existing batch order
+      console.log(`Adding services to existing batch order ${existingBatchOrder.id}`);
+      
+      for (const service of services) {
+        // Check if this service already exists in the batch order
+        const existingService = existingBatchOrder.services.find(
+          s => s.serviceId === service.serviceId && 
+               s.investigationTypeId === (service.investigationTypeId || null)
+        );
+        
+        if (existingService) {
+          console.log(`Service ${service.serviceId} already exists in batch order ${existingBatchOrder.id}, skipping`);
+          continue;
+        }
+        
+        const serviceData = validServices.find(s => s.id === service.serviceId);
+        const investigationData = service.investigationTypeId ? 
+          validInvestigationTypes.find(i => i.id === service.investigationTypeId) : null;
+        
+        const newService = await prisma.batchOrderService.create({
+          data: {
+            batchOrderId: existingBatchOrder.id,
+            serviceId: service.serviceId,
+            investigationTypeId: service.investigationTypeId || null,
+            instructions: service.instructions || null
+          },
+          include: {
+            service: true,
+            investigationType: true
+          }
+        });
+        
+        newServicesAdded.push(newService);
+      }
+      
+      // Update the existing batch order
+      batchOrder = await prisma.batchOrder.update({
+        where: { id: existingBatchOrder.id },
         data: {
-          patientId,
-          visitId,
-          totalAmount,
-          status: 'PENDING',
-          notes: 'Combined diagnostics billing - lab and radiology',
+          instructions: instructions || existingBatchOrder.instructions
+        },
+        include: {
           services: {
-            create: services.map(service => {
-              const serviceData = validServices.find(s => s.id === service.serviceId);
-              const investigationData = service.investigationTypeId ? 
-                validInvestigationTypes.find(i => i.id === service.investigationTypeId) : null;
-              const price = investigationData ? investigationData.price : serviceData.price;
-              
-              return {
-                serviceId: service.serviceId,
-                quantity: 1,
-                unitPrice: price,
-                totalPrice: price
-              };
-            })
+            include: {
+              service: true,
+              investigationType: true
+            }
+          },
+          patient: {
+            select: {
+              id: true,
+              name: true,
+              type: true
+            }
+          },
+          doctor: {
+            select: {
+              id: true,
+              fullname: true
+            }
+          },
+          visit: {
+            select: {
+              id: true,
+              visitUid: true
+            }
           }
         }
       });
     } else {
-      // Update existing diagnostics billing
-      const newTotalAmount = billing.totalAmount + totalAmount;
+      // Create new batch order
+      console.log(`Creating new batch order for visit ${visitId}`);
       
-      await prisma.billing.update({
-        where: { id: billing.id },
-        data: { totalAmount: newTotalAmount }
+      batchOrder = await prisma.batchOrder.create({
+        data: {
+          visitId,
+          patientId,
+          doctorId: actualDoctorId,
+          type,
+          instructions,
+          status: visit.isEmergency ? 'QUEUED' : 'UNPAID', // Emergency patients go directly to queue
+          services: {
+            create: services.map(service => ({
+              serviceId: service.serviceId,
+              investigationTypeId: service.investigationTypeId || null,
+              instructions: service.instructions || null
+            }))
+          }
+        },
+        include: {
+          services: {
+            include: {
+              service: true,
+              investigationType: true
+            }
+          },
+          patient: {
+            select: {
+              id: true,
+              name: true,
+              type: true
+            }
+          },
+          doctor: {
+            select: {
+              id: true,
+              fullname: true
+            }
+          },
+          visit: {
+            select: {
+              id: true,
+              visitUid: true
+            }
+          }
+        }
       });
+      
+      newServicesAdded = batchOrder.services;
+    }
 
-      // Add new services to existing billing
-      await prisma.billingService.createMany({
-        data: services.map(service => {
+    // Handle billing based on visit type
+    let billing;
+    
+    if (visit.isEmergency) {
+      // For emergency patients, add to existing emergency billing
+      billing = await prisma.billing.findFirst({
+        where: {
+          visitId: visitId,
+          billingType: 'EMERGENCY',
+          status: 'EMERGENCY_PENDING'
+        }
+      });
+      
+      if (billing) {
+        // Get existing billing services to check for duplicates
+        const existingBillingServices = await prisma.billingService.findMany({
+          where: { billingId: billing.id },
+          select: { serviceId: true }
+        });
+        
+        const existingServiceIds = existingBillingServices.map(s => s.serviceId);
+        
+        // Add only the new services to emergency billing
+        for (const service of newServicesAdded) {
+          // Skip if service already exists in billing
+          if (existingServiceIds.includes(service.serviceId)) {
+            console.log(`Service ${service.serviceId} already exists in emergency billing ${billing.id}, skipping`);
+            continue;
+          }
+          
           const serviceData = validServices.find(s => s.id === service.serviceId);
           const investigationData = service.investigationTypeId ? 
             validInvestigationTypes.find(i => i.id === service.investigationTypeId) : null;
           const price = investigationData ? investigationData.price : serviceData.price;
           
-          return {
-            billingId: billing.id,
-            serviceId: service.serviceId,
-            quantity: 1,
-            unitPrice: price,
-            totalPrice: price
-          };
-        })
+          await prisma.billingService.create({
+            data: {
+              billingId: billing.id,
+              serviceId: service.serviceId,
+              quantity: 1,
+              unitPrice: price,
+              totalPrice: price
+            }
+          });
+        }
+        
+        // Update emergency billing total with only the new services amount
+        const newServicesAmount = newServicesAdded.reduce((total, service) => {
+          const serviceData = validServices.find(s => s.id === service.serviceId);
+          const investigationData = service.investigationTypeId ? 
+            validInvestigationTypes.find(i => i.id === service.investigationTypeId) : null;
+          const price = investigationData ? investigationData.price : serviceData.price;
+          return total + price;
+        }, 0);
+        
+        await prisma.billing.update({
+          where: { id: billing.id },
+          data: {
+            totalAmount: {
+              increment: newServicesAmount
+            }
+          }
+        });
+      }
+    } else {
+      // For regular patients, use existing logic
+      billing = await prisma.billing.findFirst({
+        where: {
+          visitId: visitId,
+          OR: [
+            { notes: { contains: 'diagnostics' } },
+            { notes: { contains: 'lab' } },
+            { notes: { contains: 'radiology' } },
+            { notes: { contains: 'Batch' } }
+          ],
+          status: 'PENDING'
+        }
       });
 
-      // Update billing total amount
-      billing.totalAmount = newTotalAmount;
+      if (!billing) {
+        // Create new diagnostics billing
+        billing = await prisma.billing.create({
+          data: {
+            patientId,
+            visitId,
+            totalAmount,
+            status: 'PENDING',
+            notes: 'Combined diagnostics billing - lab and radiology',
+            services: {
+              create: services.map(service => {
+                const serviceData = validServices.find(s => s.id === service.serviceId);
+                const investigationData = service.investigationTypeId ? 
+                  validInvestigationTypes.find(i => i.id === service.investigationTypeId) : null;
+                const price = investigationData ? investigationData.price : serviceData.price;
+                
+                return {
+                  serviceId: service.serviceId,
+                  quantity: 1,
+                  unitPrice: price,
+                  totalPrice: price
+                };
+              })
+            }
+          }
+        });
+      } else {
+        // Get existing billing services to check for duplicates
+        const existingBillingServices = await prisma.billingService.findMany({
+          where: { billingId: billing.id },
+          select: { serviceId: true }
+        });
+        
+        const existingServiceIds = existingBillingServices.map(s => s.serviceId);
+        
+        // Add only the new services to existing diagnostics billing
+        for (const service of newServicesAdded) {
+          // Skip if service already exists in billing
+          if (existingServiceIds.includes(service.serviceId)) {
+            console.log(`Service ${service.serviceId} already exists in diagnostics billing ${billing.id}, skipping`);
+            continue;
+          }
+          
+          const serviceData = validServices.find(s => s.id === service.serviceId);
+          const investigationData = service.investigationTypeId ? 
+            validInvestigationTypes.find(i => i.id === service.investigationTypeId) : null;
+          const price = investigationData ? investigationData.price : serviceData.price;
+          
+          await prisma.billingService.create({
+            data: {
+              billingId: billing.id,
+              serviceId: service.serviceId,
+              quantity: 1,
+              unitPrice: price,
+              totalPrice: price
+            }
+          });
+        }
+        
+        // Update existing diagnostics billing total with only the new services amount
+        const newServicesAmount = newServicesAdded.reduce((total, service) => {
+          const serviceData = validServices.find(s => s.id === service.serviceId);
+          const investigationData = service.investigationTypeId ? 
+            validInvestigationTypes.find(i => i.id === service.investigationTypeId) : null;
+          const price = investigationData ? investigationData.price : serviceData.price;
+          return total + price;
+        }, 0);
+        
+        await prisma.billing.update({
+          where: { id: billing.id },
+          data: {
+            totalAmount: {
+              increment: newServicesAmount
+            }
+          }
+        });
+      }
     }
 
     // Update visit status based on order type
     let newStatus = visit.status;
     
-    // Only update status if we're not already in a mixed state
-    if (visit.status === 'UNDER_DOCTOR_REVIEW' || visit.status === 'WAITING_FOR_DOCTOR') {
-      if (type === 'LAB') {
-        newStatus = 'SENT_TO_LAB';
-      } else if (type === 'RADIOLOGY') {
-        newStatus = 'SENT_TO_RADIOLOGY';
-      } else if (type === 'MIXED') {
+    // For emergency patients, keep them in UNDER_DOCTOR_REVIEW to allow more orders
+    if (visit.isEmergency) {
+      newStatus = 'UNDER_DOCTOR_REVIEW';
+    } else {
+      // For regular patients, use existing logic
+      // Only update status if we're not already in a mixed state
+      if (visit.status === 'UNDER_DOCTOR_REVIEW' || visit.status === 'WAITING_FOR_DOCTOR') {
+        if (type === 'LAB') {
+          newStatus = 'SENT_TO_LAB';
+        } else if (type === 'RADIOLOGY') {
+          newStatus = 'SENT_TO_RADIOLOGY';
+        } else if (type === 'MIXED') {
+          newStatus = 'SENT_TO_BOTH';
+        } else if (type === 'NURSE') {
+          newStatus = 'NURSE_SERVICES_ORDERED';
+        }
+      } else if (visit.status === 'SENT_TO_LAB' && type === 'RADIOLOGY') {
+        // If already sent to lab and now ordering radiology, change to mixed
         newStatus = 'SENT_TO_BOTH';
-      } else if (type === 'NURSE') {
-        newStatus = 'NURSE_SERVICES_ORDERED';
+      } else if (visit.status === 'SENT_TO_RADIOLOGY' && type === 'LAB') {
+        // If already sent to radiology and now ordering lab, change to mixed
+        newStatus = 'SENT_TO_BOTH';
       }
-    } else if (visit.status === 'SENT_TO_LAB' && type === 'RADIOLOGY') {
-      // If already sent to lab and now ordering radiology, change to mixed
-      newStatus = 'SENT_TO_BOTH';
-    } else if (visit.status === 'SENT_TO_RADIOLOGY' && type === 'LAB') {
-      // If already sent to radiology and now ordering lab, change to mixed
-      newStatus = 'SENT_TO_BOTH';
+      // For other cases, keep the current status
     }
-    // For other cases, keep the current status
 
     await prisma.visit.update({
       where: { id: visitId },

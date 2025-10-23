@@ -20,7 +20,8 @@ const BillingQueue = () => {
     bankName: '',
     transNumber: '',
     insuranceId: '',
-    notes: ''
+    notes: '',
+    isEmergency: false
   });
   
   // Form validation errors
@@ -122,7 +123,8 @@ const BillingQueue = () => {
         bankName: paymentForm.bankName || null,
         transNumber: paymentForm.transNumber || null,
         insuranceId: paymentForm.insuranceId || null,
-        notes: paymentForm.notes || null
+        notes: paymentForm.notes || null,
+        isEmergency: paymentForm.isEmergency
       };
       
       await api.post('/billing/payments', paymentData);
@@ -145,7 +147,8 @@ const BillingQueue = () => {
       bankName: '',
       transNumber: '',
       insuranceId: '',
-      notes: ''
+      notes: '',
+      isEmergency: false
     });
     setFormErrors({});
   };
@@ -158,7 +161,8 @@ const BillingQueue = () => {
       bankName: '',
       transNumber: '',
       insuranceId: '',
-      notes: ''
+      notes: '',
+      isEmergency: false
     });
     setFormErrors({});
     setShowPaymentForm(true);
@@ -271,7 +275,6 @@ const BillingQueue = () => {
               <option value="PENDING">Pending</option>
               <option value="PAID">Paid</option>
               <option value="PENDING_INSURANCE">Pending Insurance</option>
-              <option value="EMERGENCY_PENDING">Emergency Pending</option>
             </select>
           </div>
         </div>
@@ -486,6 +489,27 @@ const BillingQueue = () => {
                     placeholder="Optional notes about the payment"
                   />
                 </div>
+
+                {/* Emergency Checkbox - Only show for emergency visits */}
+                {selectedBilling?.visit?.isEmergency && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <div className="flex items-center space-x-3">
+                      <input
+                        type="checkbox"
+                        id="emergency"
+                        checked={paymentForm.isEmergency}
+                        onChange={(e) => setPaymentForm({...paymentForm, isEmergency: e.target.checked})}
+                        className="h-4 w-4 text-red-600 focus:ring-red-500 border-red-300 rounded"
+                      />
+                      <label htmlFor="emergency" className="text-sm font-medium text-red-800">
+                        Mark as Emergency Service
+                      </label>
+                    </div>
+                    <p className="text-sm text-red-600 mt-2">
+                      Check this box to copy this service to emergency billing for later collection. This allows the patient to receive services immediately while tracking the amount owed.
+                    </p>
+                  </div>
+                )}
 
                 {/* Action Buttons */}
                 <div className="flex justify-end space-x-3 pt-4">

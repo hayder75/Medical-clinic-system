@@ -159,21 +159,21 @@ const MedicalCertificateForm = ({ certificate, onSave, onCancel, isEditing = fal
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-semibold" style={{ color: '#0C0E0B' }}>
+        <h2 className="text-xl font-semibold" style={{ color: 'var(--dark)' }}>
           {isEditing ? 'Edit Medical Certificate' : 'Create Medical Certificate'}
         </h2>
         <button
           onClick={onCancel}
           className="p-2 hover:bg-gray-100 rounded-full transition-colors"
         >
-          <X className="h-5 w-5" style={{ color: '#2e13d1' }} />
+          <X className="h-5 w-5" style={{ color: 'var(--primary)' }} />
         </button>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Patient Selection */}
         <div className="space-y-2">
-          <label className="block text-sm font-medium" style={{ color: '#0C0E0B' }}>
+          <label className="block text-sm font-medium" style={{ color: 'var(--dark)' }}>
             Patient *
           </label>
           <div className="relative">
@@ -181,15 +181,18 @@ const MedicalCertificateForm = ({ certificate, onSave, onCancel, isEditing = fal
               type="text"
               value={formData.patientName}
               placeholder="Search and select patient..."
-              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              style={{ borderColor: '#E5E7EB' }}
+              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2"
+              style={{ 
+                borderColor: 'var(--primary)',
+                '--tw-ring-color': 'var(--primary)'
+              }}
               onClick={() => setShowPatientSearch(true)}
               readOnly
             />
             <Search className="absolute right-3 top-2.5 h-5 w-5 text-gray-400" />
           </div>
           {errors.patientId && (
-            <p className="text-sm text-red-600">{errors.patientId}</p>
+            <p className="text-sm" style={{ color: 'var(--danger)' }}>{errors.patientId}</p>
           )}
           
           {/* Patient Search Modal */}
@@ -199,7 +202,11 @@ const MedicalCertificateForm = ({ certificate, onSave, onCancel, isEditing = fal
                 <input
                   type="text"
                   placeholder="Search patients by name..."
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2"
+                  style={{ 
+                    borderColor: 'var(--primary)',
+                    '--tw-ring-color': 'var(--primary)'
+                  }}
                   value={searchQuery}
                   onChange={(e) => {
                     setSearchQuery(e.target.value);
@@ -253,61 +260,61 @@ const MedicalCertificateForm = ({ certificate, onSave, onCancel, isEditing = fal
 
         {/* Certificate Date */}
         <div className="space-y-2">
-          <label className="block text-sm font-medium" style={{ color: '#0C0E0B' }}>
+          <label className="block text-sm font-medium" style={{ color: 'var(--dark)' }}>
             Certificate Date
           </label>
-          <div className="relative">
-            <input
-              type="date"
-              name="certificateDate"
-              value={formData.certificateDate}
-              onChange={handleInputChange}
-              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              style={{ borderColor: '#E5E7EB' }}
-            />
-            <Calendar className="absolute right-3 top-2.5 h-5 w-5 text-gray-400" />
-          </div>
+          <input
+            type="date"
+            name="certificateDate"
+            value={formData.certificateDate}
+            onChange={handleInputChange}
+            className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2"
+            style={{ 
+              borderColor: 'var(--primary)',
+              '--tw-ring-color': 'var(--primary)'
+            }}
+          />
         </div>
 
         {/* Rest Period */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <label className="block text-sm font-medium" style={{ color: '#0C0E0B' }}>
+            <label className="block text-sm font-medium" style={{ color: 'var(--dark)' }}>
               Rest Start Date *
             </label>
-            <div className="relative">
-              <input
-                type="date"
-                name="restStartDate"
-                value={formData.restStartDate}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                style={{ borderColor: errors.restStartDate ? '#EA2E00' : '#E5E7EB' }}
-              />
-              <Calendar className="absolute right-3 top-2.5 h-5 w-5 text-gray-400" />
-            </div>
+            <input
+              type="date"
+              name="restStartDate"
+              value={formData.restStartDate}
+              onChange={handleInputChange}
+              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2"
+              style={{ 
+                borderColor: errors.restStartDate ? 'var(--danger)' : 'var(--primary)',
+                '--tw-ring-color': 'var(--primary)'
+              }}
+            />
             {errors.restStartDate && (
-              <p className="text-sm text-red-600">{errors.restStartDate}</p>
+              <p className="text-sm" style={{ color: 'var(--danger)' }}>{errors.restStartDate}</p>
             )}
           </div>
           
           <div className="space-y-2">
-            <label className="block text-sm font-medium" style={{ color: '#0C0E0B' }}>
+            <label className="block text-sm font-medium" style={{ color: 'var(--dark)' }}>
               Rest End Date *
             </label>
-            <div className="relative">
-              <input
-                type="date"
-                name="restEndDate"
-                value={formData.restEndDate}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                style={{ borderColor: errors.restEndDate ? '#EA2E00' : '#E5E7EB' }}
-              />
-              <Calendar className="absolute right-3 top-2.5 h-5 w-5 text-gray-400" />
-            </div>
+            <input
+              type="date"
+              name="restEndDate"
+              value={formData.restEndDate}
+              onChange={handleInputChange}
+              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2"
+              style={{ 
+                borderColor: errors.restEndDate ? 'var(--danger)' : 'var(--primary)',
+                '--tw-ring-color': 'var(--primary)'
+              }}
+            />
             {errors.restEndDate && (
-              <p className="text-sm text-red-600">{errors.restEndDate}</p>
+              <p className="text-sm" style={{ color: 'var(--danger)' }}>{errors.restEndDate}</p>
             )}
           </div>
         </div>
