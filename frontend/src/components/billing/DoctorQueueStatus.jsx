@@ -247,3 +247,5 @@ const DoctorQueueStatus = () => {
 export default DoctorQueueStatus;
 
 
+
+

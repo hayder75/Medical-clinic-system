@@ -40,6 +40,7 @@ model User {
   medicalHistories MedicalHistory[] @relation("DoctorHistory")
   nurseAssignments NurseServiceAssignment[] @relation("NurseAssignments")
   nurseAssignmentsBy NurseServiceAssignment[] @relation("NurseAssignmentsBy")
+  cardActivations CardActivation[] @relation("CardActivations")
 
   @@index([role])
   @@index([availability])
@@ -108,6 +109,12 @@ model Patient {
   status          PatientStatus @default(Active)
   insuranceId     String?
   insurance       Insurance? @relation(fields: [insuranceId], references: [id])
+  
+  // Card Management Fields
+  cardStatus      CardStatus @default(INACTIVE)
+  cardActivatedAt DateTime?
+  cardExpiryDate  DateTime?
+  
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -131,11 +138,13 @@ model Patient {
   virtualQueues   VirtualQueue[]
   medicalCertificates MedicalCertificate[]
   diagnosisNotes  DiagnosisNotes[]
+  cardActivations CardActivation[]
 
   @@index([status])
   @@index([type])
   @@index([insuranceId])
   @@index([createdAt])
+  @@index([cardStatus])
 }
 
 model Visit {
@@ -145,6 +154,7 @@ model Visit {
   patient        Patient   @relation(fields: [patientId], references: [id])
   createdById    String?      // e.g., receptionist or receptionist user id
   createdBy      User?     @relation(fields: [createdById], references: [id])
+  suggestedDoctorId String?   // Doctor suggested by reception based on patient history
   date           DateTime  @default(now())        // creation timestamp
   status         VisitStatus @default(WAITING_FOR_TRIAGE)
   queueType      QueueType @default(CONSULTATION) // CONSULTATION or RESULTS_REVIEW
@@ -175,6 +185,7 @@ model Visit {
   @@index([patientId])
   @@index([assignmentId])
   @@index([createdAt])
+  @@index([suggestedDoctorId])
 }
 
 model NurseServiceAssignment {
@@ -276,6 +287,7 @@ model Billing {
   insurance     Insurance?  @relation(fields: [insuranceId], references: [id])
   services      BillingService[]
   payments      BillPayment[]
+  cardActivations CardActivation[] @relation("CardActivationBilling")
   totalAmount   Float
   status        BillingStatus @default(PENDING)
   notes         String?
@@ -843,6 +855,30 @@ enum BatchOrderType {
 enum QueueType {
   CONSULTATION
   RESULTS_REVIEW
+}
+
+enum CardStatus {
+  ACTIVE
+  INACTIVE
+  EXPIRED
+}
+
+model CardActivation {
+  id            Int      @id @default(autoincrement())
+  patientId     String
+  patient       Patient  @relation(fields: [patientId], references: [id])
+  activatedById String
+  activatedBy   User     @relation("CardActivations", fields: [activatedById], references: [id])
+  activatedAt   DateTime @default(now())
+  expiresAt     DateTime
+  billingId     String?  // Link to the billing record for this activation
+  billing       Billing? @relation("CardActivationBilling", fields: [billingId], references: [id])
+  notes         String?
+  createdAt     DateTime @default(now())
+  
+  @@index([patientId])
+  @@index([activatedById])
+  @@index([activatedAt])
 }
 
 model BatchOrder {

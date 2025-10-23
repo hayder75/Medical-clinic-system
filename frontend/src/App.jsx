@@ -19,6 +19,10 @@ import LabDashboard from './pages/lab/LabDashboard';
 import LabOrders from './pages/lab/LabOrders';
 import PharmacyDashboard from './pages/pharmacy/PharmacyDashboard';
 import AppointmentsPage from './pages/appointments/AppointmentsPage';
+import ReceptionDashboard from './pages/reception/ReceptionDashboard';
+import ReceptionPatientRegistration from './pages/reception/ReceptionPatientRegistration';
+import PatientManagement from './pages/reception/PatientManagement';
+import PreRegistration from './pages/reception/PreRegistration';
 
 // Protected Route Component
 const ProtectedRoute = ({ children, allowedRoles }) => {
@@ -64,6 +68,8 @@ const AppRoutes = () => {
         return '/doctor/dashboard';
       case 'NURSE':
         return '/nurse';
+      case 'RECEPTIONIST':
+        return '/reception';
       case 'BILLING_OFFICER':
         return '/billing';
       case 'PHARMACY_BILLING_OFFICER':
@@ -110,6 +116,51 @@ const AppRoutes = () => {
             <ProtectedRoute allowedRoles={['NURSE']}>
               <Layout title="Nurse Dashboard" subtitle="Patient triage and daily tasks">
                 <NurseDashboard />
+              </Layout>
+            </ProtectedRoute>
+          } 
+        />
+        
+        <Route 
+          path="/reception" 
+          element={
+            <ProtectedRoute allowedRoles={['RECEPTIONIST', 'ADMIN']}>
+              <Layout title="Reception Dashboard" subtitle="Patient registration and card management">
+                <ReceptionDashboard />
+              </Layout>
+            </ProtectedRoute>
+          } 
+        />
+        
+        <Route 
+          path="/reception/register" 
+          element={
+            <ProtectedRoute allowedRoles={['RECEPTIONIST', 'ADMIN']}>
+              <Layout title="Patient Registration & Visit Creation" subtitle="Register new patients or create visits for existing patients">
+                <ReceptionPatientRegistration />
+              </Layout>
+            </ProtectedRoute>
+          } 
+        />
+        
+        <Route 
+          path="/reception/patients" 
+          element={
+            <ProtectedRoute allowedRoles={['RECEPTIONIST', 'ADMIN']}>
+              <Layout title="Patient Card Management" subtitle="Manage patient card status, activation, and billing">
+                <PatientManagement />
+              </Layout>
+            </ProtectedRoute>
+          } 
+        />
+        
+        
+        <Route 
+          path="/reception/pre-registration" 
+          element={
+            <ProtectedRoute allowedRoles={['RECEPTIONIST', 'ADMIN']}>
+              <Layout title="Pre-Registration" subtitle="Handle phone call registrations and appointments">
+                <PreRegistration />
               </Layout>
             </ProtectedRoute>
           } 

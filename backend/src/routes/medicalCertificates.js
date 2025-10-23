@@ -28,3 +28,5 @@ router.get('/:id/pdf', authMiddleware, roleGuard(['DOCTOR', 'ADMIN']), medicalCe
 module.exports = router;
 
 
+
+

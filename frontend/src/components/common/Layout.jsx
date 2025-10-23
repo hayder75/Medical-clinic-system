@@ -85,6 +85,14 @@ const Layout = ({ children, title, subtitle }) => {
           { name: 'Continuous Vitals', href: '/nurse/continuous-vitals', icon: Activity },
         ];
       
+      case 'RECEPTIONIST':
+        return [
+          ...baseItems,
+          { name: 'Patient Registration', href: '/reception/register', icon: Calendar },
+          { name: 'Patient Management', href: '/reception/patients', icon: Users },
+          { name: 'Pre-Registration', href: '/reception/pre-registration', icon: Phone },
+        ];
+      
       case 'BILLING_OFFICER':
         return [
           ...baseItems,

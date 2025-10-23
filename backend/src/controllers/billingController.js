@@ -761,6 +761,53 @@ exports.processPayment = async (req, res) => {
         data: { status: 'PAID' } 
       });
 
+      // Check if this is card activation billing (for automatic card activation)
+      const isCardActivation = billing.services.some(service => 
+        service.service.code === 'CARD-ACT'
+      );
+      const isCardRegistration = billing.services.some(service => 
+        service.service.code === 'CARD-REG'
+      );
+      
+      // Automatically activate card after payment for card registration or activation
+      if (isCardActivation || isCardRegistration) {
+        const activationDate = new Date();
+        const expiryDate = new Date(activationDate);
+        expiryDate.setDate(expiryDate.getDate() + 30); // Card valid for 30 days
+        
+        await prisma.patient.update({
+          where: { id: billing.patientId },
+          data: {
+            cardStatus: 'ACTIVE',
+            cardActivatedAt: activationDate,
+            cardExpiryDate: expiryDate
+          }
+        });
+        
+        // Create card activation history record
+        await prisma.cardActivation.create({
+          data: {
+            patientId: billing.patientId,
+            activatedById: req.user.id,
+            activatedAt: activationDate,
+            expiresAt: expiryDate,
+            billingId: billing.id,
+            notes: isCardRegistration ? 'Initial card registration' : 'Card renewal/activation'
+          }
+        });
+        
+        // Log action
+        await prisma.auditLog.create({
+          data: {
+            action: 'CARD_ACTIVATED_AUTOMATIC',
+            entity: 'Patient',
+            entityId: parseInt(billing.patientId.split('-').pop()) || 0,
+            userId: req.user.id,
+            details: `Card automatically activated after payment for patient ${billing.patient.name} (${billing.patientId}). Expires: ${expiryDate.toISOString()}`
+          }
+        });
+      }
+
       // Update related orders based on billing type
       if (billing.visit) {
         await prisma.$transaction(async (tx) => {
@@ -773,6 +820,32 @@ exports.processPayment = async (req, res) => {
             service.service.category === 'RADIOLOGY'
           );
           const isDiagnosticsBilling = hasLabServices || hasRadiologyServices;
+          
+          // Check if this is a triage/visit creation billing (automatic send to nurse triage)
+          const isTriageService = billing.services.some(service => 
+            service.service.code === 'TRIAGE' || 
+            service.service.name.toLowerCase().includes('triage') ||
+            service.service.category === 'CONSULTATION'
+          );
+          
+          // Automatically send to triage if this is a visit creation billing and visit is in WAITING_FOR_TRIAGE status
+          if (isTriageService && billing.visit.status === 'WAITING_FOR_TRIAGE') {
+            await tx.visit.update({
+              where: { id: billing.visit.id },
+              data: { status: 'WAITING_FOR_TRIAGE' } // Keep as WAITING_FOR_TRIAGE - nurse will see it in their queue
+            });
+            
+            // Log action
+            await prisma.auditLog.create({
+              data: {
+                action: 'VISIT_SENT_TO_TRIAGE',
+                entity: 'Visit',
+                entityId: billing.visit.id,
+                userId: req.user.id,
+                details: `Visit ${billing.visit.visitUid} automatically sent to triage after payment for patient ${billing.patient.name} (${billing.patientId})`
+              }
+            });
+          }
 
           if (isDiagnosticsBilling) {
             // Update batch orders (new system)

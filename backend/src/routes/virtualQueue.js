@@ -14,3 +14,5 @@ router.get('/search-patients', virtualQueueController.searchPatientsForVirtualQu
 module.exports = router;
 
 
+
+

@@ -31,6 +31,7 @@ const patientAttachedImagesRoutes = require('./src/routes/patientAttachedImages'
 const virtualQueueRoutes = require('./src/routes/virtualQueue');
 const medicalCertificatesRoutes = require('./src/routes/medicalCertificates');
 const continuousInfusionsRoutes = require('./src/routes/continuousInfusions');
+const receptionRoutes = require('./src/routes/reception');
 
 // Middleware
 const authMiddleware = require('./src/middleware/auth');
@@ -80,9 +81,10 @@ app.use('/api/walk-in-sales', authMiddleware, roleGuard(['PHARMACIST', 'PHARMACY
 app.use('/api/dental', dentalRoutes);
 app.use('/api/dental-photos', authMiddleware, roleGuard(['DOCTOR', 'ADMIN']), dentalPhotosRoutes);
 app.use('/api/patient-attached-images', authMiddleware, patientAttachedImagesRoutes);
-app.use('/api/pre-registration', authMiddleware, roleGuard(['BILLING_OFFICER', 'ADMIN']), virtualQueueRoutes);
+app.use('/api/pre-registration', authMiddleware, roleGuard(['BILLING_OFFICER', 'RECEPTIONIST', 'ADMIN']), virtualQueueRoutes);
 app.use('/api/medical-certificates', authMiddleware, roleGuard(['DOCTOR', 'ADMIN']), medicalCertificatesRoutes);
 app.use('/api/continuous-infusions', continuousInfusionsRoutes);
+app.use('/api/reception', receptionRoutes);
 
 // Cron for inactivity (run daily)
 cron.schedule('0 0 * * *', async () => {

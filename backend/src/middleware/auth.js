@@ -51,6 +51,12 @@ const authMiddleware = async (req, res, next) => {
         username: 'labtech',
         fullname: 'Lab Technician',
         role: 'LAB_TECHNICIAN'
+      },
+      {
+        id: '5', // Reception test user ID
+        username: 'reception',
+        fullname: 'Reception Staff',
+        role: 'RECEPTIONIST'
       }
     ];
 

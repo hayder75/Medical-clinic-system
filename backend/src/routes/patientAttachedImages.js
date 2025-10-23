@@ -5,16 +5,18 @@ const roleGuard = require('../middleware/roleGuard');
 
 const router = express.Router();
 
-// Upload patient attached image (BILLING_OFFICER only)
-router.post('/upload', authMiddleware, roleGuard(['BILLING_OFFICER', 'ADMIN']), patientAttachedImageController.uploadPatientAttachedImage);
+// Upload patient attached image (RECEPTIONIST, BILLING_OFFICER, ADMIN)
+router.post('/upload', authMiddleware, roleGuard(['RECEPTIONIST', 'BILLING_OFFICER', 'ADMIN']), patientAttachedImageController.uploadPatientAttachedImage);
 
-// Get patient attached images for a visit (DOCTOR, BILLING_OFFICER, ADMIN)
-router.get('/visit/:visitId', authMiddleware, roleGuard(['DOCTOR', 'BILLING_OFFICER', 'ADMIN']), patientAttachedImageController.getPatientAttachedImages);
+// Get patient attached images for a visit (RECEPTIONIST, DOCTOR, BILLING_OFFICER, ADMIN)
+router.get('/visit/:visitId', authMiddleware, roleGuard(['RECEPTIONIST', 'DOCTOR', 'BILLING_OFFICER', 'ADMIN']), patientAttachedImageController.getPatientAttachedImages);
 
-// Delete patient attached image (BILLING_OFFICER, ADMIN only)
-router.delete('/:imageId', authMiddleware, roleGuard(['BILLING_OFFICER', 'ADMIN']), patientAttachedImageController.deletePatientAttachedImage);
+// Delete patient attached image (RECEPTIONIST, BILLING_OFFICER, ADMIN only)
+router.delete('/:imageId', authMiddleware, roleGuard(['RECEPTIONIST', 'BILLING_OFFICER', 'ADMIN']), patientAttachedImageController.deletePatientAttachedImage);
 
 module.exports = router;
+
+
 
 
 
