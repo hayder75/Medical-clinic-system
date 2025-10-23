@@ -2610,6 +2610,18 @@ exports.getPatientHistory = async (req, res) => {
         dentalPhotos: true,
         attachedImages: true,
         diagnosisNotes: true,
+        galleryImages: {
+          include: {
+            uploadedBy: {
+              select: {
+                id: true,
+                fullname: true,
+                role: true
+              }
+            }
+          },
+          orderBy: { createdAt: 'desc' }
+        },
         nurseServiceAssignments: {
           include: {
             service: true,

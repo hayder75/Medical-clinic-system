@@ -23,7 +23,8 @@ import {
   Activity,
   Phone,
   FileCheck,
-  Clock
+  Clock,
+  Image
 } from 'lucide-react';
 
 const Layout = ({ children, title, subtitle }) => {
@@ -83,6 +84,7 @@ const Layout = ({ children, title, subtitle }) => {
           { name: 'Doctor Assignment', href: '/nurse/assign', icon: Users },
           { name: 'Daily Tasks', href: '/nurse/tasks', icon: Calendar },
           { name: 'Continuous Vitals', href: '/nurse/continuous-vitals', icon: Activity },
+          { name: 'Patient Gallery', href: '/nurse/gallery', icon: Image },
         ];
       
       case 'RECEPTIONIST':
@@ -92,6 +94,7 @@ const Layout = ({ children, title, subtitle }) => {
           { name: 'Patient Management', href: '/reception/patients', icon: Users },
           { name: 'Pre-Registration', href: '/reception/pre-registration', icon: Phone },
           { name: 'Doctor Queue Management', href: '/reception/doctor-queue', icon: Stethoscope },
+          { name: 'Patient Gallery', href: '/reception/gallery', icon: Image },
         ];
       
       case 'BILLING_OFFICER':

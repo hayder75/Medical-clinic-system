@@ -48,6 +48,7 @@ model User {
   nurseAssignments NurseServiceAssignment[] @relation("NurseAssignments")
   nurseAssignmentsBy NurseServiceAssignment[] @relation("NurseAssignmentsBy")
   cardActivations CardActivation[] @relation("CardActivations")
+  galleryUploads  PatientGallery[]
 
   @@index([role])
   @@index([availability])
@@ -147,6 +148,7 @@ model Patient {
   diagnosisNotes  DiagnosisNotes[]
   cardActivations CardActivation[]
   cashTransactions CashTransaction[]
+  galleryImages   PatientGallery[]
 
   @@index([status])
   @@index([type])
@@ -186,6 +188,7 @@ model Visit {
   diagnosisNotes  DiagnosisNotes[]
   medicalHistories MedicalHistory[] @relation("VisitHistory")
   nurseServiceAssignments NurseServiceAssignment[]
+  galleryImages   PatientGallery[]
   completedAt    DateTime?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
@@ -1342,4 +1345,36 @@ model DiagnosisNotes {
   @@index([patientId])
   @@index([doctorId])
   @@index([createdAt])
+}
+
+model PatientGallery {
+  id          String   @id @default(uuid())
+  
+  // Relations
+  patientId   String
+  patient     Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  visitId     Int
+  visit       Visit    @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  
+  // Image Details
+  imageType   ImageType  // BEFORE or AFTER
+  filePath    String
+  description String?
+  
+  // Audit
+  uploadedById String
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id])
+  
+  createdAt   DateTime @default(now())
+  
+  @@index([patientId])
+  @@index([visitId])
+  @@index([imageType])
+  @@index([uploadedById])
+  @@index([createdAt])
+}
+
+enum ImageType {
+  BEFORE
+  AFTER
 }
