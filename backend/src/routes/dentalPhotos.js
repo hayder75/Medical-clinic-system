@@ -15,3 +15,7 @@ router.delete('/:photoId', auth, dentalPhotoController.deleteDentalPhoto);
 
 module.exports = router;
 
+
+
+
+

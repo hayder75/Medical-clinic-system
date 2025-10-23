@@ -1,5 +1,5 @@
 {
-  "name": "medical-clinic-backend",
+  "name": "tenalesew-medical-center-backend",
   "version": "1.0.0",
   "prisma": {
     "schema": "prisma/schema.prisma"

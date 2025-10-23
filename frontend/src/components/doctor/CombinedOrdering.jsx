@@ -1,14 +1,21 @@
-import React, { useState } from 'react';
-import { TestTube, Scan, X, CheckCircle, AlertTriangle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { TestTube, Scan, X, CheckCircle, AlertTriangle, Stethoscope } from 'lucide-react';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
+import DoctorServiceOrdering from './DoctorServiceOrdering';
 
 const CombinedOrdering = ({ visit, onClose, onOrdersPlaced }) => {
   const [selectedLabTests, setSelectedLabTests] = useState([]);
   const [selectedRadiologyTests, setSelectedRadiologyTests] = useState([]);
+  const [selectedNurseServices, setSelectedNurseServices] = useState([]);
   const [labInstructions, setLabInstructions] = useState('');
   const [radiologyInstructions, setRadiologyInstructions] = useState('');
+  const [nurseInstructions, setNurseInstructions] = useState('');
+  const [selectedNurse, setSelectedNurse] = useState('');
+  const [nurses, setNurses] = useState([]);
+  const [nurseServices, setNurseServices] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [showServiceOrdering, setShowServiceOrdering] = useState(false);
 
   // Lab test options
   const labTestOptions = [
@@ -50,15 +57,49 @@ const CombinedOrdering = ({ visit, onClose, onOrdersPlaced }) => {
     );
   };
 
+  const toggleNurseService = (service) => {
+    setSelectedNurseServices(prev => 
+      prev.find(s => s.id === service.id) 
+        ? prev.filter(s => s.id !== service.id)
+        : [...prev, service]
+    );
+  };
+
+  // Fetch nurses and nurse services
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [nursesResponse, servicesResponse] = await Promise.all([
+          api.get('/nurses/nurses'),
+          api.get('/nurses/services')
+        ]);
+        
+        setNurses(nursesResponse.data);
+        setNurseServices(servicesResponse.data);
+        
+        // Auto-select the first available nurse
+        if (nursesResponse.data.length > 0) {
+          setSelectedNurse(nursesResponse.data[0].id);
+        }
+      } catch (error) {
+        console.error('Error fetching nurses/services:', error);
+        toast.error('Failed to fetch nurses and services');
+      }
+    };
+    
+    fetchData();
+  }, []);
+
   const calculateTotal = () => {
     const labTotal = selectedLabTests.reduce((sum, test) => sum + test.price, 0);
     const radiologyTotal = selectedRadiologyTests.reduce((sum, test) => sum + test.price, 0);
-    return labTotal + radiologyTotal;
+    const nurseTotal = selectedNurseServices.reduce((sum, service) => sum + service.price, 0);
+    return labTotal + radiologyTotal + nurseTotal;
   };
 
   const handleSubmit = async () => {
-    if (selectedLabTests.length === 0 && selectedRadiologyTests.length === 0) {
-      toast.error('Please select at least one test');
+    if (selectedLabTests.length === 0 && selectedRadiologyTests.length === 0 && selectedNurseServices.length === 0) {
+      toast.error('Please select at least one test or service');
       return;
     }
 
@@ -71,12 +112,14 @@ const CombinedOrdering = ({ visit, onClose, onOrdersPlaced }) => {
         const labOrderData = {
           visitId: visit.id,
           patientId: visit.patient.id,
-          orders: selectedLabTests.map(test => ({
-            typeId: test.id,
-            instructions: labInstructions || 'Lab test ordered by doctor'
+          type: 'LAB',
+          instructions: labInstructions || 'Lab tests ordered by doctor',
+          services: selectedLabTests.map(test => ({
+            serviceId: test.id.toString(),
+            instructions: labInstructions || `Lab test: ${test.name}`
           }))
         };
-        promises.push(api.post('/doctors/lab-orders/multiple', labOrderData));
+        promises.push(api.post('/batch-orders/create', labOrderData));
       }
 
       // Submit radiology orders if any selected
@@ -84,12 +127,36 @@ const CombinedOrdering = ({ visit, onClose, onOrdersPlaced }) => {
         const radiologyOrderData = {
           visitId: visit.id,
           patientId: visit.patient.id,
-          orders: selectedRadiologyTests.map(test => ({
-            typeId: test.id,
-            instructions: radiologyInstructions || 'Radiology test ordered by doctor'
+          type: 'RADIOLOGY',
+          instructions: radiologyInstructions || 'Radiology tests ordered by doctor',
+          services: selectedRadiologyTests.map(test => ({
+            serviceId: test.id.toString(),
+            instructions: radiologyInstructions || `Radiology test: ${test.name}`
           }))
         };
-        promises.push(api.post('/doctors/radiology-orders/multiple', radiologyOrderData));
+        promises.push(api.post('/batch-orders/create', radiologyOrderData));
+      }
+
+      // Submit nurse service orders if any selected
+      if (selectedNurseServices.length > 0) {
+        if (!selectedNurse) {
+          toast.error('Please select a nurse for the services');
+          setLoading(false);
+          return;
+        }
+        
+        const nurseOrderData = {
+          visitId: visit.id,
+          patientId: visit.patient.id,
+          type: 'NURSE',
+          assignedNurseId: selectedNurse,
+          instructions: nurseInstructions || 'Nurse services ordered by doctor',
+          services: selectedNurseServices.map(service => ({
+            serviceId: service.id,
+            instructions: nurseInstructions || `Nurse service: ${service.name}`
+          }))
+        };
+        promises.push(api.post('/batch-orders/create', nurseOrderData));
       }
 
       // Wait for all orders to be submitted
@@ -240,13 +307,83 @@ const CombinedOrdering = ({ visit, onClose, onOrdersPlaced }) => {
             </div>
           </div>
 
+          {/* Nurse Services Section */}
+          <div className="space-y-4">
+            <div className="flex items-center space-x-2">
+              <Stethoscope className="h-5 w-5 text-green-600" />
+              <h3 className="text-lg font-semibold text-gray-900">Nurse Services</h3>
+              <span className="text-sm text-gray-500">
+                ({selectedNurseServices.length} selected)
+              </span>
+            </div>
+
+            {/* Nurse Selection */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Assign to Nurse
+              </label>
+              <select
+                value={selectedNurse}
+                onChange={(e) => setSelectedNurse(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Select a nurse</option>
+                {nurses.map((nurse) => (
+                  <option key={nurse.id} value={nurse.id}>
+                    {nurse.fullname}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {nurseServices.map((service) => (
+                <label
+                  key={service.id}
+                  className="flex items-center space-x-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedNurseServices.some(s => s.id === service.id)}
+                    onChange={() => toggleNurseService(service)}
+                    className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
+                  />
+                  <div className="flex-1">
+                    <div className="text-sm font-medium text-gray-900">
+                      {service.name}
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      {service.description}
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      ETB {service.price}
+                    </div>
+                  </div>
+                </label>
+              ))}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Nurse Service Instructions
+              </label>
+              <textarea
+                value={nurseInstructions}
+                onChange={(e) => setNurseInstructions(e.target.value)}
+                placeholder="Special instructions for nurse services..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                rows={3}
+              />
+            </div>
+          </div>
+
           {/* Summary */}
           <div className="mt-6 p-4 bg-gray-50 rounded-lg">
             <div className="flex items-center justify-between">
               <div>
                 <h4 className="text-lg font-semibold text-gray-900">Order Summary</h4>
                 <p className="text-sm text-gray-600">
-                  {selectedLabTests.length} lab test(s) • {selectedRadiologyTests.length} radiology test(s)
+                  {selectedLabTests.length} lab test(s) • {selectedRadiologyTests.length} radiology test(s) • {selectedNurseServices.length} nurse service(s)
                 </p>
               </div>
               <div className="text-right">
@@ -259,32 +396,51 @@ const CombinedOrdering = ({ visit, onClose, onOrdersPlaced }) => {
           </div>
 
           {/* Action Buttons */}
-          <div className="mt-6 flex justify-end space-x-3">
+          <div className="mt-6 flex justify-between">
             <button
-              onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              onClick={() => setShowServiceOrdering(true)}
+              className="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 flex items-center space-x-2"
             >
-              Cancel
+              <Stethoscope className="h-4 w-4" />
+              <span>Order Custom Services</span>
             </button>
-            <button
-              onClick={handleSubmit}
-              disabled={loading || (selectedLabTests.length === 0 && selectedRadiologyTests.length === 0)}
-              className="px-6 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
-            >
-              {loading ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  <span>Placing Orders...</span>
-                </>
-              ) : (
-                <>
-                  <CheckCircle className="h-4 w-4" />
-                  <span>Place All Orders</span>
-                </>
-              )}
-            </button>
+            
+            <div className="flex space-x-3">
+              <button
+                onClick={onClose}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={loading || (selectedLabTests.length === 0 && selectedRadiologyTests.length === 0 && selectedNurseServices.length === 0)}
+                className="px-6 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+              >
+                {loading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <span>Placing Orders...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="h-4 w-4" />
+                    <span>Place All Orders</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
+
+        {/* Service Ordering Modal */}
+        {showServiceOrdering && (
+          <DoctorServiceOrdering
+            visit={visit}
+            onClose={() => setShowServiceOrdering(false)}
+            onOrdersPlaced={onOrdersPlaced}
+          />
+        )}
       </div>
     </div>
   );

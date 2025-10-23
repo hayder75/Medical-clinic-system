@@ -159,6 +159,32 @@ exports.getVisitByUid = async (req, res) => {
   }
 };
 
+// Update visit status
+exports.updateVisit = async (req, res) => {
+  try {
+    const { visitId } = req.params;
+    const { status, notes } = req.body;
+
+    const visit = await prisma.visit.update({
+      where: { id: parseInt(visitId) },
+      data: {
+        ...(status && { status }),
+        ...(notes && { notes })
+      },
+      include: {
+        patient: {
+          select: { id: true, name: true }
+        }
+      }
+    });
+
+    res.json({ visit });
+  } catch (error) {
+    console.error('Error updating visit:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
 // Complete visit
 exports.completeVisit = async (req, res) => {
   try {

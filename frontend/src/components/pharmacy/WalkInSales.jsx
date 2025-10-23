@@ -172,7 +172,7 @@ const WalkInSales = () => {
     try {
       setLoading(true);
       await api.post(`/walk-in-sales/sales/${selectedSale.id}/dispense`, {
-        items: selectedSale.items.map(item => ({
+        items: selectedSale.pharmacyInvoiceItems.map(item => ({
           medicationCatalogId: item.medicationCatalogId,
           name: item.name,
           dosageForm: item.dosageForm,
@@ -541,7 +541,7 @@ const WalkInSales = () => {
               <button
                 onClick={handleCreateSale}
                 className="btn btn-primary"
-                disabled={loading || saleData.items.length === 0}
+                disabled={loading || saleData.pharmacyInvoiceItems.length === 0}
               >
                 {loading ? 'Creating...' : 'Create Sale'}
               </button>

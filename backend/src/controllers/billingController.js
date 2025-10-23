@@ -690,6 +690,19 @@ exports.processPayment = async (req, res) => {
       return res.status(400).json({ error: 'Billing already paid' });
     }
 
+    // Check if there's already a payment being processed (prevent double-click)
+    const existingPayment = await prisma.billPayment.findFirst({
+      where: {
+        billingId: billingId,
+        amount: numericAmount,
+        type: type
+      }
+    });
+
+    if (existingPayment) {
+      return res.status(400).json({ error: 'Payment already processed' });
+    }
+
     // For entry fees, we only allow one payment of the full amount
     if (billing.payments.length > 0) {
       return res.status(400).json({ error: 'Billing already has a payment' });
@@ -725,11 +738,12 @@ exports.processPayment = async (req, res) => {
           billingId,
           patientId: billing.patientId,
           paymentId: payment.id,
-          amount,
+          amount: numericAmount,
           type,
           bankName,
           transNumber,
-          notes
+          notes,
+          processedBy: req.user.fullname || req.user.username
         }),
         ip: req.ip,
         userAgent: req.get('User-Agent')
@@ -924,6 +938,162 @@ exports.getBillings = async (req, res) => {
 
     res.json({ billings });
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Get billing dashboard statistics for a specific user
+exports.getBillingDashboardStats = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { period = 'daily' } = req.query; // daily, weekly, monthly, yearly
+    
+    // Calculate date ranges based on period
+    const now = new Date();
+    let startDate, endDate;
+    
+    switch (period) {
+      case 'daily':
+        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        endDate = new Date(startDate.getTime() + 24 * 60 * 60 * 1000);
+        break;
+      case 'weekly':
+        const dayOfWeek = now.getDay();
+        startDate = new Date(now.getTime() - dayOfWeek * 24 * 60 * 60 * 1000);
+        startDate.setHours(0, 0, 0, 0);
+        endDate = new Date(startDate.getTime() + 7 * 24 * 60 * 60 * 1000);
+        break;
+      case 'monthly':
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        endDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+        break;
+      case 'yearly':
+        startDate = new Date(now.getFullYear(), 0, 1);
+        endDate = new Date(now.getFullYear() + 1, 0, 1);
+        break;
+      default:
+        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        endDate = new Date(startDate.getTime() + 24 * 60 * 60 * 1000);
+    }
+
+    // Get payments processed by this user in the specified period
+    const payments = await prisma.billPayment.findMany({
+      where: {
+        createdAt: {
+          gte: startDate,
+          lt: endDate
+        },
+        // We need to join with audit logs to find payments processed by this user
+      },
+      include: {
+        billing: {
+          include: {
+            patient: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
+          }
+        },
+        insurance: {
+          select: {
+            name: true,
+            code: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    // Filter payments that were actually processed by this user using audit logs
+    const userProcessedPayments = [];
+    for (const payment of payments) {
+      const auditLog = await prisma.auditLog.findFirst({
+        where: {
+          userId: userId,
+          action: 'PROCESS_PAYMENT',
+          details: {
+            contains: payment.id
+          },
+          createdAt: {
+            gte: startDate,
+            lt: endDate
+          }
+        }
+      });
+      
+      if (auditLog) {
+        userProcessedPayments.push(payment);
+      }
+    }
+
+    // Calculate statistics by payment type
+    const statsByType = {
+      CASH: { count: 0, amount: 0 },
+      BANK: { count: 0, amount: 0 },
+      INSURANCE: { count: 0, amount: 0 },
+      CHARITY: { count: 0, amount: 0 }
+    };
+
+    let totalAmount = 0;
+    let totalCount = 0;
+
+    userProcessedPayments.forEach(payment => {
+      statsByType[payment.type].count += 1;
+      statsByType[payment.type].amount += payment.amount;
+      totalAmount += payment.amount;
+      totalCount += 1;
+    });
+
+    // Get pending billings count (all users can see this)
+    const pendingBillings = await prisma.billing.count({
+      where: {
+        status: 'PENDING'
+      }
+    });
+
+    // Get total pending amount (all users can see this)
+    const pendingBillingsData = await prisma.billing.findMany({
+      where: {
+        status: 'PENDING'
+      },
+      select: {
+        totalAmount: true
+      }
+    });
+
+    const pendingAmount = pendingBillingsData.reduce((sum, billing) => sum + billing.totalAmount, 0);
+
+    // Get recent transactions (last 10 payments processed by this user)
+    const recentTransactions = userProcessedPayments.slice(0, 10).map(payment => ({
+      id: payment.id,
+      amount: payment.amount,
+      type: payment.type,
+      patientName: payment.billing.patient.name,
+      createdAt: payment.createdAt,
+      bankName: payment.bankName,
+      transNumber: payment.transNumber,
+      insuranceName: payment.insurance?.name
+    }));
+
+    res.json({
+      period,
+      dateRange: {
+        start: startDate,
+        end: endDate
+      },
+      stats: {
+        totalAmount,
+        totalCount,
+        pendingBillings,
+        pendingAmount,
+        byType: statsByType
+      },
+      recentTransactions
+    });
+  } catch (error) {
+    console.error('Error fetching billing dashboard stats:', error);
     res.status(500).json({ error: error.message });
   }
 };
@@ -1322,32 +1492,32 @@ exports.deleteVisit = async (req, res) => {
       return res.status(404).json({ error: 'Visit not found' });
     }
 
-    // Only allow deletion of visits that haven't progressed too far
-    // Allow deletion if visit is still in early stages
+    // Allow deletion only for early stage visits (before doctor consultation, lab, radiology)
+    // Once doctor sees patient or lab/radiology work is done, no deletion allowed
     const deletableStatuses = [
       'WAITING_FOR_TRIAGE',
-      'TRIAGED'
+      'TRIAGED', 
+      'WAITING_FOR_DOCTOR',
+      'IN_DOCTOR_QUEUE'
     ];
 
     if (!deletableStatuses.includes(visit.status)) {
       return res.status(400).json({ 
-        error: 'Cannot delete visit that has progressed beyond triage stage',
+        error: 'Cannot delete visit after doctor consultation or lab/radiology work has begun',
         currentStatus: visit.status,
         allowedStatuses: deletableStatuses
       });
     }
 
-    // Check if there are any paid bills (we don't want to delete paid visits)
+    // For early stage visits, allow deletion even with paid bills
+    // The patient can create a new visit if needed
     const paidBills = visit.bills.filter(bill => bill.status === 'PAID');
     if (paidBills.length > 0) {
-      return res.status(400).json({ 
-        error: 'Cannot delete visit with paid bills',
-        paidBills: paidBills.map(bill => ({
-          id: bill.id,
-          totalAmount: bill.totalAmount,
-          status: bill.status
-        }))
-      });
+      console.log(`Deleting visit ${visit.id} with paid bills:`, paidBills.map(bill => ({
+        id: bill.id,
+        totalAmount: bill.totalAmount,
+        status: bill.status
+      })));
     }
 
     // Start a transaction to delete all related records
@@ -1413,15 +1583,23 @@ exports.deleteVisit = async (req, res) => {
         });
       }
 
-      // 9. Delete bills (should be unpaid at this point)
+      // 9. Delete bills and payments
       if (visit.bills.length > 0) {
-        // First delete billing services for each bill
+        // First delete payments for each bill
+        for (const bill of visit.bills) {
+          await tx.billPayment.deleteMany({
+            where: { billingId: bill.id }
+          });
+        }
+        
+        // Then delete billing services for each bill
         for (const bill of visit.bills) {
           await tx.billingService.deleteMany({
             where: { billingId: bill.id }
           });
         }
-        // Then delete the bills
+        
+        // Finally delete the bills
         await tx.billing.deleteMany({
           where: { visitId: parseInt(visitId) }
         });
@@ -1446,7 +1624,7 @@ exports.deleteVisit = async (req, res) => {
           patientName: visit.patient.name,
           visitStatus: visit.status,
           deletedAt: new Date().toISOString(),
-          reason: 'Billing officer correction - visit recreation needed'
+          reason: 'Billing officer deletion - visit reassignment/rescheduling needed'
         }),
         ip: req.ip,
         userAgent: req.get('User-Agent')

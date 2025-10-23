@@ -16,8 +16,8 @@ const visitsRoutes = require('./src/routes/visits');
 const billingRoutes = require('./src/routes/billing');
 const doctorsRoutes = require('./src/routes/doctors');
 const nursesRoutes = require('./src/routes/nurses');
-const labsRoutes = require('./src/routes/labs');
 const radiologiesRoutes = require('./src/routes/radiologies');
+const labsRoutes = require('./src/routes/labs');
 const pharmaciesRoutes = require('./src/routes/pharmacies');
 const batchOrdersRoutes = require('./src/routes/batchOrders');
 const pharmacyBillingRoutes = require('./src/routes/pharmacyBilling');
@@ -28,6 +28,9 @@ const walkInSalesRoutes = require('./src/routes/walkInSales');
 const dentalRoutes = require('./src/routes/dental');
 const dentalPhotosRoutes = require('./src/routes/dentalPhotos');
 const patientAttachedImagesRoutes = require('./src/routes/patientAttachedImages');
+const virtualQueueRoutes = require('./src/routes/virtualQueue');
+const medicalCertificatesRoutes = require('./src/routes/medicalCertificates');
+const continuousInfusionsRoutes = require('./src/routes/continuousInfusions');
 
 // Middleware
 const authMiddleware = require('./src/middleware/auth');
@@ -63,10 +66,10 @@ app.use('/api/auth', authRoutes);
 app.use('/api/patients', authMiddleware, patientsRoutes);
 app.use('/api/visits', authMiddleware, visitsRoutes);
 app.use('/api/billing', authMiddleware, roleGuard(['BILLING_OFFICER', 'PHARMACY_BILLING_OFFICER', 'PHARMACIST', 'ADMIN']), billingRoutes);
-app.use('/api/doctors', authMiddleware, roleGuard(['DOCTOR', 'ADMIN']), doctorsRoutes);
-app.use('/api/nurses', authMiddleware, roleGuard(['NURSE', 'ADMIN']), nursesRoutes);
-app.use('/api/labs', authMiddleware, roleGuard(['LAB_TECHNICIAN', 'DOCTOR', 'ADMIN']), labsRoutes);
+app.use('/api/doctors', authMiddleware, roleGuard(['DOCTOR', 'ADMIN', 'BILLING_OFFICER', 'NURSE', 'RECEPTIONIST']), doctorsRoutes);
+app.use('/api/nurses', authMiddleware, roleGuard(['NURSE', 'ADMIN', 'DOCTOR']), nursesRoutes);
 app.use('/api/radiologies', authMiddleware, roleGuard(['RADIOLOGIST', 'RADIOLOGY_TECHNICIAN', 'DOCTOR', 'ADMIN']), radiologiesRoutes);
+app.use('/api/labs', authMiddleware, roleGuard(['LAB_TECHNICIAN', 'DOCTOR', 'ADMIN']), labsRoutes);
 app.use('/api/pharmacies', authMiddleware, roleGuard(['PHARMACY_OFFICER', 'PHARMACIST', 'PHARMACY_BILLING_OFFICER', 'ADMIN']), pharmaciesRoutes);
 app.use('/api/batch-orders', batchOrdersRoutes);
 app.use('/api/pharmacy-billing', authMiddleware, roleGuard(['PHARMACY_BILLING_OFFICER', 'PHARMACIST', 'ADMIN']), pharmacyBillingRoutes);
@@ -77,6 +80,9 @@ app.use('/api/walk-in-sales', authMiddleware, roleGuard(['PHARMACIST', 'PHARMACY
 app.use('/api/dental', dentalRoutes);
 app.use('/api/dental-photos', authMiddleware, roleGuard(['DOCTOR', 'ADMIN']), dentalPhotosRoutes);
 app.use('/api/patient-attached-images', authMiddleware, patientAttachedImagesRoutes);
+app.use('/api/pre-registration', authMiddleware, roleGuard(['BILLING_OFFICER', 'ADMIN']), virtualQueueRoutes);
+app.use('/api/medical-certificates', authMiddleware, roleGuard(['DOCTOR', 'ADMIN']), medicalCertificatesRoutes);
+app.use('/api/continuous-infusions', continuousInfusionsRoutes);
 
 // Cron for inactivity (run daily)
 cron.schedule('0 0 * * *', async () => {

@@ -111,7 +111,7 @@ const PatientAttachedImagesSection = ({
   const handleImageClick = (image, index) => {
     // Convert images to format expected by ImageViewer
     const viewerImages = images.map(img => ({
-      fileUrl: `http://localhost:3000/${img.filePath}`,
+      fileUrl: img.filePath ? `http://localhost:3000/${img.filePath}` : '',
       fileName: img.fileName,
       description: img.description
     }));
@@ -249,13 +249,14 @@ const PatientAttachedImagesSection = ({
               </div>
               
               {/* Show image preview for images */}
-              {image.mimeType && image.mimeType.startsWith('image/') && (
+              {image.mimeType && image.mimeType.startsWith('image/') && image.filePath && (
                 <div className="mb-2">
                   <img
                     src={`http://localhost:3000/${image.filePath}`}
                     alt={image.fileName}
                     className="w-full h-32 object-cover rounded border"
                     onError={(e) => {
+                      console.error('Image load error:', image.filePath);
                       e.target.style.display = 'none';
                     }}
                   />

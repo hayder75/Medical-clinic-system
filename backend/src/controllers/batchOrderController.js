@@ -7,8 +7,9 @@ const prisma = new PrismaClient();
 const createBatchOrderSchema = z.object({
   visitId: z.number(),
   patientId: z.string(),
-  type: z.enum(['LAB', 'RADIOLOGY', 'MIXED']),
+  type: z.enum(['LAB', 'RADIOLOGY', 'MIXED', 'NURSE']),
   instructions: z.string().optional(),
+  assignedNurseId: z.string().optional(), // For nurse services
   services: z.array(z.object({
     serviceId: z.string(),
     investigationTypeId: z.number().optional(),
@@ -19,7 +20,7 @@ const createBatchOrderSchema = z.object({
 // Create a batch order
 exports.createBatchOrder = async (req, res) => {
   try {
-    const { visitId, patientId, type, instructions, services } = createBatchOrderSchema.parse(req.body);
+    const { visitId, patientId, type, instructions, services, assignedNurseId } = createBatchOrderSchema.parse(req.body);
     const doctorId = req.user.id;
 
     // Check if visit exists and is in correct status
@@ -31,8 +32,19 @@ exports.createBatchOrder = async (req, res) => {
       return res.status(404).json({ error: 'Visit not found' });
     }
 
-    if (!['WAITING_FOR_DOCTOR', 'UNDER_DOCTOR_REVIEW', 'SENT_TO_LAB', 'SENT_TO_RADIOLOGY', 'SENT_TO_BOTH'].includes(visit.status)) {
+    if (!['WAITING_FOR_DOCTOR', 'UNDER_DOCTOR_REVIEW', 'SENT_TO_LAB', 'SENT_TO_RADIOLOGY', 'SENT_TO_BOTH', 'NURSE_SERVICES_COMPLETED'].includes(visit.status)) {
       return res.status(400).json({ error: 'Visit must be waiting for doctor, under doctor review, or sent to lab/radiology to create orders' });
+    }
+
+    // For nurse services, validate assigned nurse
+    if (type === 'NURSE' && assignedNurseId) {
+      const assignedNurse = await prisma.user.findUnique({
+        where: { id: assignedNurseId, role: 'NURSE', availability: true }
+      });
+
+      if (!assignedNurse) {
+        return res.status(404).json({ error: 'Nurse not found or not available' });
+      }
     }
 
     // Validate all services exist
@@ -196,18 +208,60 @@ exports.createBatchOrder = async (req, res) => {
 
     // Update visit status based on order type
     let newStatus = visit.status;
-    if (type === 'LAB') {
-      newStatus = 'SENT_TO_LAB';
-    } else if (type === 'RADIOLOGY') {
-      newStatus = 'SENT_TO_RADIOLOGY';
-    } else if (type === 'MIXED') {
+    
+    // Only update status if we're not already in a mixed state
+    if (visit.status === 'UNDER_DOCTOR_REVIEW' || visit.status === 'WAITING_FOR_DOCTOR') {
+      if (type === 'LAB') {
+        newStatus = 'SENT_TO_LAB';
+      } else if (type === 'RADIOLOGY') {
+        newStatus = 'SENT_TO_RADIOLOGY';
+      } else if (type === 'MIXED') {
+        newStatus = 'SENT_TO_BOTH';
+      } else if (type === 'NURSE') {
+        newStatus = 'NURSE_SERVICES_ORDERED';
+      }
+    } else if (visit.status === 'SENT_TO_LAB' && type === 'RADIOLOGY') {
+      // If already sent to lab and now ordering radiology, change to mixed
+      newStatus = 'SENT_TO_BOTH';
+    } else if (visit.status === 'SENT_TO_RADIOLOGY' && type === 'LAB') {
+      // If already sent to radiology and now ordering lab, change to mixed
       newStatus = 'SENT_TO_BOTH';
     }
+    // For other cases, keep the current status
 
     await prisma.visit.update({
       where: { id: visitId },
       data: { status: newStatus }
     });
+
+    // For nurse services, create nurse service assignments
+    if (type === 'NURSE' && assignedNurseId) {
+      const nurseServiceAssignments = [];
+      for (const service of services) {
+        const assignment = await prisma.nurseServiceAssignment.create({
+          data: {
+            visitId,
+            serviceId: service.serviceId,
+            assignedNurseId,
+            assignedById: 'nurse-123', // Default nurse ID for doctor orders
+            status: 'PENDING',
+            notes: service.instructions || `Doctor ordered: ${validServices.find(s => s.id === service.serviceId)?.name}`,
+            orderType: 'DOCTOR_ORDERED'
+          },
+          include: {
+            service: true,
+            assignedNurse: {
+              select: {
+                id: true,
+                fullname: true,
+                username: true
+              }
+            }
+          }
+        });
+        nurseServiceAssignments.push(assignment);
+      }
+    }
 
     res.status(201).json({
       message: 'Batch order created successfully',
@@ -237,7 +291,7 @@ exports.getLabBatchOrders = async (req, res) => {
           { type: 'MIXED' }
         ],
         status: {
-          in: ['PAID', 'QUEUED', 'IN_PROGRESS', 'COMPLETED']
+          in: ['UNPAID', 'PAID', 'QUEUED', 'IN_PROGRESS', 'COMPLETED']
         }
       },
       include: {
@@ -294,7 +348,7 @@ exports.getRadiologyBatchOrders = async (req, res) => {
           { type: 'MIXED' }
         ],
         status: {
-          in: ['PAID', 'QUEUED', 'IN_PROGRESS', 'COMPLETED']
+          in: ['UNPAID', 'PAID', 'QUEUED', 'IN_PROGRESS', 'COMPLETED']
         }
       },
       include: {

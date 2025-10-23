@@ -2,6 +2,9 @@ const express = require('express');
 const router = express.Router();
 const pharmacyBillingController = require('../controllers/pharmacyBillingController');
 
+// Get pharmacy billing dashboard
+router.get('/dashboard', pharmacyBillingController.getDashboard);
+
 // Get pharmacy invoices (billing queue)
 router.get('/invoices', pharmacyBillingController.getPharmacyInvoices);
 

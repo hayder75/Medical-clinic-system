@@ -27,11 +27,20 @@ const TriageQueue = () => {
   const [selectedDoctor, setSelectedDoctor] = useState('');
   const [specialtyFilter, setSpecialtyFilter] = useState('ALL');
   
+  // Nurse service states
+  const [nurseServices, setNurseServices] = useState([]);
+  const [nurses, setNurses] = useState([]);
+  const [selectedNurseServices, setSelectedNurseServices] = useState([]); // Changed to array
+  const [selectedNurse, setSelectedNurse] = useState('');
+  const [nurseServiceNotes, setNurseServiceNotes] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
   // Section states for collapsible interface
   const [expandedSections, setExpandedSections] = useState({
     vitals: true,        // Always start with vitals expanded
     complaint: false,
     examination: false,
+    nurseService: false,
     assignment: false
   });
   
@@ -40,6 +49,7 @@ const TriageQueue = () => {
     vitals: false,
     complaint: false,
     examination: false,
+    nurseService: false,
     assignment: false
   });
   
@@ -51,6 +61,7 @@ const TriageQueue = () => {
     height: '',
     weight: '',
     oxygenSaturation: '',
+    bloodType: '',
     condition: '',
     notes: '',
     
@@ -89,12 +100,24 @@ const TriageQueue = () => {
   useEffect(() => {
     fetchPatients();
     fetchDoctors();
+    fetchNurseServices();
+    fetchNurses();
   }, []);
+
+  // Initialize blood type when patient is selected
+  useEffect(() => {
+    if (selectedPatient?.bloodType) {
+      setVitalsData(prev => ({
+        ...prev,
+        bloodType: selectedPatient.bloodType
+      }));
+    }
+  }, [selectedPatient]);
 
   // Check section completion whenever vitalsData changes
   useEffect(() => {
     checkSectionCompletion();
-  }, [vitalsData, selectedDoctor]);
+  }, [vitalsData, selectedDoctor, selectedNurseServices, selectedNurse]);
 
   const fetchPatients = async () => {
     try {
@@ -111,19 +134,48 @@ const TriageQueue = () => {
 
   const fetchDoctors = async () => {
     try {
-      const response = await api.get('/nurses/doctors');
-      setDoctors(response.data.doctors || []);
+      const response = await api.get('/doctors/queue-status');
+      const doctorsData = response.data.doctors || [];
+      setDoctors(doctorsData);
+      
+      // Auto-suggest the least busy doctor (silently, no popup)
+      if (doctorsData.length > 0 && !selectedDoctor) {
+        const leastBusyDoctor = doctorsData[0]; // Already sorted by workload
+        setSelectedDoctor(leastBusyDoctor.id);
+        // Removed toast notification for auto-selection
+      }
     } catch (error) {
       toast.error('Failed to fetch doctors');
       console.error('Error fetching doctors:', error);
     }
   };
 
+  const fetchNurseServices = async () => {
+    try {
+      const response = await api.get('/nurses/services');
+      setNurseServices(response.data.services || []);
+    } catch (error) {
+      toast.error('Failed to fetch nurse services');
+      console.error('Error fetching nurse services:', error);
+    }
+  };
+
+  const fetchNurses = async () => {
+    try {
+      const response = await api.get('/nurses/nurses');
+      setNurses(response.data.nurses || []);
+    } catch (error) {
+      toast.error('Failed to fetch nurses');
+      console.error('Error fetching nurses:', error);
+    }
+  };
+
   const checkSectionCompletion = () => {
     const completion = {
-      vitals: !!(vitalsData.bloodPressure && vitalsData.temperature && vitalsData.heartRate && vitalsData.condition),
+      vitals: true, // Always true - vitals are now optional
       complaint: !!(vitalsData.chiefComplaint || vitalsData.historyOfPresentIllness),
       examination: !!(vitalsData.generalAppearance || vitalsData.cardiovascularExam || vitalsData.respiratoryExam),
+      nurseService: selectedNurseServices.length > 0, // Don't require nurse selection - will auto-select current nurse
       assignment: !!selectedDoctor
     };
     setSectionCompletion(completion);
@@ -143,65 +195,131 @@ const TriageQueue = () => {
     return bmi.toFixed(1);
   };
 
+  const handleServiceToggle = (serviceId) => {
+    setSelectedNurseServices(prev => {
+      if (prev.includes(serviceId)) {
+        return prev.filter(id => id !== serviceId);
+      } else {
+        return [...prev, serviceId];
+      }
+    });
+  };
+
   const handleVitalsSubmit = async (e) => {
     e.preventDefault();
     
-    // Check if required sections are completed
-    if (!sectionCompletion.vitals) {
-      toast.error('Please complete the Record Vitals section');
+    // Check if either doctor assignment or nurse service is completed
+    if (!sectionCompletion.assignment && !sectionCompletion.nurseService) {
+      toast.error('Please either assign a doctor or select a nurse service');
       return;
     }
-    
-    if (!sectionCompletion.assignment) {
-      toast.error('Please assign a doctor');
+
+    // Prevent multiple submissions
+    if (isSubmitting) {
       return;
     }
+    setIsSubmitting(true);
 
     try {
+      // Build vitals payload with only fields that have values
       const vitalsPayload = {
         visitId: selectedPatient.id,
-        patientId: selectedPatient.patient.id,
-        bloodPressure: vitalsData.bloodPressure,
-        temperature: parseFloat(vitalsData.temperature),
-        heartRate: parseInt(vitalsData.heartRate),
-        height: parseFloat(vitalsData.height),
-        weight: parseFloat(vitalsData.weight),
-        oxygenSaturation: parseInt(vitalsData.oxygenSaturation),
-        condition: vitalsData.condition,
-        notes: vitalsData.notes,
-        
-        // Optional fields
-        chiefComplaint: vitalsData.chiefComplaint,
-        historyOfPresentIllness: vitalsData.historyOfPresentIllness,
-        onsetOfSymptoms: vitalsData.onsetOfSymptoms,
-        durationOfSymptoms: vitalsData.durationOfSymptoms,
-        severityOfSymptoms: vitalsData.severityOfSymptoms,
-        associatedSymptoms: vitalsData.associatedSymptoms,
-        relievingFactors: vitalsData.relievingFactors,
-        aggravatingFactors: vitalsData.aggravatingFactors,
-        
-        generalAppearance: vitalsData.generalAppearance,
-        headAndNeck: vitalsData.headAndNeck,
-        cardiovascularExam: vitalsData.cardiovascularExam,
-        respiratoryExam: vitalsData.respiratoryExam,
-        abdominalExam: vitalsData.abdominalExam,
-        extremities: vitalsData.extremities,
-        neurologicalExam: vitalsData.neurologicalExam
+        patientId: selectedPatient.patient.id
       };
 
+      // Only add vitals fields if they have values
+      if (vitalsData.bloodPressure) vitalsPayload.bloodPressure = vitalsData.bloodPressure;
+      if (vitalsData.temperature) vitalsPayload.temperature = parseFloat(vitalsData.temperature);
+      if (vitalsData.heartRate) vitalsPayload.heartRate = parseInt(vitalsData.heartRate);
+      if (vitalsData.height) vitalsPayload.height = parseFloat(vitalsData.height);
+      if (vitalsData.weight) vitalsPayload.weight = parseFloat(vitalsData.weight);
+      if (vitalsData.oxygenSaturation) vitalsPayload.oxygenSaturation = parseInt(vitalsData.oxygenSaturation);
+      if (vitalsData.condition) vitalsPayload.condition = vitalsData.condition;
+      if (vitalsData.notes) vitalsPayload.notes = vitalsData.notes;
+      
+      // Optional complaint fields
+      if (vitalsData.chiefComplaint) vitalsPayload.chiefComplaint = vitalsData.chiefComplaint;
+      if (vitalsData.historyOfPresentIllness) vitalsPayload.historyOfPresentIllness = vitalsData.historyOfPresentIllness;
+      if (vitalsData.onsetOfSymptoms) vitalsPayload.onsetOfSymptoms = vitalsData.onsetOfSymptoms;
+      if (vitalsData.durationOfSymptoms) vitalsPayload.durationOfSymptoms = vitalsData.durationOfSymptoms;
+      if (vitalsData.severityOfSymptoms) vitalsPayload.severityOfSymptoms = vitalsData.severityOfSymptoms;
+      if (vitalsData.associatedSymptoms) vitalsPayload.associatedSymptoms = vitalsData.associatedSymptoms;
+      if (vitalsData.relievingFactors) vitalsPayload.relievingFactors = vitalsData.relievingFactors;
+      if (vitalsData.aggravatingFactors) vitalsPayload.aggravatingFactors = vitalsData.aggravatingFactors;
+      
+      // Optional examination fields
+      if (vitalsData.generalAppearance) vitalsPayload.generalAppearance = vitalsData.generalAppearance;
+      if (vitalsData.headAndNeck) vitalsPayload.headAndNeck = vitalsData.headAndNeck;
+      if (vitalsData.cardiovascularExam) vitalsPayload.cardiovascularExam = vitalsData.cardiovascularExam;
+      if (vitalsData.respiratoryExam) vitalsPayload.respiratoryExam = vitalsData.respiratoryExam;
+      if (vitalsData.abdominalExam) vitalsPayload.abdominalExam = vitalsData.abdominalExam;
+      if (vitalsData.extremities) vitalsPayload.extremities = vitalsData.extremities;
+      if (vitalsData.neurologicalExam) vitalsPayload.neurologicalExam = vitalsData.neurologicalExam;
+
+      // Always record vitals to trigger triaging (even with minimal data)
+      // This ensures the visit status becomes TRIAGED
       await api.post('/nurses/vitals', vitalsPayload);
       
-      // Assign doctor
-      await api.post('/nurses/assignments', {
-        visitId: selectedPatient.id,
-        patientId: selectedPatient.patient.id,
-        doctorId: selectedDoctor
-      });
+      // Handle assignment based on what was selected
+      // Auto-select current nurse if nurse services are selected but no nurse is chosen
+      let assignedNurseId = selectedNurse;
+      if (sectionCompletion.nurseService && (!selectedNurse || selectedNurse === '')) {
+        // Get current user info and use their ID as the assigned nurse
+        const currentUser = JSON.parse(localStorage.getItem('user'));
+        assignedNurseId = currentUser?.id;
+        if (assignedNurseId) {
+          setSelectedNurse(assignedNurseId);
+        }
+      }
 
-      toast.success('Vitals recorded and doctor assigned successfully');
+      // Use combined endpoint if both nurse services and doctor are selected
+      if (sectionCompletion.nurseService && sectionCompletion.assignment) {
+        const payload = {
+          visitId: selectedPatient.id,
+          patientId: selectedPatient.patient.id,
+          serviceIds: selectedNurseServices,
+          doctorId: selectedDoctor,
+          notes: nurseServiceNotes
+        };
+        
+        // Only include assignedNurseId if it's valid
+        if (assignedNurseId && assignedNurseId !== '') {
+          payload.assignedNurseId = assignedNurseId;
+        }
+        
+        await api.post('/nurses/assign-combined', payload);
+        toast.success('Patient processed with both nurse services and doctor assignment');
+      } else if (sectionCompletion.nurseService) {
+        // Handle nurse services assignment only
+        const payload = {
+          visitId: selectedPatient.id,
+          patientId: selectedPatient.patient.id,
+          serviceIds: selectedNurseServices,
+          notes: nurseServiceNotes
+        };
+        
+        // Only include assignedNurseId if it's valid
+        if (assignedNurseId && assignedNurseId !== '') {
+          payload.assignedNurseId = assignedNurseId;
+        }
+        
+        await api.post('/nurses/assign-nurse-services', payload);
+        toast.success(`${selectedNurseServices.length} nurse service(s) assigned successfully`);
+      } else if (sectionCompletion.assignment) {
+        // Handle doctor assignment only
+        await api.post('/nurses/assignments', {
+          visitId: selectedPatient.id,
+          patientId: selectedPatient.patient.id,
+          doctorId: selectedDoctor
+        });
+        toast.success('Doctor assigned successfully');
+      }
       setShowVitalsForm(false);
       setSelectedPatient(null);
       setSelectedDoctor('');
+      setSelectedNurseServices([]);
+      setSelectedNurse('');
+      setNurseServiceNotes('');
       
       // Reset form
       setVitalsData({
@@ -211,6 +329,7 @@ const TriageQueue = () => {
         height: '',
         weight: '',
         oxygenSaturation: '',
+        bloodType: '',
         condition: '',
         notes: '',
         chiefComplaint: '',
@@ -240,8 +359,10 @@ const TriageQueue = () => {
       
       fetchPatients();
     } catch (error) {
-      toast.error('Failed to record vitals');
-      console.error('Error recording vitals:', error);
+      console.error('Error in triage process:', error);
+      toast.error(`Triage failed: ${error.response?.data?.error || error.message}`);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -292,7 +413,7 @@ const TriageQueue = () => {
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Triage Queue</h2>
-          <p className="text-gray-600">Record patient vitals and assign doctors</p>
+          <p className="text-gray-600">Record patient vitals (optional) and assign doctors</p>
         </div>
         <div className="text-sm text-gray-500">
           {patients.length} patients waiting
@@ -396,7 +517,7 @@ const TriageQueue = () => {
                 <div className="border border-gray-200 rounded-lg">
                   <SectionHeader
                     section="vitals"
-                    title="Record Vitals"
+                    title="Record Vitals (Optional)"
                     icon={Stethoscope}
                     isCompleted={sectionCompletion.vitals}
                     isExpanded={expandedSections.vitals}
@@ -475,6 +596,35 @@ const TriageQueue = () => {
                             value={vitalsData.oxygenSaturation}
                             onChange={(e) => setVitalsData({...vitalsData, oxygenSaturation: e.target.value})}
                           />
+                        </div>
+                        
+                        <div>
+                          <label className="label">Blood Type *</label>
+                          <select
+                            className="input"
+                            value={vitalsData.bloodType}
+                            onChange={(e) => setVitalsData({...vitalsData, bloodType: e.target.value})}
+                            required
+                            disabled={selectedPatient?.bloodType && vitalsData.bloodType === ''}
+                          >
+                            <option value="">Select Blood Type</option>
+                            <option value="A_PLUS">A+</option>
+                            <option value="A_MINUS">A-</option>
+                            <option value="B_PLUS">B+</option>
+                            <option value="B_MINUS">B-</option>
+                            <option value="AB_PLUS">AB+</option>
+                            <option value="AB_MINUS">AB-</option>
+                            <option value="O_PLUS">O+</option>
+                            <option value="O_MINUS">O-</option>
+                          </select>
+                          <p className="text-xs text-gray-500 mt-1">
+                            💡 Check the patient's ID card for blood type. This information will be permanently saved and cannot be changed later.
+                          </p>
+                          {selectedPatient?.bloodType && (
+                            <p className="text-xs text-green-600 mt-1">
+                              ✅ Patient's blood type is already recorded: {selectedPatient.bloodType.replace('_', '')}
+                            </p>
+                          )}
                         </div>
                       </div>
 
@@ -723,7 +873,96 @@ const TriageQueue = () => {
                   )}
                 </div>
 
-                {/* 4. Doctor Assignment Section */}
+                {/* 4. Nurse Service Section */}
+                <div className="border border-gray-200 rounded-lg">
+                  <SectionHeader
+                    section="nurseService"
+                    title="Nurse Service (Optional)"
+                    icon={Stethoscope}
+                    isCompleted={sectionCompletion.nurseService}
+                    isExpanded={expandedSections.nurseService}
+                    onToggle={toggleSection}
+                  />
+                  
+                  {expandedSections.nurseService && (
+                    <div className="p-6 border-t border-gray-200">
+                      <div className="space-y-4">
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                          <p className="text-sm text-blue-800">
+                            <strong>Note:</strong> Select a nurse service if the patient needs a service that can be provided by a nurse without requiring a doctor consultation.
+                          </p>
+                        </div>
+
+                        <div>
+                          <label className="label">Select Nurse Services</label>
+                          <div className="space-y-2 max-h-60 overflow-y-auto border border-gray-200 rounded-lg p-3">
+                            {nurseServices.map(service => (
+                              <label key={service.id} className="flex items-start space-x-3 cursor-pointer hover:bg-gray-50 p-2 rounded">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedNurseServices.includes(service.id)}
+                                  onChange={() => handleServiceToggle(service.id)}
+                                  className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                />
+                                <div className="flex-1">
+                                  <div className="text-sm font-medium text-gray-900">
+                                    {service.name} - ${service.price}
+                                  </div>
+                                  <div className="text-xs text-gray-500">
+                                    {service.code} - {service.description}
+                                  </div>
+                                </div>
+                              </label>
+                            ))}
+                          </div>
+                          {selectedNurseServices.length > 0 && (
+                            <p className="text-sm text-gray-600 mt-2">
+                              Selected {selectedNurseServices.length} service(s)
+                            </p>
+                          )}
+                        </div>
+
+                        {selectedNurseServices.length > 0 && (
+                          <div>
+                            <label className="label">Assign to Nurse</label>
+                            <select
+                              className="input"
+                              value={selectedNurse}
+                              onChange={(e) => setSelectedNurse(e.target.value)}
+                            >
+                              <option value="">Auto-assign to current nurse</option>
+                              {nurses.map(nurse => (
+                                <option key={nurse.id} value={nurse.id}>
+                                  {nurse.fullname} ({nurse.username})
+                                </option>
+                              ))}
+                            </select>
+                            {!selectedNurse && (
+                              <p className="text-sm text-gray-600 mt-1">
+                                If no nurse is selected, the current nurse will be automatically assigned
+                              </p>
+                            )}
+                          </div>
+                        )}
+
+                        {selectedNurseServices.length > 0 && selectedNurse && (
+                          <div>
+                            <label className="label">Service Notes (Optional)</label>
+                            <textarea
+                              className="input"
+                              rows={3}
+                              value={nurseServiceNotes}
+                              onChange={(e) => setNurseServiceNotes(e.target.value)}
+                              placeholder="Any specific instructions or notes for this service..."
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 5. Doctor Assignment Section */}
                 <div className="border border-gray-200 rounded-lg">
                   <SectionHeader
                     section="assignment"
@@ -753,6 +992,52 @@ const TriageQueue = () => {
                           </div>
                         </div>
 
+                        {/* Doctor Workload Overview */}
+                        <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                          <h4 className="text-sm font-medium text-blue-900 mb-2 flex items-center">
+                            <Activity className="h-4 w-4 mr-1" />
+                            Doctor Workload Status - {specialtyFilter === 'ALL' ? 'All Specialties' : specialtyFilter}
+                          </h4>
+                          <div className="grid grid-cols-1 gap-2 text-xs max-h-32 overflow-y-auto">
+                            {doctors
+                              .filter(doctor => 
+                                specialtyFilter === 'ALL' || 
+                                doctor.specialties?.some(spec => spec.includes(specialtyFilter))
+                              )
+                              .map(doctor => (
+                                <div key={doctor.id} className="flex items-center justify-between p-1 hover:bg-blue-100 rounded">
+                                  <div className="flex items-center">
+                                    <span className="text-blue-700 truncate font-medium">{doctor.fullname}</span>
+                                    {doctor.specialties && doctor.specialties.length > 0 && (
+                                      <span className="ml-2 text-blue-600 text-xs">
+                                        ({doctor.specialties.join(', ')})
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                    doctor.totalWorkload === 0 
+                                      ? 'bg-green-100 text-green-700' 
+                                      : doctor.totalWorkload <= 2
+                                      ? 'bg-blue-100 text-blue-700'
+                                      : doctor.totalWorkload <= 5
+                                      ? 'bg-yellow-100 text-yellow-700'
+                                      : 'bg-red-100 text-red-700'
+                                  }`}>
+                                    {doctor.totalWorkload} patients
+                                  </span>
+                                </div>
+                              ))}
+                            {doctors.filter(doctor => 
+                              specialtyFilter === 'ALL' || 
+                              doctor.specialties?.some(spec => spec.includes(specialtyFilter))
+                            ).length === 0 && (
+                              <div className="text-center text-blue-600 py-2">
+                                No doctors found for {specialtyFilter}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
                         <div>
                           <label className="label">Select Doctor *</label>
                           <select
@@ -769,7 +1054,8 @@ const TriageQueue = () => {
                               )
                               .map(doctor => (
                                 <option key={doctor.id} value={doctor.id}>
-                                  {doctor.fullname} - {doctor.specialties?.join(', ') || 'General'}
+                                  {doctor.fullname} - {doctor.specialties?.join(', ') || 'General'} 
+                                  {doctor.totalWorkload > 0 ? ` (${doctor.totalWorkload} patients)` : ' (Available)'}
                                 </option>
                               ))
                             }
@@ -786,7 +1072,7 @@ const TriageQueue = () => {
                   <div className="flex space-x-4 text-sm">
                     <span className={`flex items-center ${sectionCompletion.vitals ? 'text-green-600' : 'text-gray-500'}`}>
                       <CheckCircle className="h-4 w-4 mr-1" />
-                      Vitals
+                      Vitals (Optional)
                     </span>
                     <span className={`flex items-center ${sectionCompletion.complaint ? 'text-green-600' : 'text-gray-500'}`}>
                       <CheckCircle className="h-4 w-4 mr-1" />
@@ -795,6 +1081,10 @@ const TriageQueue = () => {
                     <span className={`flex items-center ${sectionCompletion.examination ? 'text-green-600' : 'text-gray-500'}`}>
                       <CheckCircle className="h-4 w-4 mr-1" />
                       Examination
+                    </span>
+                    <span className={`flex items-center ${sectionCompletion.nurseService ? 'text-green-600' : 'text-gray-500'}`}>
+                      <CheckCircle className="h-4 w-4 mr-1" />
+                      Nurse Service
                     </span>
                     <span className={`flex items-center ${sectionCompletion.assignment ? 'text-green-600' : 'text-gray-500'}`}>
                       <CheckCircle className="h-4 w-4 mr-1" />
@@ -815,13 +1105,13 @@ const TriageQueue = () => {
                   <button
                     type="submit"
                     className={`btn ${
-                      sectionCompletion.vitals && sectionCompletion.assignment 
+                      (sectionCompletion.assignment || sectionCompletion.nurseService) && !isSubmitting
                         ? 'btn-primary' 
                         : 'btn-disabled'
                     }`}
-                    disabled={!sectionCompletion.vitals || !sectionCompletion.assignment}
+                    disabled={(!sectionCompletion.assignment && !sectionCompletion.nurseService) || isSubmitting}
                   >
-                    Complete Assessment
+                    {isSubmitting ? 'Processing...' : 'Complete Triage'}
                   </button>
                 </div>
               </form>

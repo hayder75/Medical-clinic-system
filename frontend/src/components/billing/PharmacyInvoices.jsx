@@ -27,11 +27,16 @@ const PharmacyInvoices = () => {
   const fetchInvoices = async () => {
     try {
       setLoading(true);
+      console.log('🔍 Fetching pharmacy invoices...');
       const response = await api.get('/pharmacy-billing/invoices');
+      console.log('✅ API Response:', response.data);
+      console.log('📊 Invoices count:', response.data.invoices?.length || 0);
       setInvoices(response.data.invoices || []);
     } catch (error) {
+      console.error('❌ Error fetching invoices:', error);
+      console.error('❌ Error response:', error.response?.data);
+      console.error('❌ Error status:', error.response?.status);
       toast.error('Failed to fetch pharmacy invoices');
-      console.error('Error fetching invoices:', error);
     } finally {
       setLoading(false);
     }
@@ -115,8 +120,30 @@ const PharmacyInvoices = () => {
     }
   };
 
-  // Filter invoices based on status
-  const filteredInvoices = invoices.filter(invoice => invoice.status === statusFilter);
+  // Filter invoices based on status and sort by creation date (newest first)
+  const filteredInvoices = invoices
+    .filter(invoice => invoice.status === statusFilter)
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  
+  // Debug logging
+  console.log('🔍 All invoices:', invoices);
+  console.log('🔍 Filtered invoices:', filteredInvoices);
+  console.log('🔍 Status filter:', statusFilter);
+  
+  // Check for test patient invoices specifically
+  const testPatientInvoices = filteredInvoices.filter(invoice => 
+    invoice.patient?.name?.includes('Test Patient') || 
+    invoice.patientId?.includes('PAT-TEST')
+  );
+  console.log('🔍 Test patient invoices:', testPatientInvoices);
+  
+  // Check if invoices have the expected structure
+  if (filteredInvoices.length > 0) {
+    console.log('🔍 First invoice structure (newest):', filteredInvoices[0]);
+    console.log('🔍 First invoice totalAmount:', filteredInvoices[0].totalAmount);
+    console.log('🔍 First invoice pharmacyInvoiceItems:', filteredInvoices[0].pharmacyInvoiceItems);
+    console.log('🔍 First invoice patient:', filteredInvoices[0].patient?.name);
+  }
 
   if (loading) {
     return (
@@ -176,8 +203,8 @@ const PharmacyInvoices = () => {
                   <User className="h-5 w-5 text-primary-600" />
                 </div>
                 <div className="ml-3">
-                  <h3 className="font-medium text-gray-900">{invoice.patient.name}</h3>
-                  <p className="text-sm text-gray-500">ID: {invoice.patient.id}</p>
+                  <h3 className="font-medium text-gray-900">{invoice.patient?.name || 'Unknown Patient'}</h3>
+                  <p className="text-sm text-gray-500">ID: {invoice.patient?.id || 'N/A'}</p>
                 </div>
               </div>
               <div className="text-right">

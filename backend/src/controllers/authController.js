@@ -36,6 +36,13 @@ exports.login = async (req, res) => {
         password: 'doctor123',
         fullname: 'Dr. Smith',
         role: 'DOCTOR'
+      },
+      {
+        id: '4aed4032-47eb-4c74-8e8a-6e4c51315a85',
+        username: 'labtech',
+        password: 'labtech123',
+        fullname: 'Lab Technician',
+        role: 'LAB_TECHNICIAN'
       }
     ];
 

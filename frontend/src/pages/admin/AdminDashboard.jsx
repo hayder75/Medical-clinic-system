@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate } from 'react-router-dom';
-import Layout from '../../components/common/Layout';
 import StaffManagement from '../../components/admin/StaffManagement';
 import ServiceCatalog from '../../components/admin/ServiceCatalog';
 import AuditLogs from '../../components/admin/AuditLogs';
 import Reports from '../../components/admin/Reports';
 import InsuranceManagement from '../../components/admin/InsuranceManagement';
+import ContinuousInfusionDashboard from '../../components/admin/ContinuousInfusionDashboard';
 import { 
   Users, 
   Stethoscope, 
@@ -15,7 +15,8 @@ import {
   Calendar,
   TrendingUp,
   AlertTriangle,
-  CheckCircle
+  CheckCircle,
+  Clock
 } from 'lucide-react';
 
 const AdminDashboard = () => {
@@ -240,16 +241,15 @@ const AdminDashboard = () => {
   );
 
   return (
-    <Layout title="Admin Dashboard" subtitle="System overview and management">
-      <Routes>
-        <Route path="/" element={<DashboardOverview />} />
-        <Route path="/staff" element={<StaffManagement />} />
-        <Route path="/services" element={<ServiceCatalog />} />
-        <Route path="/insurances" element={<InsuranceManagement />} />
-        <Route path="/audit" element={<AuditLogs />} />
-        <Route path="/reports" element={<Reports />} />
-      </Routes>
-    </Layout>
+    <Routes>
+      <Route path="/" element={<DashboardOverview />} />
+      <Route path="/staff" element={<StaffManagement />} />
+      <Route path="/services" element={<ServiceCatalog />} />
+      <Route path="/insurances" element={<InsuranceManagement />} />
+      <Route path="/audit" element={<AuditLogs />} />
+      <Route path="/reports" element={<Reports />} />
+      <Route path="/continuous-infusions" element={<ContinuousInfusionDashboard />} />
+    </Routes>
   );
 };
 

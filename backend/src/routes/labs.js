@@ -1,24 +1,24 @@
 const express = require('express');
-const labController = require('../controllers/labController');
-const fileUpload = require('../middleware/fileUpload');
-
 const router = express.Router();
+const labController = require('../controllers/labController');
+const authMiddleware = require('../middleware/auth');
+const roleGuard = require('../middleware/roleGuard');
 
-router.get('/orders', labController.getOrders);
-router.post('/orders/:orderId/result', labController.fillResult);
-router.post('/orders/:orderId/test', labController.testResult);
-router.post('/orders/:orderId/attachment', fileUpload.single('file'), labController.uploadAttachment);
-router.get('/investigation-types', labController.getInvestigationTypes);
+// Get lab templates
+router.get('/templates', authMiddleware, roleGuard(['LAB_TECHNICIAN', 'ADMIN']), labController.getTemplates);
 
-// New per-test result routes
-router.post('/results', labController.createLabResult);
-router.post('/results/:resultId/file', fileUpload.single('file'), labController.uploadLabResultFile);
-router.get('/orders/:orderId/results', labController.getLabResults);
+// Get detailed lab results for a specific order (must come before /orders)
+router.get('/orders/:orderId/detailed-results', authMiddleware, roleGuard(['DOCTOR', 'LAB_TECHNICIAN', 'ADMIN']), labController.getDetailedResults);
 
-// New detailed lab form routes
-router.get('/templates', labController.getLabTemplates);
-router.get('/templates/:templateId', labController.getLabTemplate);
-router.post('/results/detailed', labController.submitDetailedResults);
-router.get('/orders/:labOrderId/detailed-results', labController.getDetailedResults);
+// Get lab orders (batch orders)
+router.get('/orders', authMiddleware, roleGuard(['LAB_TECHNICIAN', 'ADMIN']), labController.getOrders);
+
+// Save individual lab result
+router.post('/results/individual', authMiddleware, roleGuard(['LAB_TECHNICIAN', 'ADMIN']), labController.saveIndividualLabResult);
+
+// Send lab results to doctor
+router.post('/orders/:labOrderId/send-to-doctor', authMiddleware, roleGuard(['LAB_TECHNICIAN', 'ADMIN']), labController.sendToDoctor);
 
 module.exports = router;
+
+

@@ -35,6 +35,11 @@ model User {
   dentalRecords DentalRecord[]
   dentalPhotos  DentalPhoto[]
   attachedImages PatientAttachedImage[]
+  medicalCertificates MedicalCertificate[]
+  diagnosisNotes DiagnosisNotes[]
+  medicalHistories MedicalHistory[] @relation("DoctorHistory")
+  nurseAssignments NurseServiceAssignment[] @relation("NurseAssignments")
+  nurseAssignmentsBy NurseServiceAssignment[] @relation("NurseAssignmentsBy")
 
   @@index([role])
   @@index([availability])
@@ -57,6 +62,7 @@ model Service {
   investigationTypes  InvestigationType[]
   inventoryItems      Inventory[]
   batchOrderServices  BatchOrderService[]
+  nurseServiceAssignments NurseServiceAssignment[]
 }
 
 model Insurance {
@@ -114,7 +120,7 @@ model Patient {
   bills           Billing[]
   payments        BillPayment[]
   dispenseLogs    DispenseLog[]
-  history         MedicalHistory[]
+  history         MedicalHistory[] @relation("PatientHistory")
   appointments    Appointment[]
   files           File[]
   dentalRecords   DentalRecord[]
@@ -122,6 +128,9 @@ model Patient {
   attachedImages  PatientAttachedImage[]
   visits          Visit[]
   pharmacyInvoices PharmacyInvoice[]
+  virtualQueues   VirtualQueue[]
+  medicalCertificates MedicalCertificate[]
+  diagnosisNotes  DiagnosisNotes[]
 
   @@index([status])
   @@index([type])
@@ -154,6 +163,10 @@ model Visit {
   dentalRecords   DentalRecord[]
   dentalPhotos    DentalPhoto[]
   attachedImages  PatientAttachedImage[]
+  medicalCertificates MedicalCertificate[]
+  diagnosisNotes  DiagnosisNotes[]
+  medicalHistories MedicalHistory[] @relation("VisitHistory")
+  nurseServiceAssignments NurseServiceAssignment[]
   completedAt    DateTime?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
@@ -161,6 +174,29 @@ model Visit {
   @@index([status])
   @@index([patientId])
   @@index([assignmentId])
+  @@index([createdAt])
+}
+
+model NurseServiceAssignment {
+  id            Int       @id @default(autoincrement())
+  visitId       Int
+  visit         Visit     @relation(fields: [visitId], references: [id])
+  serviceId     String
+  service       Service   @relation(fields: [serviceId], references: [id])
+  assignedNurseId String
+  assignedNurse User      @relation("NurseAssignments", fields: [assignedNurseId], references: [id])
+  assignedById  String    // Nurse who assigned this service
+  assignedBy    User      @relation("NurseAssignmentsBy", fields: [assignedById], references: [id])
+  status        NurseServiceStatus @default(PENDING)
+  notes         String?
+  orderType     String?   @default("TRIAGE_ORDERED") // TRIAGE_ORDERED or DOCTOR_ORDERED
+  completedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([visitId])
+  @@index([assignedNurseId])
+  @@index([status])
   @@index([createdAt])
 }
 
@@ -225,6 +261,7 @@ model Appointment {
   status        AppointmentStatus @default(PENDING)
   duration      String?  // e.g., "30 minutes"
   notes         String?
+  medicalHistories MedicalHistory[] @relation("AppointmentHistory")
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }
@@ -338,7 +375,7 @@ model MedicationOrder {
   genericName   String?
   dosageForm    String
   strength      String
-  quantity      Int
+  quantity      String
   frequency     String?
   duration      String?
   instructions  String?
@@ -415,10 +452,39 @@ model RadiologyOrder {
 model MedicalHistory {
   id            Int      @id @default(autoincrement())
   patientId     String
-  patient       Patient  @relation(fields: [patientId], references: [id])
-  details       String   // JSON for vitals, diagnosis, orders, results, meds
+  patient       Patient  @relation("PatientHistory", fields: [patientId], references: [id])
+  visitId       Int?     // Reference to the visit this history belongs to
+  visit         Visit?   @relation("VisitHistory", fields: [visitId], references: [id])
+  doctorId      String?  // Doctor who completed the visit
+  doctor        User?    @relation("DoctorHistory", fields: [doctorId], references: [id])
+  
+  // Visit Information
+  visitUid      String?  // Visit unique identifier
+  visitDate     DateTime? // When the visit occurred
+  completedDate DateTime? // When the visit was completed
+  
+  // Comprehensive Visit Data
+  details       String   // JSON for vitals, diagnosis, orders, results, meds, images, etc.
+  
+  // Diagnosis & Notes
+  diagnosis     String?
+  diagnosisDetails String?
+  instructions  String?
+  finalNotes    String?
+  
+  // Additional Information
+  needsAppointment Boolean @default(false)
+  appointmentId    Int?
+  appointment      Appointment? @relation("AppointmentHistory", fields: [appointmentId], references: [id])
+  
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+  
+  @@index([patientId])
+  @@index([visitId])
+  @@index([doctorId])
+  @@index([visitDate])
+  @@index([completedDate])
 }
 
 model File {
@@ -707,6 +773,8 @@ enum ServiceCategory {
   RADIOLOGY
   MEDICATION
   PROCEDURE
+  NURSE
+  CONTINUOUS_INFUSION
   OTHER
 }
 
@@ -752,6 +820,16 @@ enum VisitStatus {
   AWAITING_RESULTS_REVIEW
   DIRECT_COMPLETE
   SENT_TO_PHARMACY
+  WAITING_FOR_NURSE_SERVICE
+  NURSE_SERVICES_ORDERED
+  NURSE_SERVICES_COMPLETED
+  COMPLETED
+  CANCELLED
+}
+
+enum NurseServiceStatus {
+  PENDING
+  IN_PROGRESS
   COMPLETED
   CANCELLED
 }
@@ -946,4 +1024,109 @@ model PatientAttachedImage {
   @@index([visitId])
   @@index([patientId])
   @@index([doctorId])
+}
+
+// Pre-Registration Virtual Queue System
+model VirtualQueue {
+  id          String   @id @default(uuid())
+  name        String
+  phone       String
+  patientId   String?  // If existing patient
+  patient     Patient? @relation(fields: [patientId], references: [id])
+  status      VirtualQueueStatus @default(PENDING)
+  priority    Int      @default(3) // 1=urgent, 2=priority, 3=normal
+  notes       String?  // Additional notes from receptionist
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  processedAt DateTime?
+  processedBy String?  // Billing officer who processed it
+  
+  @@index([status])
+  @@index([priority])
+  @@index([createdAt])
+  @@index([patientId])
+}
+
+enum VirtualQueueStatus {
+  PENDING     // Waiting to be processed
+  PROCESSING  // Currently being registered
+  COMPLETED   // Successfully registered
+  CANCELLED   // Cancelled by patient/staff
+}
+
+// Medical Certificate System
+model MedicalCertificate {
+  id            String   @id @default(uuid())
+  certificateNo String   @unique // MC-20250113-001 format
+  patientId     String
+  patient       Patient  @relation(fields: [patientId], references: [id])
+  doctorId      String
+  doctor        User     @relation(fields: [doctorId], references: [id])
+  visitId       Int?     // Optional - link to specific visit
+  visit         Visit?   @relation(fields: [visitId], references: [id])
+  
+  // Certificate Details
+  certificateDate DateTime @default(now())
+  restStartDate   DateTime
+  restEndDate     DateTime
+  totalDays       Int
+  
+  // Medical Information
+  diagnosis       String
+  treatment       String?
+  recommendations String?
+  
+  // Status
+  status          CertificateStatus @default(ACTIVE)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@index([patientId])
+  @@index([doctorId])
+  @@index([certificateDate])
+  @@index([status])
+}
+
+enum CertificateStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+model DiagnosisNotes {
+  id                      String   @id @default(uuid())
+  
+  // Relations
+  visitId                 Int
+  patientId               String
+  doctorId                String
+  
+  // Diagnosis & Notes Fields
+  chiefComplaint          String?
+  historyOfPresentIllness String?
+  pastMedicalHistory      String?
+  allergicHistory         String?
+  physicalExamination     String?
+  investigationFindings   String?
+  assessmentAndDiagnosis   String?
+  treatmentPlan           String?
+  treatmentGiven          String?
+  medicationIssued        String?
+  additional              String?
+  prognosis               String?
+  
+  // Metadata
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+  updatedBy               String?
+  
+  // Relations
+  visit                   Visit    @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  patient                 Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor                  User     @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  
+  @@index([visitId])
+  @@index([patientId])
+  @@index([doctorId])
+  @@index([createdAt])
 }

@@ -26,6 +26,13 @@ const EnhancedPrescription = ({ visitId, patientId, onPrescriptionSubmit, onCanc
   });
   const [categories, setCategories] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showContinuousInfusion, setShowContinuousInfusion] = useState(false);
+  const [continuousInfusion, setContinuousInfusion] = useState({
+    isContinuousInfusion: false,
+    continuousInfusionDays: 1,
+    dailyDose: '',
+    frequency: 'Every 24 hours'
+  });
 
   useEffect(() => {
     fetchCategories();
@@ -86,7 +93,10 @@ const EnhancedPrescription = ({ visitId, patientId, onPrescriptionSubmit, onCanc
       type: medication.type,
       unitPrice: medication.unitPrice,
       availableQuantity: medication.availableQuantity,
-      isFromCatalog: true
+      isFromCatalog: true,
+      isContinuousInfusion: continuousInfusion.isContinuousInfusion,
+      continuousInfusionDays: continuousInfusion.continuousInfusionDays,
+      dailyDose: continuousInfusion.dailyDose
     };
 
     setSelectedMedications([...selectedMedications, newMedication]);
@@ -116,7 +126,10 @@ const EnhancedPrescription = ({ visitId, patientId, onPrescriptionSubmit, onCanc
       category: customMedication.category,
       type: customMedication.type,
       unitPrice: parseFloat(customMedication.unitPrice) || 0,
-      isFromCatalog: false
+      isFromCatalog: false,
+      isContinuousInfusion: continuousInfusion.isContinuousInfusion,
+      continuousInfusionDays: continuousInfusion.continuousInfusionDays,
+      dailyDose: continuousInfusion.dailyDose
     };
 
     setSelectedMedications([...selectedMedications, newMedication]);
@@ -180,7 +193,10 @@ const EnhancedPrescription = ({ visitId, patientId, onPrescriptionSubmit, onCanc
           additionalNotes: med.additionalNotes,
           category: med.category,
           type: med.type,
-          unitPrice: parseFloat(med.unitPrice)
+          unitPrice: parseFloat(med.unitPrice),
+          isContinuousInfusion: med.isContinuousInfusion || false,
+          continuousInfusionDays: med.continuousInfusionDays || 1,
+          dailyDose: med.dailyDose || ''
         }))
       };
 
@@ -463,6 +479,113 @@ const EnhancedPrescription = ({ visitId, patientId, onPrescriptionSubmit, onCanc
         )}
       </div>
 
+      {/* Continuous Infusion Section */}
+      <div className="card">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+            <Clock className="h-5 w-5 mr-2" />
+            Continuous Infusion
+          </h3>
+          <button
+            type="button"
+            onClick={() => setShowContinuousInfusion(!showContinuousInfusion)}
+            className="btn btn-outline btn-sm"
+          >
+            {showContinuousInfusion ? 'Hide' : 'Configure'}
+          </button>
+        </div>
+
+        {showContinuousInfusion && (
+          <div className="space-y-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <div className="flex items-center space-x-4">
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={continuousInfusion.isContinuousInfusion}
+                  onChange={(e) => setContinuousInfusion({
+                    ...continuousInfusion,
+                    isContinuousInfusion: e.target.checked
+                  })}
+                  className="mr-2"
+                />
+                <span className="text-sm font-medium text-gray-700">
+                  This medication requires continuous infusion
+                </span>
+              </label>
+            </div>
+
+            {continuousInfusion.isContinuousInfusion && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Duration (Days)
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="30"
+                    className="input"
+                    value={continuousInfusion.continuousInfusionDays}
+                    onChange={(e) => setContinuousInfusion({
+                      ...continuousInfusion,
+                      continuousInfusionDays: parseInt(e.target.value) || 1
+                    })}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Daily Dose
+                  </label>
+                  <input
+                    type="text"
+                    className="input"
+                    placeholder="e.g., 5ml over 24h"
+                    value={continuousInfusion.dailyDose}
+                    onChange={(e) => setContinuousInfusion({
+                      ...continuousInfusion,
+                      dailyDose: e.target.value
+                    })}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Frequency
+                  </label>
+                  <select
+                    className="input"
+                    value={continuousInfusion.frequency}
+                    onChange={(e) => setContinuousInfusion({
+                      ...continuousInfusion,
+                      frequency: e.target.value
+                    })}
+                  >
+                    <option value="Every 24 hours">Every 24 hours</option>
+                    <option value="Every 12 hours">Every 12 hours</option>
+                    <option value="Every 8 hours">Every 8 hours</option>
+                    <option value="Every 6 hours">Every 6 hours</option>
+                    <option value="Continuous">Continuous</option>
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {continuousInfusion.isContinuousInfusion && (
+              <div className="mt-4 p-3 bg-blue-100 rounded-lg">
+                <div className="text-sm text-blue-800">
+                  <strong>Infusion Schedule:</strong> {continuousInfusion.continuousInfusionDays} day(s) 
+                  of {continuousInfusion.dailyDose || 'daily dose'} - {continuousInfusion.frequency}
+                </div>
+                <div className="text-xs text-blue-600 mt-1">
+                  This will create nurse administration tasks for each day of the infusion period.
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* Selected Medications */}
       {selectedMedications.length > 0 && (
         <div className="card">
@@ -492,6 +615,12 @@ const EnhancedPrescription = ({ visitId, patientId, onPrescriptionSubmit, onCanc
                             Custom
                           </span>
                         )}
+                        {medication.isContinuousInfusion && (
+                          <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded flex items-center">
+                            <Clock className="h-3 w-3 mr-1" />
+                            Infusion
+                          </span>
+                        )}
                         {StatusIcon && (
                           <StatusIcon className={`h-4 w-4 ${stockStatus.color}`} />
                         )}
@@ -503,6 +632,16 @@ const EnhancedPrescription = ({ visitId, patientId, onPrescriptionSubmit, onCanc
                         {medication.dosageForm} {medication.strength}
                         {medication.unitPrice > 0 && ` • $${medication.unitPrice}`}
                       </div>
+                      {medication.isContinuousInfusion && (
+                        <div className="mt-2 p-2 bg-purple-50 rounded border border-purple-200">
+                          <div className="text-xs font-medium text-purple-800">
+                            Continuous Infusion: {medication.continuousInfusionDays} day(s)
+                          </div>
+                          <div className="text-xs text-purple-600">
+                            Daily Dose: {medication.dailyDose || 'Not specified'}
+                          </div>
+                        </div>
+                      )}
                     </div>
                     <button
                       type="button"

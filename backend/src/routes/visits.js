@@ -5,6 +5,7 @@ const router = express.Router();
 
 // Visit management routes
 router.post('/', visitController.createVisit);
+router.put('/:visitId', visitController.updateVisit);
 router.get('/uid/:visitUid', visitController.getVisitByUid);
 router.post('/complete', visitController.completeVisit);
 router.get('/patient/:patientId', visitController.getPatientVisits);

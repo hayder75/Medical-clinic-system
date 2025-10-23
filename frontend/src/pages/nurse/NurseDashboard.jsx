@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route } from 'react-router-dom';
-import Layout from '../../components/common/Layout';
 import TriageQueue from '../../components/nurse/TriageQueue';
 import DailyTasks from '../../components/nurse/DailyTasks';
 import DoctorAssignment from '../../components/nurse/DoctorAssignment';
@@ -194,15 +193,13 @@ const NurseDashboard = () => {
   );
 
   return (
-    <Layout title="Nurse Dashboard" subtitle="Patient triage and daily tasks">
-      <Routes>
-        <Route path="/" element={<DashboardOverview />} />
-        <Route path="/queue" element={<TriageQueue />} />
-        <Route path="/tasks" element={<DailyTasks />} />
-        <Route path="/assign" element={<DoctorAssignment />} />
-        <Route path="/continuous-vitals" element={<ContinuousVitals />} />
-      </Routes>
-    </Layout>
+    <Routes>
+      <Route path="/" element={<DashboardOverview />} />
+      <Route path="/queue" element={<TriageQueue />} />
+      <Route path="/tasks" element={<DailyTasks />} />
+      <Route path="/assign" element={<DoctorAssignment />} />
+      <Route path="/continuous-vitals" element={<ContinuousVitals />} />
+    </Routes>
   );
 };
 

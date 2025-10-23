@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import Layout from './components/common/Layout';
 
 // Import pages
 import LoginPage from './pages/LoginPage';
@@ -9,10 +10,13 @@ import AdminDashboard from './pages/admin/AdminDashboard';
 import PatientRegistration from './pages/patient/PatientRegistration';
 import NurseDashboard from './pages/nurse/NurseDashboard';
 import DoctorDashboard from './pages/doctor/DoctorDashboard';
+import PatientConsultationPage from './pages/doctor/PatientConsultationPage';
 import BillingDashboard from './pages/billing/BillingDashboard';
 import PharmacyBillingDashboard from './pages/billing/PharmacyBillingDashboard';
-import LabDashboard from './pages/lab/LabDashboard';
+import DoctorQueueManagement from './pages/billing/DoctorQueueManagement';
 import RadiologyDashboard from './pages/radiology/RadiologyDashboard';
+import LabDashboard from './pages/lab/LabDashboard';
+import LabOrders from './pages/lab/LabOrders';
 import PharmacyDashboard from './pages/pharmacy/PharmacyDashboard';
 import AppointmentsPage from './pages/appointments/AppointmentsPage';
 
@@ -57,7 +61,7 @@ const AppRoutes = () => {
       case 'ADMIN':
         return '/admin';
       case 'DOCTOR':
-        return '/doctor';
+        return '/doctor/dashboard';
       case 'NURSE':
         return '/nurse';
       case 'BILLING_OFFICER':
@@ -68,8 +72,6 @@ const AppRoutes = () => {
         return '/pharmacy';
       case 'LAB_TECHNICIAN':
         return '/lab';
-      case 'RADIOLOGIST':
-        return '/radiology';
       default:
         return '/login';
     }
@@ -86,7 +88,9 @@ const AppRoutes = () => {
           path="/admin/*" 
           element={
             <ProtectedRoute allowedRoles={['ADMIN']}>
-              <AdminDashboard />
+              <Layout title="Admin Dashboard" subtitle="System overview and management">
+                <AdminDashboard />
+              </Layout>
             </ProtectedRoute>
           } 
         />
@@ -104,7 +108,29 @@ const AppRoutes = () => {
           path="/nurse/*" 
           element={
             <ProtectedRoute allowedRoles={['NURSE']}>
-              <NurseDashboard />
+              <Layout title="Nurse Dashboard" subtitle="Patient triage and daily tasks">
+                <NurseDashboard />
+              </Layout>
+            </ProtectedRoute>
+          } 
+        />
+        
+        <Route 
+          path="/doctor/dashboard" 
+          element={
+            <ProtectedRoute allowedRoles={['DOCTOR']}>
+              <Layout title="Doctor Dashboard" subtitle="Patient consultation and medical orders">
+                <DoctorDashboard />
+              </Layout>
+            </ProtectedRoute>
+          } 
+        />
+        
+        <Route 
+          path="/doctor/consultation/:visitId" 
+          element={
+            <ProtectedRoute allowedRoles={['DOCTOR']}>
+              <PatientConsultationPage />
             </ProtectedRoute>
           } 
         />
@@ -113,7 +139,9 @@ const AppRoutes = () => {
           path="/doctor/*" 
           element={
             <ProtectedRoute allowedRoles={['DOCTOR']}>
-              <DoctorDashboard />
+              <Layout title="Doctor Dashboard" subtitle="Patient consultation and medical orders">
+                <DoctorDashboard />
+              </Layout>
             </ProtectedRoute>
           } 
         />
@@ -122,7 +150,20 @@ const AppRoutes = () => {
           path="/billing/*" 
           element={
             <ProtectedRoute allowedRoles={['BILLING_OFFICER']}>
-              <BillingDashboard />
+              <Layout title="Billing Dashboard" subtitle="Payment processing and financial management">
+                <BillingDashboard />
+              </Layout>
+            </ProtectedRoute>
+          } 
+        />
+        
+        <Route 
+          path="/doctor-queue" 
+          element={
+            <ProtectedRoute allowedRoles={['BILLING_OFFICER', 'RECEPTIONIST', 'ADMIN']}>
+              <Layout title="Doctor Queue Management" subtitle="Real-time doctor availability and patient guidance">
+                <DoctorQueueManagement />
+              </Layout>
             </ProtectedRoute>
           } 
         />
@@ -131,25 +172,43 @@ const AppRoutes = () => {
           path="/pharmacy-billing/*" 
           element={
             <ProtectedRoute allowedRoles={['PHARMACY_BILLING_OFFICER', 'PHARMACIST']}>
-              <PharmacyBillingDashboard />
+              <Layout title="Pharmacy Billing Dashboard" subtitle="Pharmacy payment processing and medication dispensing">
+                <PharmacyBillingDashboard />
+              </Layout>
             </ProtectedRoute>
           } 
         />
         
-        <Route 
-          path="/lab/*" 
-          element={
-            <ProtectedRoute allowedRoles={['LAB_TECHNICIAN']}>
-              <LabDashboard />
-            </ProtectedRoute>
-          } 
-        />
         
         <Route 
           path="/radiology/*" 
           element={
             <ProtectedRoute allowedRoles={['RADIOLOGIST']}>
-              <RadiologyDashboard />
+              <Layout title="Radiology Dashboard" subtitle="Radiology scan processing and image management">
+                <RadiologyDashboard />
+              </Layout>
+            </ProtectedRoute>
+          } 
+        />
+        
+        <Route 
+          path="/lab" 
+          element={
+            <ProtectedRoute allowedRoles={['LAB_TECHNICIAN']}>
+              <Layout title="Lab Dashboard" subtitle="Laboratory test processing and result management">
+                <LabDashboard />
+              </Layout>
+            </ProtectedRoute>
+          } 
+        />
+        
+        <Route 
+          path="/lab/orders" 
+          element={
+            <ProtectedRoute allowedRoles={['LAB_TECHNICIAN']}>
+              <Layout title="Lab Orders" subtitle="View and manage laboratory test orders">
+                <LabOrders />
+              </Layout>
             </ProtectedRoute>
           } 
         />
@@ -158,7 +217,9 @@ const AppRoutes = () => {
           path="/pharmacy/*" 
           element={
             <ProtectedRoute allowedRoles={['PHARMACIST']}>
-              <PharmacyDashboard />
+              <Layout title="Pharmacy Dashboard" subtitle="Medication dispensing and inventory management">
+                <PharmacyDashboard />
+              </Layout>
             </ProtectedRoute>
           } 
         />
@@ -167,7 +228,9 @@ const AppRoutes = () => {
           path="/appointments/*" 
           element={
             <ProtectedRoute allowedRoles={['ADMIN', 'DOCTOR']}>
-              <AppointmentsPage />
+              <Layout title="Appointments" subtitle="Schedule and manage patient appointments">
+                <AppointmentsPage />
+              </Layout>
             </ProtectedRoute>
           } 
         />

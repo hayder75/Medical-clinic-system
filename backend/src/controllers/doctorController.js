@@ -2,6 +2,33 @@ const prisma = require('../config/database');
 const { z } = require('zod');
 const { checkMedicationOrderingAllowed } = require('../utils/investigationUtils');
 
+// Get all services (for doctors to order)
+exports.getAllServices = async (req, res) => {
+  try {
+    const { category, isActive } = req.query;
+    
+    let whereClause = {};
+    if (category) {
+      whereClause.category = category;
+    }
+    if (isActive !== undefined) {
+      whereClause.isActive = isActive === 'true';
+    } else {
+      whereClause.isActive = true; // Default to active services only
+    }
+
+    const services = await prisma.service.findMany({
+      where: whereClause,
+      orderBy: { name: 'asc' }
+    });
+
+    res.json({ services });
+  } catch (error) {
+    console.error('Error fetching services:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
 // Validation schemas
 const labOrderSchema = z.object({
   visitId: z.number(),
@@ -41,7 +68,7 @@ const medicationOrderSchema = z.object({
   name: z.string(),
   dosageForm: z.string(),
   strength: z.string(),
-  quantity: z.number(),
+  quantity: z.string(), // Changed to string to accept any input
   frequency: z.string(),
   duration: z.string(),
   instructions: z.string(),
@@ -64,7 +91,7 @@ const updateVisitSchema = z.object({
 
 const completeVisitSchema = z.object({
   visitId: z.number(),
-  diagnosis: z.string(),
+  diagnosis: z.string().optional(), // Will be extracted from diagnosis notes
   diagnosisDetails: z.string().optional(), // Rich text diagnosis details
   instructions: z.string().optional(), // Patient instructions
   finalNotes: z.string().optional(),
@@ -100,7 +127,7 @@ exports.getQueue = async (req, res) => {
     const queue = await prisma.visit.findMany({
       where: { 
         status: {
-          in: ['WAITING_FOR_DOCTOR', 'UNDER_DOCTOR_REVIEW']
+          in: ['WAITING_FOR_DOCTOR', 'UNDER_DOCTOR_REVIEW', 'NURSE_SERVICES_COMPLETED']
         },
         assignmentId: {
           not: null
@@ -168,7 +195,11 @@ exports.getQueue = async (req, res) => {
             attachments: true
           }
         },
-        medicationOrders: true,
+        medicationOrders: {
+          include: {
+            continuousInfusion: true
+          }
+        },
         bills: {
           include: {
             services: {
@@ -255,7 +286,11 @@ exports.getResultsQueue = async (req, res) => {
             attachments: true
           }
         },
-        medicationOrders: true,
+        medicationOrders: {
+          include: {
+            continuousInfusion: true
+          }
+        },
         bills: {
           include: {
             services: {
@@ -317,20 +352,54 @@ exports.getResultsQueue = async (req, res) => {
         }
         
         if (batchOrder.type === 'LAB') {
-          // Get lab results from batch order - use the batch order result and services
-          labResults.push({
-            id: `batch-${batchOrder.id}`,
-            testType: { name: 'Lab Tests' },
-            resultText: batchOrder.result || 'No result provided',
-            additionalNotes: batchOrder.additionalNotes || '',
-            status: batchOrder.status,
-            attachments: batchOrder.attachments || [],
-            createdAt: batchOrder.updatedAt || batchOrder.createdAt,
-            services: batchOrder.services.map(service => ({
-              name: service.investigationType?.name || service.service?.name || 'Test',
-              result: service.result || 'No result'
-            }))
+          // Get detailed lab results from DetailedLabResult table
+          const detailedLabResults = await prisma.detailedLabResult.findMany({
+            where: {
+              labOrderId: batchOrder.id
+            },
+            include: {
+              template: true
+            },
+            orderBy: { createdAt: 'desc' }
           });
+
+          // Convert detailed lab results to the expected format
+          const detailedResults = detailedLabResults.map(result => ({
+            id: result.id,
+            testType: {
+              name: result.template.name,
+              category: result.template.category
+            },
+            resultText: `Detailed results for ${result.template.name}`,
+            detailedResults: result.results, // Include the actual detailed results
+            additionalNotes: result.additionalNotes || '',
+            status: result.status,
+            attachments: [], // Detailed lab results don't have separate attachments
+            createdAt: result.createdAt,
+            verifiedBy: result.verifiedBy,
+            verifiedAt: result.verifiedAt,
+            template: result.template
+          }));
+
+          // Add detailed results to labResults
+          labResults.push(...detailedResults);
+
+          // If no detailed results, fall back to batch order result
+          if (detailedResults.length === 0) {
+            labResults.push({
+              id: `batch-${batchOrder.id}`,
+              testType: { name: 'Lab Tests' },
+              resultText: batchOrder.result || 'No result provided',
+              additionalNotes: batchOrder.additionalNotes || '',
+              status: batchOrder.status,
+              attachments: batchOrder.attachments || [],
+              createdAt: batchOrder.updatedAt || batchOrder.createdAt,
+              services: batchOrder.services.map(service => ({
+                name: service.investigationType?.name || service.service?.name || 'Test',
+                result: service.result || 'No result'
+              }))
+            });
+          }
         }
         
         return {
@@ -375,6 +444,199 @@ exports.getResultsQueue = async (req, res) => {
   }
 };
 
+// Get all doctors' queue status for load balancing
+exports.getDoctorsQueueStatus = async (req, res) => {
+  try {
+    const doctors = await prisma.user.findMany({
+      where: { 
+        role: 'DOCTOR',
+        availability: true 
+      },
+      select: {
+        id: true,
+        fullname: true,
+        specialties: true,
+        consultationFee: true
+      }
+    });
+
+    const doctorsWithQueueCount = await Promise.all(
+      doctors.map(async (doctor) => {
+        // Get assignment IDs for this doctor
+        const assignments = await prisma.assignment.findMany({
+          where: {
+            doctorId: doctor.id
+          },
+          select: {
+            id: true,
+            status: true
+          }
+        });
+
+        const assignmentIds = assignments.map(a => a.id);
+        const pendingAssignments = assignments.filter(a => a.status === 'Pending').length;
+
+        // Count all active visits for this doctor (excluding completed and cancelled)
+        const activeVisits = await prisma.visit.count({
+          where: {
+            assignmentId: {
+              in: assignmentIds
+            },
+            status: {
+              notIn: ['COMPLETED', 'CANCELLED']
+            }
+          }
+        });
+
+        // Count visits in progress for this doctor
+        const inProgressVisits = await prisma.visit.count({
+          where: {
+            assignmentId: {
+              in: assignmentIds
+            },
+            status: 'UNDER_DOCTOR_REVIEW'
+          }
+        });
+
+        // Count visits awaiting results for this doctor
+        const awaitingResultsCount = await prisma.visit.count({
+          where: {
+            assignmentId: {
+              in: assignmentIds
+            },
+            status: 'AWAITING_RESULTS_REVIEW'
+          }
+        });
+
+        // Count visits waiting for doctor (new patients)
+        const waitingForDoctor = await prisma.visit.count({
+          where: {
+            assignmentId: {
+              in: assignmentIds
+            },
+            status: {
+              in: ['WAITING_FOR_DOCTOR', 'IN_DOCTOR_QUEUE', 'NURSE_SERVICES_COMPLETED']
+            }
+          }
+        });
+
+        return {
+          ...doctor,
+          queueCount: waitingForDoctor + inProgressVisits,
+          newPatientsCount: waitingForDoctor,
+          resultsCount: awaitingResultsCount,
+          totalWorkload: activeVisits
+        };
+      })
+    );
+
+    // Sort by workload (ascending - least busy first)
+    doctorsWithQueueCount.sort((a, b) => a.totalWorkload - b.totalWorkload);
+
+    res.json({
+      doctors: doctorsWithQueueCount,
+      totalPatients: doctorsWithQueueCount.reduce((sum, doc) => sum + doc.totalWorkload, 0),
+      averageWorkload: doctorsWithQueueCount.length > 0 
+        ? Math.round(doctorsWithQueueCount.reduce((sum, doc) => sum + doc.totalWorkload, 0) / doctorsWithQueueCount.length)
+        : 0
+    });
+  } catch (error) {
+    console.error('Error fetching doctors queue status:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Get patient assignments and doctor information
+exports.getPatientAssignments = async (req, res) => {
+  try {
+    const { search } = req.query;
+    
+    let whereClause = {};
+    if (search) {
+      whereClause = {
+        OR: [
+          { name: { contains: search, mode: 'insensitive' } },
+          { id: { contains: search, mode: 'insensitive' } }
+        ]
+      };
+    }
+
+    const patients = await prisma.patient.findMany({
+      where: whereClause,
+      select: {
+        id: true,
+        name: true,
+        mobile: true,
+        email: true,
+        dob: true,
+        gender: true,
+        assignments: {
+          select: {
+            id: true,
+            status: true,
+            doctor: {
+              select: {
+                id: true,
+                fullname: true,
+                specialties: true
+              }
+            }
+          }
+        },
+        visits: {
+          where: {
+            status: {
+              notIn: ['COMPLETED', 'CANCELLED']
+            }
+          },
+          select: {
+            id: true,
+            visitUid: true,
+            status: true,
+            date: true,
+            assignmentId: true
+          },
+          orderBy: {
+            createdAt: 'desc'
+          },
+          take: 1
+        }
+      },
+      take: 20 // Limit results for performance
+    });
+
+    // Format the response
+    const formattedPatients = patients.map(patient => {
+      const activeAssignment = patient.assignments.find(a => 
+        a.status === 'Pending' || a.status === 'In Progress'
+      );
+      
+      // Find the current visit (most recent active visit)
+      const currentVisit = patient.visits.length > 0 ? patient.visits[0] : null;
+      
+      return {
+        id: patient.id,
+        name: patient.name,
+        phone: patient.mobile,
+        email: patient.email,
+        dateOfBirth: patient.dob,
+        gender: patient.gender,
+        assignedDoctor: activeAssignment?.doctor || null,
+        currentVisit: currentVisit,
+        assignmentStatus: activeAssignment?.status || 'Unassigned'
+      };
+    });
+
+    res.json({
+      patients: formattedPatients,
+      total: formattedPatients.length
+    });
+  } catch (error) {
+    console.error('Error fetching patient assignments:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
 // Unified Queue - combines patient queue and results queue with priority system
 exports.getUnifiedQueue = async (req, res) => {
   try {
@@ -382,7 +644,7 @@ exports.getUnifiedQueue = async (req, res) => {
     console.log('🔍 getUnifiedQueue - Doctor ID:', doctorId);
     
     // Get doctor assignments
-    const doctorAssignments = await prisma.doctorAssignment.findMany({
+    const doctorAssignments = await prisma.assignment.findMany({
       where: { doctorId: doctorId },
       select: { id: true }
     });
@@ -390,13 +652,14 @@ exports.getUnifiedQueue = async (req, res) => {
     const assignmentIds = doctorAssignments.map(a => a.id);
     
     // Get all visits assigned to this doctor (both new consultations and results)
+    // EXCLUDE patients sent to lab/radiology - they should be removed from queue until results are back
     const allVisits = await prisma.visit.findMany({
       where: { 
         status: {
-          in: ['WAITING_FOR_DOCTOR', 'UNDER_DOCTOR_REVIEW', 'AWAITING_RESULTS_REVIEW']
+          in: ['WAITING_FOR_DOCTOR', 'UNDER_DOCTOR_REVIEW', 'NURSE_SERVICES_COMPLETED', 'AWAITING_RESULTS_REVIEW']
         },
         OR: [
-          { assignmentId: { not: null } },
+          { assignmentId: { in: assignmentIds } },
           { batchOrders: { some: { doctorId: doctorId } } }
         ]
       },
@@ -412,10 +675,6 @@ exports.getUnifiedQueue = async (req, res) => {
             gender: true,
             bloodType: true
           } 
-        },
-        assignments: {
-          where: { doctorId: doctorId },
-          include: { doctor: true }
         },
         vitals: {
           orderBy: { createdAt: 'desc' },
@@ -454,7 +713,11 @@ exports.getUnifiedQueue = async (req, res) => {
             attachments: true
           }
         },
-        medicationOrders: true,
+        medicationOrders: {
+          include: {
+            continuousInfusion: true
+          }
+        },
         bills: {
           include: {
             services: {
@@ -465,18 +728,30 @@ exports.getUnifiedQueue = async (req, res) => {
             payments: true
           }
         },
-        dentalRecords: true
+        dentalRecords: true,
+        nurseServiceAssignments: {
+          where: {
+            status: 'COMPLETED'
+          },
+          include: {
+            service: true,
+            assignedNurse: {
+              select: {
+                id: true,
+                fullname: true
+              }
+            }
+          },
+          orderBy: {
+            completedAt: 'desc'
+          }
+        }
       },
       orderBy: { createdAt: 'asc' }
     });
 
-    // Filter to only include visits assigned to this specific doctor
-    const filteredVisits = allVisits.filter(visit => {
-      const hasAssignment = visit.assignments.some(assignment => 
-        assignmentIds.includes(assignment.id)
-      );
-      return hasAssignment;
-    });
+    // All visits are already filtered by assignmentId and batchOrders in the query
+    const filteredVisits = allVisits;
 
     // Add priority and queue type to each visit
     const unifiedQueue = filteredVisits.map(visit => {
@@ -489,6 +764,10 @@ exports.getUnifiedQueue = async (req, res) => {
         priority = 2;
         queueType = 'RESULTS_READY';
         priorityReason = 'Results ready for review';
+      } else if (['SENT_TO_LAB', 'SENT_TO_RADIOLOGY', 'SENT_TO_BOTH'].includes(visit.status)) {
+        priority = 3;
+        queueType = 'AWAITING_RESULTS';
+        priorityReason = 'Awaiting lab/radiology results';
       }
 
       // Check for urgent cases (high triage priority)
@@ -528,7 +807,8 @@ exports.getUnifiedQueue = async (req, res) => {
     console.log('🔍 Queue breakdown:', {
       urgent: unifiedQueue.filter(v => v.priority === 1).length,
       results: unifiedQueue.filter(v => v.priority === 2).length,
-      new: unifiedQueue.filter(v => v.priority === 3).length
+      new: unifiedQueue.filter(v => v.priority === 3 && v.queueType === 'NEW_CONSULTATION').length,
+      awaiting: unifiedQueue.filter(v => v.priority === 3 && v.queueType === 'AWAITING_RESULTS').length
     });
 
     res.json({
@@ -538,7 +818,8 @@ exports.getUnifiedQueue = async (req, res) => {
         total: unifiedQueue.length,
         urgent: unifiedQueue.filter(v => v.priority === 1).length,
         results: unifiedQueue.filter(v => v.priority === 2).length,
-        new: unifiedQueue.filter(v => v.priority === 3).length
+        new: unifiedQueue.filter(v => v.priority === 3 && v.queueType === 'NEW_CONSULTATION').length,
+        awaiting: unifiedQueue.filter(v => v.priority === 3 && v.queueType === 'AWAITING_RESULTS').length
       }
     });
 
@@ -549,6 +830,198 @@ exports.getUnifiedQueue = async (req, res) => {
       error: 'Failed to fetch unified queue',
       details: error.message
     });
+  }
+};
+
+// Get single visit details for consultation page
+exports.getVisitDetails = async (req, res) => {
+  try {
+    const { visitId } = req.params;
+    const doctorId = req.user.id;
+    
+    const visit = await prisma.visit.findUnique({
+      where: { id: parseInt(visitId) },
+      include: {
+        patient: { 
+          select: { 
+            id: true, 
+            name: true, 
+            type: true,
+            mobile: true,
+            email: true,
+            dob: true,
+            gender: true,
+            bloodType: true
+          } 
+        },
+        vitals: {
+          orderBy: { createdAt: 'desc' }
+        },
+        labOrders: {
+          include: {
+            type: true,
+            labResults: {
+              include: {
+                testType: true,
+                attachments: true
+              }
+            }
+          }
+        },
+        radiologyOrders: {
+          include: {
+            type: true,
+            radiologyResults: {
+              include: {
+                testType: true,
+                attachments: true
+              }
+            }
+          }
+        },
+        batchOrders: {
+          include: {
+            services: {
+              include: {
+                service: true,
+                investigationType: true
+              }
+            },
+            attachments: true,
+            detailedResults: {
+              include: {
+                template: true
+              }
+            }
+          }
+        },
+        medicationOrders: {
+          include: {
+            continuousInfusion: true
+          }
+        },
+        bills: {
+          include: {
+            services: {
+              include: {
+                service: true
+              }
+            },
+            payments: true
+          }
+        },
+        dentalRecords: true,
+        dentalPhotos: true,
+        attachedImages: true,
+        nurseServiceAssignments: {
+          include: {
+            service: true,
+            assignedNurse: {
+              select: {
+                id: true,
+                fullname: true,
+                username: true
+              }
+            },
+            assignedBy: {
+              select: {
+                id: true,
+                fullname: true,
+                username: true
+              }
+            }
+          }
+        }
+      }
+    });
+    
+    if (!visit) {
+      return res.status(404).json({ error: 'Visit not found' });
+    }
+    
+    // Check if doctor has access to this visit
+    const assignment = await prisma.assignment.findFirst({
+      where: { 
+        patientId: visit.patientId,
+        doctorId: doctorId
+      }
+    });
+    
+    const hasBatchOrder = visit.batchOrders.some(order => order.doctorId === doctorId);
+    
+    if (!assignment && !hasBatchOrder) {
+      return res.status(403).json({ error: 'Access denied to this visit' });
+    }
+    
+    // Fetch detailed lab results for batch orders
+    const labBatchOrderIds = visit.batchOrders
+      .filter(bo => bo.type === 'LAB')
+      .map(bo => bo.id);
+    
+    if (labBatchOrderIds.length > 0) {
+      const detailedLabResults = await prisma.detailedLabResult.findMany({
+        where: {
+          labOrderId: {
+            in: labBatchOrderIds
+          }
+        },
+        include: {
+          template: true
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+
+      // Attach detailed lab results to batch orders
+      visit.batchOrders.forEach(batchOrder => {
+        if (batchOrder.type === 'LAB') {
+          batchOrder.detailedLabResults = detailedLabResults.filter(
+            result => result.labOrderId === batchOrder.id
+          );
+        }
+      });
+    }
+    
+    // Fetch radiology results for batch orders
+    const radiologyBatchOrderIds = visit.batchOrders
+      .filter(bo => bo.type === 'RADIOLOGY')
+      .map(bo => bo.id);
+    
+    if (radiologyBatchOrderIds.length > 0) {
+      const radiologyResults = await prisma.radiologyResult.findMany({
+        where: {
+          batchOrderId: {
+            in: radiologyBatchOrderIds
+          }
+        },
+        include: {
+          testType: true,
+          attachments: true
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+
+      // Attach radiology results to batch orders
+      visit.batchOrders.forEach(batchOrder => {
+        if (batchOrder.type === 'RADIOLOGY') {
+          batchOrder.radiologyResults = radiologyResults.filter(
+            result => result.batchOrderId === batchOrder.id
+          );
+        }
+      });
+    }
+    
+    // Process attached images to return relative paths
+    if (visit.attachedImages) {
+      visit.attachedImages = visit.attachedImages.map(image => ({
+        ...image,
+        filePath: image.filePath.replace(/^.*\/uploads\//, 'uploads/')
+      }));
+    }
+    
+    res.json(visit);
+  } catch (error) {
+    console.error('Error fetching visit details:', error);
+    res.status(500).json({ error: error.message });
   }
 };
 
@@ -585,7 +1058,11 @@ exports.selectVisit = async (req, res) => {
             }
           }
         },
-        medicationOrders: true,
+        medicationOrders: {
+          include: {
+            continuousInfusion: true
+          }
+        },
         bills: {
           include: {
             services: {
@@ -685,7 +1162,11 @@ exports.updateVisit = async (req, res) => {
         vitals: true,
         labOrders: true,
         radiologyOrders: true,
-        medicationOrders: true,
+        medicationOrders: {
+          include: {
+            continuousInfusion: true
+          }
+        },
         bills: {
           include: {
             services: {
@@ -1552,7 +2033,11 @@ exports.createMultipleRadiologyOrders = async (req, res) => {
 
 exports.createMedicationOrder = async (req, res) => {
   try {
+    console.log('🔍 Medication Order Request Body:', JSON.stringify(req.body, null, 2));
+    
     const data = medicationOrderSchema.parse(req.body);
+    console.log('✅ Parsed medication order data:', JSON.stringify(data, null, 2));
+    
     const doctorId = req.user.id;
 
     // Check if visit exists and is under doctor review
@@ -1568,9 +2053,9 @@ exports.createMedicationOrder = async (req, res) => {
       return res.status(404).json({ error: 'Visit not found' });
     }
 
-    // Allow orders to be created if visit is waiting for doctor, under doctor review, or sent to lab
-    if (!['WAITING_FOR_DOCTOR', 'UNDER_DOCTOR_REVIEW', 'SENT_TO_LAB', 'SENT_TO_RADIOLOGY', 'SENT_TO_BOTH'].includes(visit.status)) {
-      return res.status(400).json({ error: 'Visit must be waiting for doctor, under doctor review, or sent to lab/radiology to create orders' });
+    // Allow orders to be created if visit is waiting for doctor, under doctor review, sent to lab, or awaiting results review
+    if (!['WAITING_FOR_DOCTOR', 'UNDER_DOCTOR_REVIEW', 'SENT_TO_LAB', 'SENT_TO_RADIOLOGY', 'SENT_TO_BOTH', 'AWAITING_RESULTS_REVIEW'].includes(visit.status)) {
+      return res.status(400).json({ error: 'Visit must be waiting for doctor, under doctor review, sent to lab/radiology, or awaiting results review to create orders' });
     }
 
     // Check if medication ordering is allowed based on investigation completion
@@ -1609,6 +2094,56 @@ exports.createMedicationOrder = async (req, res) => {
       }
     });
 
+    // Update inventory if medication is from catalog
+    // Try to find the medication in the catalog and update its quantity
+    try {
+      const medicationCatalog = await prisma.medicationCatalog.findFirst({
+        where: {
+          name: {
+            contains: data.name,
+            mode: 'insensitive'
+          },
+          strength: data.strength,
+          dosageForm: data.dosageForm
+        }
+      });
+
+      if (medicationCatalog) {
+        // Parse quantity to number for inventory update
+        const orderedQuantity = parseInt(data.quantity) || 0;
+        
+        if (orderedQuantity > 0 && medicationCatalog.availableQuantity >= orderedQuantity) {
+          // Update inventory
+          await prisma.medicationCatalog.update({
+            where: { id: medicationCatalog.id },
+            data: {
+              availableQuantity: {
+                decrement: orderedQuantity
+              }
+            }
+          });
+
+          // Link the order to the catalog and set the price
+          await prisma.medicationOrder.update({
+            where: { id: order.id },
+            data: {
+              medicationCatalogId: medicationCatalog.id,
+              unitPrice: medicationCatalog.unitPrice
+            }
+          });
+
+          console.log(`Updated inventory for ${data.name}: -${orderedQuantity} units`);
+        } else {
+          console.warn(`Insufficient inventory for ${data.name}. Available: ${medicationCatalog.availableQuantity}, Ordered: ${orderedQuantity}`);
+        }
+      } else {
+        console.log(`Medication ${data.name} not found in catalog - custom medication`);
+      }
+    } catch (inventoryError) {
+      console.warn('Failed to update inventory:', inventoryError.message);
+      // Don't fail the order if inventory update fails
+    }
+
     // If it's a continuous infusion, create the infusion record and nurse tasks
     if (data.isContinuousInfusion && data.continuousInfusionDays && data.dailyDose) {
       const startDate = new Date();
@@ -1646,58 +2181,292 @@ exports.createMedicationOrder = async (req, res) => {
       });
     }
 
-    // Find medication service
-    const medicationService = await prisma.service.findFirst({
-      where: {
-        name: { contains: data.name, mode: 'insensitive' },
-        category: 'MEDICATION'
-      }
-    });
-
-    if (!medicationService) {
-      return res.status(404).json({ error: 'Medication service not found. Please add this medication to the service catalog first.' });
-    }
-
-    // Create pharmacy invoice for medications
-    const servicePrice = medicationService.price * data.quantity;
-
+    // Create pharmacy invoice for medications (without service catalog requirement)
+    // Medications are handled differently - they don't need to be in service catalog
     const pharmacyInvoice = await prisma.pharmacyInvoice.create({
         data: {
           patientId: data.patientId,
           visitId: data.visitId,
-          totalAmount: servicePrice,
+          totalAmount: 0, // Will be calculated by pharmacy when dispensing
           status: 'PENDING',
-        notes: data.isContinuousInfusion ? 'Continuous infusion medication billing' : 'Medication order billing'
+          notes: data.isContinuousInfusion ? 'Continuous infusion medication billing' : 'Medication order billing'
+        }
+    });
+
+    // Create pharmacy invoice item for the medication
+    // Fetch the updated order to get the correct unitPrice
+    const updatedOrder = await prisma.medicationOrder.findUnique({
+      where: { id: order.id }
+    });
+    
+    // Set default price for custom medications (not in catalog)
+    const unitPrice = updatedOrder.unitPrice || (updatedOrder.medicationCatalogId ? 0 : 5.0); // Default 5 ETB for custom medications
+    const quantity = parseInt(order.quantity) || 1;
+    const totalPrice = unitPrice * quantity;
+    
+    const pharmacyInvoiceItem = await prisma.pharmacyInvoiceItem.create({
+      data: {
+        pharmacyInvoiceId: pharmacyInvoice.id,
+        medicationOrderId: order.id,
+        medicationCatalogId: updatedOrder.medicationCatalogId,
+        name: order.name,
+        dosageForm: order.dosageForm,
+        strength: order.strength,
+        quantity: quantity,
+        unitPrice: unitPrice,
+        totalPrice: totalPrice
+      }
+    });
+
+    // Update pharmacy invoice total amount
+    await prisma.pharmacyInvoice.update({
+      where: { id: pharmacyInvoice.id },
+      data: { 
+        totalAmount: totalPrice,
+        notes: `${pharmacyInvoiceItem.name} - ${pharmacyInvoiceItem.quantity} ${pharmacyInvoiceItem.dosageForm}`
       }
     });
 
     // For continuous infusion, create daily billing services
     if (data.isContinuousInfusion && data.continuousInfusionDays && data.dailyDose) {
-      for (let i = 0; i < data.continuousInfusionDays; i++) {
-        await prisma.billingService.create({
-          data: {
-            billingId: pharmacyInvoice.id,
-            serviceId: medicationService.id,
-            quantity: 1,
-            unitPrice: medicationService.price,
-            totalPrice: medicationService.price
-          }
-        });
-      }
+      // Note: Continuous infusion billing is handled by the pharmacy when dispensing
+      // The daily administration tasks are created above for nurse tracking
+      console.log(`Continuous infusion created for ${data.continuousInfusionDays} days`);
     }
+
+    // Update visit status to SENT_TO_PHARMACY after medication order
+    await prisma.visit.update({
+      where: { id: data.visitId },
+      data: { status: 'SENT_TO_PHARMACY' }
+    });
 
     res.json({
       message: 'Medication order created successfully',
       order,
       pharmacyInvoice: {
         id: pharmacyInvoice.id,
-        totalAmount: pharmacyInvoice.totalAmount
+        totalAmount: totalPrice
       }
     });
   } catch (error) {
+    console.error('❌ Error creating medication order:', error);
+    
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: 'Validation error', details: error.errors });
+      console.error('❌ Validation errors:', error.errors);
+      return res.status(400).json({ 
+        error: 'Validation error', 
+        details: error.errors ? error.errors.map(err => ({
+          field: err.path.join('.'),
+          message: err.message
+        })) : error.issues ? error.issues.map(err => ({
+          field: err.path.join('.'),
+          message: err.message
+        })) : [{ field: 'unknown', message: 'Validation error' }]
+      });
     }
+    
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Check if medication ordering is allowed for a visit
+exports.checkMedicationOrdering = async (req, res) => {
+  try {
+    const { visitId } = req.params;
+    const doctorId = req.user.id;
+    
+    // Import the utility function
+    const { checkMedicationOrderingAllowed } = require('../utils/investigationUtils');
+    
+    const result = await checkMedicationOrderingAllowed(parseInt(visitId));
+    
+    res.json(result);
+  } catch (error) {
+    console.error('Error checking medication ordering:', error);
+    res.status(500).json({ 
+      allowed: false,
+      reason: 'Error checking medication ordering status',
+      error: error.message 
+    });
+  }
+};
+
+// Create doctor service order (for custom services like Booth Cleaning, Special Treatments, etc.)
+exports.createDoctorServiceOrder = async (req, res) => {
+  try {
+    console.log('🔍 Doctor Service Order Request Body:', JSON.stringify(req.body, null, 2));
+    
+    const { visitId, patientId, serviceIds, assignedNurseId, instructions } = req.body;
+    const doctorId = req.user.id;
+
+    // Validate required fields
+    if (!visitId || !patientId || !serviceIds || !Array.isArray(serviceIds) || serviceIds.length === 0) {
+      return res.status(400).json({ error: 'Missing required fields: visitId, patientId, serviceIds' });
+    }
+
+    // Check if visit exists and is under doctor review
+    const visit = await prisma.visit.findUnique({
+      where: { id: visitId },
+      include: { patient: true }
+    });
+
+    if (!visit) {
+      return res.status(404).json({ error: 'Visit not found' });
+    }
+
+    // Allow orders to be created if visit is waiting for doctor, under doctor review, awaiting results review, or sent to radiology
+    if (!['WAITING_FOR_DOCTOR', 'UNDER_DOCTOR_REVIEW', 'AWAITING_RESULTS_REVIEW', 'SENT_TO_RADIOLOGY'].includes(visit.status)) {
+      return res.status(400).json({ error: 'Visit must be waiting for doctor, under doctor review, awaiting results review, or sent to radiology to create service orders' });
+    }
+
+    // Check if consultation fee has been paid
+    const consultationBilling = await prisma.billing.findFirst({
+      where: {
+        visitId: visitId,
+        services: {
+          some: {
+            service: {
+              code: 'CONS001' // Consultation service code
+            }
+          }
+        }
+      },
+      include: {
+        payments: true
+      }
+    });
+
+    if (!consultationBilling || consultationBilling.status !== 'PAID') {
+      return res.status(400).json({ error: 'Consultation fee must be paid before ordering services' });
+    }
+
+    // Check if all services exist and are nurse services (or other services that can be handled by nurses)
+    const services = await prisma.service.findMany({
+      where: { 
+        id: { in: serviceIds },
+        category: { in: ['NURSE', 'PROCEDURE', 'OTHER'] }, // Allow nurse, procedure, and other services
+        isActive: true
+      }
+    });
+
+    if (services.length !== serviceIds.length) {
+      return res.status(404).json({ error: 'One or more services not found or not available nurse services' });
+    }
+
+    // Check if assigned nurse exists and is available
+    const assignedNurse = await prisma.user.findUnique({
+      where: { id: assignedNurseId, role: 'NURSE', availability: true }
+    });
+
+    if (!assignedNurse) {
+      return res.status(404).json({ error: 'Nurse not found or not available' });
+    }
+
+    // Use transaction to ensure atomicity
+    const result = await prisma.$transaction(async (tx) => {
+      // Create doctor service assignments for each service
+      const doctorServiceAssignments = [];
+      for (const serviceId of serviceIds) {
+        const assignment = await tx.nurseServiceAssignment.create({
+          data: {
+            visitId,
+            serviceId,
+            assignedNurseId,
+            assignedById: 'nurse-123', // Use a default nurse ID for doctor orders
+            status: 'PENDING',
+            notes: instructions || `Doctor ordered: ${services.find(s => s.id === serviceId)?.name}`,
+            orderType: 'DOCTOR_ORDERED' // New field to distinguish from triage-ordered services
+          },
+          include: {
+            service: true,
+            assignedNurse: {
+              select: {
+                id: true,
+                fullname: true,
+                username: true
+              }
+            },
+            assignedBy: {
+              select: {
+                id: true,
+                fullname: true,
+                username: true
+              }
+            }
+          }
+        });
+        doctorServiceAssignments.push(assignment);
+      }
+
+      // DON'T update visit status - keep patient in doctor's queue
+      // The visit status will only change when nurse completes the services
+      // This allows doctor to continue ordering lab/radiology tests
+
+      // Calculate total amount for all services
+      const totalAmount = services.reduce((sum, service) => sum + service.price, 0);
+
+      // Create single billing entry for all services
+      const billing = await tx.billing.create({
+        data: {
+          patientId,
+          visitId,
+          totalAmount,
+          status: 'PENDING',
+          notes: `Doctor ordered services: ${services.map(s => s.name).join(', ')}`
+        }
+      });
+
+      // Add all services to the single billing entry
+      for (const service of services) {
+        await tx.billingService.create({
+          data: {
+            billingId: billing.id,
+            serviceId: service.id,
+            quantity: 1,
+            unitPrice: service.price,
+            totalPrice: service.price
+          }
+        });
+      }
+
+      return { doctorServiceAssignments, billing };
+    });
+
+    // Create audit log
+    await prisma.auditLog.create({
+      data: {
+        userId: null, // Temporarily set to null to avoid constraint issue
+        action: 'CREATE_DOCTOR_SERVICE_ORDER',
+        entity: 'NurseServiceAssignment',
+        entityId: result.doctorServiceAssignments[0]?.id || 0, // Use first assignment ID
+        details: JSON.stringify({
+          visitId,
+          patientId,
+          serviceIds,
+          assignedNurseId,
+          instructions,
+          orderType: 'DOCTOR_ORDERED',
+          totalAmount: result.billing.totalAmount,
+          doctorId: doctorId // Include doctor ID in details instead
+        }),
+        ip: req.ip,
+        userAgent: req.get('User-Agent')
+      }
+    });
+
+    res.json({
+      message: `${serviceIds.length} service(s) ordered successfully`,
+      assignments: result.doctorServiceAssignments,
+      billing: {
+        id: result.billing.id,
+        totalAmount: result.billing.totalAmount,
+        status: result.billing.status
+      },
+      visitStatus: visit.status // Keep current status, don't change it
+    });
+
+  } catch (error) {
+    console.error('Error creating doctor service order:', error);
     res.status(500).json({ error: error.message });
   }
 };
@@ -1793,6 +2562,29 @@ exports.getPatientHistory = async (req, res) => {
             }
           },
           orderBy: { createdAt: 'desc' }
+        },
+        dentalRecords: true,
+        dentalPhotos: true,
+        attachedImages: true,
+        diagnosisNotes: true,
+        nurseServiceAssignments: {
+          include: {
+            service: true,
+            assignedNurse: {
+              select: {
+                id: true,
+                fullname: true,
+                username: true
+              }
+            },
+            assignedBy: {
+              select: {
+                id: true,
+                fullname: true,
+                username: true
+              }
+            }
+          }
         }
       },
       orderBy: { createdAt: 'desc' }
@@ -1905,6 +2697,8 @@ exports.completeVisit = async (req, res) => {
     const { visitId, diagnosis, diagnosisDetails, instructions, finalNotes, needsAppointment, appointmentDate, appointmentTime, appointmentNotes } = completeVisitSchema.parse(req.body);
     const doctorId = req.user.id;
 
+    console.log('🔍 Completing visit:', visitId, 'by doctor:', doctorId);
+
     // Check if visit exists and is under doctor review
     const visit = await prisma.visit.findUnique({
       where: { id: visitId },
@@ -1913,7 +2707,50 @@ exports.completeVisit = async (req, res) => {
         vitals: true,
         labOrders: true,
         radiologyOrders: true,
-        medicationOrders: true,
+        medicationOrders: {
+          include: {
+            continuousInfusion: true
+          }
+        },
+        batchOrders: {
+          include: {
+            detailedResults: {
+              include: {
+                template: true
+              }
+            },
+            attachments: true,
+            services: {
+              include: {
+                service: true,
+                investigationType: true
+              }
+            }
+          }
+        },
+        dentalRecords: true,
+        dentalPhotos: true,
+        attachedImages: true,
+        diagnosisNotes: true,
+        nurseServiceAssignments: {
+          include: {
+            service: true,
+            assignedNurse: {
+              select: {
+                id: true,
+                fullname: true,
+                username: true
+              }
+            },
+            assignedBy: {
+              select: {
+                id: true,
+                fullname: true,
+                username: true
+              }
+            }
+          }
+        },
         bills: {
           include: {
             services: {
@@ -1930,34 +2767,135 @@ exports.completeVisit = async (req, res) => {
       return res.status(404).json({ error: 'Visit not found' });
     }
 
-    if (!['UNDER_DOCTOR_REVIEW', 'SENT_TO_PHARMACY'].includes(visit.status)) {
-      return res.status(400).json({ error: 'Visit must be under doctor review or sent to pharmacy to complete' });
+    if (!['UNDER_DOCTOR_REVIEW', 'SENT_TO_PHARMACY', 'AWAITING_RESULTS_REVIEW'].includes(visit.status)) {
+      return res.status(400).json({ error: 'Visit must be under doctor review, sent to pharmacy, or awaiting results review to complete' });
     }
 
-    // Create medical history snapshot
+    // Fetch detailed lab and radiology results
+    const detailedLabResults = await prisma.detailedLabResult.findMany({
+      where: {
+        labOrder: {
+          visitId: visitId
+        }
+      },
+      include: {
+        labOrder: true,
+        template: true
+      }
+    });
+
+    const radiologyResults = await prisma.radiologyResult.findMany({
+      where: {
+        batchOrder: {
+          visitId: visitId
+        }
+      },
+      include: {
+        batchOrder: true
+      }
+    });
+
+    // Extract diagnosis information from diagnosis notes if available
+    let extractedDiagnosis = diagnosis;
+    let extractedDiagnosisDetails = diagnosisDetails;
+    let extractedInstructions = instructions;
+    let extractedFinalNotes = finalNotes;
+
+    if (visit.diagnosisNotes.length > 0) {
+      const notes = visit.diagnosisNotes[0];
+      // Extract primary diagnosis from assessment and diagnosis field
+      if (notes.assessmentAndDiagnosis && notes.assessmentAndDiagnosis.trim()) {
+        extractedDiagnosis = notes.assessmentAndDiagnosis;
+      }
+      // Extract diagnosis details from investigation findings and assessment
+      if (notes.investigationFindings && notes.investigationFindings.trim()) {
+        extractedDiagnosisDetails = notes.investigationFindings;
+      }
+      // Extract instructions from treatment plan and medication issued
+      if (notes.treatmentPlan && notes.treatmentPlan.trim()) {
+        extractedInstructions = notes.treatmentPlan;
+      }
+      // Extract final notes from prognosis and additional fields
+      if (notes.prognosis && notes.prognosis.trim()) {
+        extractedFinalNotes = notes.prognosis;
+      }
+    }
+
+    // Create comprehensive medical history snapshot
     const medicalHistoryData = {
       visitId: visit.id,
       visitUid: visit.visitUid,
       patientId: visit.patientId,
-      diagnosis,
-      diagnosisDetails,
-      instructions,
-      finalNotes,
-      vitals: visit.vitals,
+      visitDate: visit.date,
+      completedDate: new Date(),
+      doctorId: doctorId,
+      
+      // Diagnosis & Notes (extracted from diagnosis notes)
+      diagnosis: extractedDiagnosis,
+      diagnosisDetails: extractedDiagnosisDetails,
+      instructions: extractedInstructions,
+      finalNotes: extractedFinalNotes,
+      
+      // Vitals
+      vitals: visit.vitals.map(vital => ({
+        id: vital.id,
+        temperature: vital.temperature,
+        bloodPressure: vital.bloodPressure,
+        heartRate: vital.heartRate,
+        respiratoryRate: vital.respiratoryRate,
+        oxygenSaturation: vital.oxygenSaturation,
+        weight: vital.weight,
+        height: vital.height,
+        bmi: vital.bmi,
+        recordedAt: vital.recordedAt,
+        recordedBy: vital.recordedBy
+      })),
+      
+      // Lab Orders & Results
       labOrders: visit.labOrders.map(order => ({
         id: order.id,
         type: order.type,
         result: order.result,
         status: order.status,
-        attachments: order.attachments
+        attachments: order.attachments,
+        createdAt: order.createdAt
       })),
+      
+      // Detailed Lab Results
+      detailedLabResults: detailedLabResults.map(result => ({
+        id: result.id,
+        testName: result.testName,
+        value: result.value,
+        unit: result.unit,
+        referenceRange: result.referenceRange,
+        status: result.status,
+        notes: result.notes,
+        attachments: result.attachments,
+        createdAt: result.createdAt
+      })),
+      
+      // Radiology Orders & Results
       radiologyOrders: visit.radiologyOrders.map(order => ({
         id: order.id,
         type: order.type,
         result: order.result,
         status: order.status,
-        attachments: order.attachments
+        attachments: order.attachments,
+        createdAt: order.createdAt
       })),
+      
+      // Radiology Results
+      radiologyResults: radiologyResults.map(result => ({
+        id: result.id,
+        testName: result.testName,
+        findings: result.findings,
+        impression: result.impression,
+        recommendations: result.recommendations,
+        attachments: result.attachments,
+        createdAt: result.createdAt
+      })),
+      
+      // Medication Orders
       medicationOrders: visit.medicationOrders.map(order => ({
         id: order.id,
         name: order.name,
@@ -1967,14 +2905,92 @@ exports.completeVisit = async (req, res) => {
         frequency: order.frequency,
         duration: order.duration,
         instructions: order.instructions,
-        status: order.status
+        additionalNotes: order.additionalNotes,
+        status: order.status,
+        createdAt: order.createdAt
       })),
+      
+      // Dental Records
+      dentalRecords: visit.dentalRecords.map(record => ({
+        id: record.id,
+        toothChart: record.toothChart,
+        painFlags: record.painFlags,
+        gumCondition: record.gumCondition,
+        oralHygiene: record.oralHygiene,
+        notes: record.notes,
+        createdAt: record.createdAt
+      })),
+      
+      // Dental Photos
+      dentalPhotos: visit.dentalPhotos.map(photo => ({
+        id: photo.id,
+        toothNumber: photo.toothNumber,
+        photoType: photo.photoType,
+        fileName: photo.fileName,
+        filePath: photo.filePath,
+        fileSize: photo.fileSize,
+        mimeType: photo.mimeType,
+        uploadedAt: photo.uploadedAt
+      })),
+      
+      // Patient Attached Images
+      attachedImages: visit.attachedImages.map(image => ({
+        id: image.id,
+        fileName: image.fileName,
+        filePath: image.filePath.replace(/^.*\/uploads\//, 'uploads/'),
+        fileSize: image.fileSize,
+        mimeType: image.mimeType,
+        uploadedAt: image.uploadedAt
+      })),
+      
+      // Diagnosis Notes
+      diagnosisNotes: visit.diagnosisNotes.length > 0 ? {
+        chiefComplaint: visit.diagnosisNotes[0].chiefComplaint,
+        historyOfPresentIllness: visit.diagnosisNotes[0].historyOfPresentIllness,
+        pastMedicalHistory: visit.diagnosisNotes[0].pastMedicalHistory,
+        allergicHistory: visit.diagnosisNotes[0].allergicHistory,
+        physicalExamination: visit.diagnosisNotes[0].physicalExamination,
+        investigationFindings: visit.diagnosisNotes[0].investigationFindings,
+        assessmentAndDiagnosis: visit.diagnosisNotes[0].assessmentAndDiagnosis,
+        treatmentPlan: visit.diagnosisNotes[0].treatmentPlan,
+        treatmentGiven: visit.diagnosisNotes[0].treatmentGiven,
+        medicationIssued: visit.diagnosisNotes[0].medicationIssued,
+        additional: visit.diagnosisNotes[0].additional,
+        prognosis: visit.diagnosisNotes[0].prognosis,
+        createdAt: visit.diagnosisNotes[0].createdAt
+      } : null,
+      
+      // Nurse Services
+      nurseServices: visit.nurseServiceAssignments.map(assignment => ({
+        id: assignment.id,
+        serviceName: assignment.service.name,
+        serviceCode: assignment.service.code,
+        servicePrice: assignment.service.price,
+        serviceDescription: assignment.service.description,
+        assignedNurse: assignment.assignedNurse.fullname,
+        assignedBy: assignment.assignedBy.fullname,
+        status: assignment.status,
+        notes: assignment.notes,
+        completedAt: assignment.completedAt,
+        createdAt: assignment.createdAt
+      })),
+      
+      // Bills & Payments
       bills: visit.bills.map(bill => ({
         id: bill.id,
         total: bill.total,
         status: bill.status,
-        payments: bill.payments
+        services: bill.services.map(service => ({
+          serviceName: service.service.name,
+          serviceCode: service.service.code,
+          quantity: service.quantity,
+          unitPrice: service.unitPrice,
+          totalPrice: service.totalPrice
+        })),
+        payments: bill.payments,
+        createdAt: bill.createdAt
       })),
+      
       completedAt: new Date(),
       completedBy: doctorId
     };
@@ -1991,7 +3007,7 @@ exports.completeVisit = async (req, res) => {
             date: new Date(appointmentDate),
             time: appointmentTime,
             type: 'FOLLOW_UP',
-            status: 'PENDING',
+            status: 'SCHEDULED',
             notes: appointmentNotes || 'Follow-up appointment'
           }
         });
@@ -2003,10 +3019,10 @@ exports.completeVisit = async (req, res) => {
         data: {
           status: 'COMPLETED',
           completedAt: new Date(),
-          diagnosis,
-          diagnosisDetails,
-          instructions,
-          notes: finalNotes ? `${visit.notes || ''}\n\nFinal Notes: ${finalNotes}` : visit.notes
+          diagnosis: extractedDiagnosis,
+          diagnosisDetails: extractedDiagnosisDetails,
+          instructions: extractedInstructions,
+          notes: extractedFinalNotes ? `${visit.notes || ''}\n\nFinal Notes: ${extractedFinalNotes}` : visit.notes
         }
       });
 
@@ -2022,11 +3038,22 @@ exports.completeVisit = async (req, res) => {
         };
       }
 
-      // Create medical history
+      // Create medical history with comprehensive data
       await tx.medicalHistory.create({
         data: {
           patientId: visit.patientId,
-          details: JSON.stringify(medicalHistoryData)
+          visitId: visit.id,
+          doctorId: doctorId,
+          visitUid: visit.visitUid,
+          visitDate: visit.date,
+          completedDate: new Date(),
+          details: JSON.stringify(medicalHistoryData),
+          diagnosis: extractedDiagnosis,
+          diagnosisDetails: extractedDiagnosisDetails,
+          instructions: extractedInstructions,
+          finalNotes: extractedFinalNotes,
+          needsAppointment: needsAppointment || false,
+          appointmentId: appointment ? appointment.id : null
         }
       });
 
@@ -2542,11 +3569,10 @@ exports.getPrescriptionHistory = async (req, res) => {
     const visit = await prisma.visit.findUnique({
       where: { id: parseInt(visitId) },
       include: {
-        assignments: {
-          where: {
-            doctorId: doctorId,
-            status: { in: ['Active', 'Pending'] }
-          }
+        patient: true,
+        vitals: {
+          orderBy: { createdAt: 'desc' },
+          take: 1
         }
       }
     });
@@ -2643,11 +3669,10 @@ exports.directCompleteVisit = async (req, res) => {
     const visit = await prisma.visit.findUnique({
       where: { id: parseInt(visitId) },
       include: {
-        assignments: {
-          where: {
-            doctorId: doctorId,
-            status: { in: ['Active', 'Pending'] }
-          }
+        patient: true,
+        vitals: {
+          orderBy: { createdAt: 'desc' },
+          take: 1
         }
       }
     });
@@ -2687,5 +3712,167 @@ exports.directCompleteVisit = async (req, res) => {
       error: 'Failed to complete visit',
       details: error.message
     });
+  }
+};
+
+// Save diagnosis notes for a visit
+exports.saveDiagnosisNotes = async (req, res) => {
+  try {
+    const { visitId } = req.params;
+    const { notes } = req.body;
+    const doctorId = req.user.id;
+
+    console.log('🔍 Saving diagnosis notes for visit:', visitId);
+    console.log('📝 Notes data:', Object.keys(notes).map(key => `${key}: ${(notes[key] || '').length} chars`));
+
+    // Sanitize notes data - convert null/undefined to empty strings
+    const sanitizedNotes = Object.keys(notes).reduce((acc, key) => {
+      acc[key] = notes[key] || '';
+      return acc;
+    }, {});
+
+    // Check if visit exists and doctor has access
+    const visit = await prisma.visit.findUnique({
+      where: { id: parseInt(visitId) },
+      include: {
+        patient: true
+      }
+    });
+
+    if (!visit) {
+      return res.status(404).json({ error: 'Visit not found' });
+    }
+
+    // Check if doctor has access to this visit
+    const assignment = await prisma.assignment.findFirst({
+      where: { 
+        patientId: visit.patientId,
+        doctorId: doctorId
+      }
+    });
+
+    const hasBatchOrder = await prisma.batchOrder.findFirst({
+      where: {
+        visitId: parseInt(visitId),
+        doctorId: doctorId
+      }
+    });
+
+    if (!assignment && !hasBatchOrder) {
+      return res.status(403).json({ error: 'Access denied to this visit' });
+    }
+
+    // Create or update diagnosis notes
+    const existingNotes = await prisma.diagnosisNotes.findFirst({
+      where: { visitId: parseInt(visitId) }
+    });
+
+    let diagnosisNotes;
+    if (existingNotes) {
+      // Update existing notes
+      diagnosisNotes = await prisma.diagnosisNotes.update({
+        where: { id: existingNotes.id },
+        data: {
+          ...sanitizedNotes,
+          updatedAt: new Date(),
+          updatedBy: doctorId
+        }
+      });
+    } else {
+      // Create new notes
+      diagnosisNotes = await prisma.diagnosisNotes.create({
+        data: {
+          visitId: parseInt(visitId),
+          patientId: visit.patientId,
+          doctorId: doctorId,
+          ...sanitizedNotes,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }
+      });
+    }
+
+    console.log('✅ Diagnosis notes saved successfully');
+
+    res.json({
+      message: 'Diagnosis notes saved successfully',
+      notes: diagnosisNotes
+    });
+  } catch (error) {
+    console.error('❌ Error saving diagnosis notes:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Get diagnosis notes for a visit
+exports.getDiagnosisNotes = async (req, res) => {
+  try {
+    const { visitId } = req.params;
+    const doctorId = req.user.id;
+
+    console.log('🔍 Getting diagnosis notes for visit:', visitId);
+
+    // Check if visit exists and doctor has access
+    const visit = await prisma.visit.findUnique({
+      where: { id: parseInt(visitId) }
+    });
+
+    if (!visit) {
+      return res.status(404).json({ error: 'Visit not found' });
+    }
+
+    // Check if doctor has access to this visit
+    const assignment = await prisma.assignment.findFirst({
+      where: { 
+        patientId: visit.patientId,
+        doctorId: doctorId
+      }
+    });
+
+    const hasBatchOrder = await prisma.batchOrder.findFirst({
+      where: {
+        visitId: parseInt(visitId),
+        doctorId: doctorId
+      }
+    });
+
+    if (!assignment && !hasBatchOrder) {
+      return res.status(403).json({ error: 'Access denied to this visit' });
+    }
+
+    // Get diagnosis notes
+    const diagnosisNotes = await prisma.diagnosisNotes.findFirst({
+      where: { visitId: parseInt(visitId) },
+      include: {
+        doctor: {
+          select: {
+            id: true,
+            fullname: true
+          }
+        }
+      }
+    });
+
+    console.log('✅ Diagnosis notes retrieved successfully');
+
+    res.json({
+      notes: diagnosisNotes || {
+        chiefComplaint: '',
+        historyOfPresentIllness: '',
+        pastMedicalHistory: '',
+        allergicHistory: '',
+        physicalExamination: '',
+        investigationFindings: '',
+        assessmentAndDiagnosis: '',
+        treatmentPlan: '',
+        treatmentGiven: '',
+        medicationIssued: '',
+        additional: '',
+        prognosis: ''
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error getting diagnosis notes:', error);
+    res.status(500).json({ error: error.message });
   }
 };

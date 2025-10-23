@@ -1,6 +1,53 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
+// Get medication catalog (all medications)
+exports.getMedicationCatalog = async (req, res) => {
+  try {
+    const { limit = 100, offset = 0 } = req.query;
+    
+    const medications = await prisma.medicationCatalog.findMany({
+      select: {
+        id: true,
+        name: true,
+        genericName: true,
+        dosageForm: true,
+        strength: true,
+        category: true,
+        unitPrice: true,
+        availableQuantity: true,
+        minimumStock: true,
+        manufacturer: true,
+        createdAt: true,
+        updatedAt: true
+      },
+      orderBy: [
+        { name: 'asc' },
+        { availableQuantity: 'desc' }
+      ],
+      take: parseInt(limit),
+      skip: parseInt(offset)
+    });
+
+    const total = await prisma.medicationCatalog.count();
+
+    res.json({
+      success: true,
+      medications,
+      total,
+      limit: parseInt(limit),
+      offset: parseInt(offset)
+    });
+  } catch (error) {
+    console.error('Error fetching medication catalog:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch medication catalog',
+      details: error.message
+    });
+  }
+};
+
 // Search medications in catalog
 exports.searchMedications = async (req, res) => {
   try {

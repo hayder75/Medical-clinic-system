@@ -19,7 +19,7 @@
   }
   
   .btn-primary {
-    background-color: #10367D;
+    background-color: #2e13d1;
     color: white;
     border: none;
   }
@@ -39,17 +39,17 @@
   }
   
   .btn-secondary:hover {
-    background-color: #10367D;
+    background-color: #2e13d1;
   }
   
   .btn-outline {
     background-color: transparent;
     color: #0C0E0B;
-    border: 2px solid #10367D;
+    border: 2px solid #2e13d1;
   }
   
   .btn-outline:hover {
-    background-color: #10367D;
+    background-color: #2e13d1;
     color: white;
   }
   
@@ -99,7 +99,7 @@
   .input {
     width: 100%;
     padding: 0.75rem;
-    border: 2px solid #10367D;
+    border: 2px solid #2e13d1;
     border-radius: 0.5rem;
     background-color: #FFFFFF;
     color: #0C0E0B;
@@ -132,10 +132,10 @@
     text-align: left;
     font-size: 0.75rem;
     font-weight: 500;
-    color: #10367D;
+    color: #2e13d1;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    border-bottom: 2px solid #10367D;
+    border-bottom: 2px solid #2e13d1;
   }
   
   .table td {

@@ -16,6 +16,9 @@ router.get('/services', adminController.getServices);
 router.put('/services/:id', adminController.updateService);
 router.delete('/services/:id', adminController.deleteService);
 
+// Nurse Management
+router.get('/nurses', adminController.getNurses);
+
 // Insurance Management
 router.post('/insurances', adminController.createInsurance);
 router.get('/insurances', adminController.getInsurances);

@@ -10,6 +10,7 @@ router.delete('/visit/:visitId', billingController.deleteVisit);
 router.get('/check-visit-status/:patientId', billingController.checkPatientVisitStatus);
 router.post('/', billingController.createBilling);
 router.get('/', billingController.getBillings);
+router.get('/dashboard-stats', billingController.getBillingDashboardStats);
 router.get('/insurances', billingController.getInsurances);
 router.post('/:billingId/services', billingController.addServiceToBilling);
 router.post('/payments', billingController.processPayment);

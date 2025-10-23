@@ -6,17 +6,20 @@ const auth = require('../middleware/auth');
 // Apply authentication middleware to all routes
 router.use(auth);
 
+// Get medication catalog
+router.get('/catalog', medicationController.getMedicationCatalog);
+
 // Search medications
 router.get('/search', medicationController.searchMedications);
-
-// Get medication by ID
-router.get('/:id', medicationController.getMedicationById);
 
 // Get low stock medications
 router.get('/low-stock/list', medicationController.getLowStockMedications);
 
 // Get medication categories
 router.get('/categories/list', medicationController.getMedicationCategories);
+
+// Get medication by ID (must be last to avoid conflicts)
+router.get('/:id', medicationController.getMedicationById);
 
 // Create new medication (admin/pharmacy only)
 router.post('/', medicationController.createMedication);

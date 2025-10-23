@@ -272,6 +272,176 @@ exports.createPharmacyInvoice = async (req, res) => {
   }
 };
 
+// Get pharmacy billing dashboard data
+exports.getDashboard = async (req, res) => {
+  try {
+    const { period = 'daily' } = req.query;
+    const userId = req.user.id;
+    
+    // Calculate date range based on period
+    const now = new Date();
+    let startDate, endDate;
+    
+    switch (period) {
+      case 'daily':
+        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        endDate = new Date(startDate.getTime() + 24 * 60 * 60 * 1000);
+        break;
+      case 'weekly':
+        const dayOfWeek = now.getDay();
+        startDate = new Date(now.getTime() - dayOfWeek * 24 * 60 * 60 * 1000);
+        startDate.setHours(0, 0, 0, 0);
+        endDate = new Date(startDate.getTime() + 7 * 24 * 60 * 60 * 1000);
+        break;
+      case 'monthly':
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        endDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+        break;
+      case 'yearly':
+        startDate = new Date(now.getFullYear(), 0, 1);
+        endDate = new Date(now.getFullYear() + 1, 0, 1);
+        break;
+      default:
+        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        endDate = new Date(startDate.getTime() + 24 * 60 * 60 * 1000);
+    }
+
+    // Get pharmacy invoices for the period
+    const invoices = await prisma.pharmacyInvoice.findMany({
+      where: {
+        processedAt: {
+          gte: startDate,
+          lt: endDate
+        },
+        processedBy: userId,
+        status: 'PAID'
+      },
+      include: {
+        patient: {
+          select: {
+            id: true,
+            name: true,
+            type: true
+          }
+        },
+        visit: {
+          select: {
+            id: true,
+            visitUid: true
+          }
+        }
+      },
+      orderBy: { processedAt: 'desc' }
+    });
+
+    // Calculate totals by payment type
+    const paymentTotals = {
+      CASH: { count: 0, amount: 0 },
+      BANK: { count: 0, amount: 0 },
+      INSURANCE: { count: 0, amount: 0 },
+      CHARITY: { count: 0, amount: 0 }
+    };
+
+    // Get audit logs for payment details
+    const auditLogs = await prisma.auditLog.findMany({
+      where: {
+        userId: userId,
+        action: 'PHARMACY_PAYMENT_PROCESSED',
+        createdAt: {
+          gte: startDate,
+          lt: endDate
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    // Process payment totals from audit logs
+    auditLogs.forEach(log => {
+      const details = log.details;
+      if (details && details.paymentType && details.amount) {
+        const paymentType = details.paymentType;
+        if (paymentTotals[paymentType]) {
+          paymentTotals[paymentType].count += 1;
+          paymentTotals[paymentType].amount += parseFloat(details.amount);
+        }
+      }
+    });
+
+    // Calculate total collected
+    const totalCollected = Object.values(paymentTotals).reduce((sum, type) => sum + type.amount, 0);
+    const totalTransactions = Object.values(paymentTotals).reduce((sum, type) => sum + type.count, 0);
+
+    // Get pending pharmacy invoices
+    const pendingInvoices = await prisma.pharmacyInvoice.findMany({
+      where: {
+        status: 'PENDING'
+      },
+      include: {
+        patient: {
+          select: {
+            id: true,
+            name: true,
+            type: true
+          }
+        }
+      }
+    });
+
+    const pendingAmount = pendingInvoices.reduce((sum, invoice) => sum + invoice.totalAmount, 0);
+
+    // Get low stock medications
+    const lowStockMedications = await prisma.medicationCatalog.findMany({
+      where: {
+        availableQuantity: {
+          lte: prisma.medicationCatalog.fields.minimumStock
+        }
+      },
+      orderBy: { availableQuantity: 'asc' },
+      take: 10 // Limit to 10 most critical
+    });
+
+    // Format recent transactions
+    const recentTransactions = invoices.slice(0, 10).map(invoice => ({
+      id: invoice.id,
+      patientName: invoice.patient.name,
+      amount: invoice.totalAmount,
+      paymentType: 'CASH', // Default, will be updated from audit logs
+      processedAt: invoice.processedAt,
+      visitUid: invoice.visit?.visitUid
+    }));
+
+    // Update payment types from audit logs
+    recentTransactions.forEach(transaction => {
+      const log = auditLogs.find(log => 
+        log.details && log.details.invoiceId === transaction.id
+      );
+      if (log && log.details.paymentType) {
+        transaction.paymentType = log.details.paymentType;
+      }
+    });
+
+    res.json({
+      period,
+      dateRange: {
+        start: startDate,
+        end: endDate
+      },
+      stats: {
+        totalCollected,
+        totalTransactions,
+        pendingBillings: pendingInvoices.length,
+        pendingAmount,
+        byType: paymentTotals
+      },
+      recentTransactions,
+      lowStockMedications
+    });
+  } catch (error) {
+    console.error('Error fetching pharmacy dashboard stats:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
 // Get insurance companies
 exports.getInsuranceCompanies = async (req, res) => {
   try {

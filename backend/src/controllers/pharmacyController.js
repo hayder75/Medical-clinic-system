@@ -448,10 +448,9 @@ exports.addInventoryItem = async (req, res) => {
     const medication = await prisma.medicationCatalog.create({
       data: {
         name,
-        category: category || 'OTHER',
+        category: category || 'TABLETS',
         dosageForm: unit || 'TABLET',
         strength: 'N/A', // Will be updated when specific strength is known
-        type: 'PRESCRIPTION',
         unitPrice: parseFloat(price),
         availableQuantity: parseInt(quantity),
         minimumStock: parseInt(lowStockThreshold) || 10,
@@ -478,7 +477,7 @@ exports.updateInventoryItem = async (req, res) => {
       where: { id },
       data: {
         name,
-        category: category || 'OTHER',
+        category: category || 'TABLETS',
         dosageForm: unit || 'TABLET',
         unitPrice: parseFloat(price),
         availableQuantity: parseInt(quantity),

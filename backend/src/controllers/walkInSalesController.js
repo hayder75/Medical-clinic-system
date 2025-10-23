@@ -81,7 +81,7 @@ exports.createWalkInSale = async (req, res) => {
           invoiceId: invoice.id,
           customerName: data.customerName,
           totalAmount: data.totalAmount,
-          itemCount: data.items.length
+          itemCount: data.pharmacyInvoiceItems.length
         }),
         ip: req.ip,
         userAgent: req.get('User-Agent')

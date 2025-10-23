@@ -32,7 +32,7 @@ const AppointmentsCalendar = () => {
   const fetchAppointments = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/schedules');
+      const response = await api.get('/schedules/appointments');
       setAppointments(response.data);
     } catch (error) {
       toast.error('Failed to fetch appointments');

@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
+import { useSearchParams } from 'react-router-dom';
 import { User, Phone, Mail, MapPin, Heart, Calendar, CreditCard, Search, UserPlus, Clock, CheckCircle } from 'lucide-react';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
 import PatientAttachedImagesSection from '../../components/common/PatientAttachedImagesSection';
 
 const PatientRegistration = () => {
+  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [patient, setPatient] = useState(null);
   const [visit, setVisit] = useState(null);
@@ -28,12 +30,35 @@ const PatientRegistration = () => {
   const [searchLoading, setSearchLoading] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [showSearchResults, setShowSearchResults] = useState(false);
+  
+  // Age-based date generation
+  const [dateInputType, setDateInputType] = useState('date'); // 'date' or 'age'
+  const [ageInput, setAgeInput] = useState('');
 
-  const { register, handleSubmit, formState: { errors }, reset } = useForm();
+  // Pre-registration data from URL
+  const preRegistrationData = {
+    name: searchParams.get('name'),
+    phone: searchParams.get('phone'),
+    notes: searchParams.get('notes'),
+    priority: searchParams.get('priority')
+  };
+
+  const { register, handleSubmit, formState: { errors }, reset, setValue } = useForm();
 
   useEffect(() => {
     fetchInsurances();
-  }, []);
+    
+    // Pre-fill form if coming from pre-registration
+    if (preRegistrationData.name && preRegistrationData.phone) {
+      setValue('name', preRegistrationData.name);
+      setValue('mobile', preRegistrationData.phone);
+      setRegistrationType('new');
+      setStep(2);
+      
+      // Show notification about pre-registration
+      toast.success(`Pre-registration data loaded for ${preRegistrationData.name}`);
+    }
+  }, []); // Remove dependencies to prevent infinite loop
 
   const fetchInsurances = async () => {
     try {
@@ -41,6 +66,48 @@ const PatientRegistration = () => {
       setInsurances(response.data.insurances || []);
     } catch (error) {
       console.error('Error fetching insurances:', error);
+    }
+  };
+
+  // Generate date of birth from age
+  const generateDateFromAge = (age) => {
+    if (!age || age < 0 || age > 120) return null;
+    
+    const currentDate = new Date();
+    const currentYear = currentDate.getFullYear();
+    const birthYear = currentYear - age;
+    
+    // Generate random month (1-12) and day (1-28 to avoid month-end issues)
+    const randomMonth = Math.floor(Math.random() * 12) + 1;
+    const randomDay = Math.floor(Math.random() * 28) + 1;
+    
+    // Create the date
+    const generatedDate = new Date(birthYear, randomMonth - 1, randomDay);
+    
+    // Format as YYYY-MM-DD for input field
+    const formattedDate = generatedDate.toISOString().split('T')[0];
+    
+    return formattedDate;
+  };
+
+  // Handle age input change
+  const handleAgeChange = (age) => {
+    setAgeInput(age);
+    if (age && age > 0 && age <= 120) {
+      const generatedDate = generateDateFromAge(parseInt(age));
+      if (generatedDate) {
+        setValue('dob', generatedDate);
+        // Only show notification when user finishes typing (not on every keystroke)
+        const timeoutId = setTimeout(() => {
+          toast.success(`Generated date: ${generatedDate} (Age: ${age})`);
+        }, 1000); // 1 second delay
+        
+        // Clear previous timeout
+        if (window.ageTimeout) {
+          clearTimeout(window.ageTimeout);
+        }
+        window.ageTimeout = timeoutId;
+      }
     }
   };
 
@@ -345,11 +412,65 @@ const PatientRegistration = () => {
 
               <div>
                 <label className="label">Date of Birth *</label>
-                <input
-                  type="date"
-                  className="input"
-                  {...register('dob', { required: 'Date of birth is required' })}
-                />
+                <div className="space-y-3">
+                  {/* Input Type Toggle */}
+                  <div className="flex space-x-4">
+                    <button
+                      type="button"
+                      onClick={() => setDateInputType('date')}
+                      className={`px-3 py-1 rounded text-sm ${
+                        dateInputType === 'date' 
+                          ? 'bg-blue-500 text-white' 
+                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      }`}
+                    >
+                      📅 Enter Date
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDateInputType('age')}
+                      className={`px-3 py-1 rounded text-sm ${
+                        dateInputType === 'age' 
+                          ? 'bg-blue-500 text-white' 
+                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      }`}
+                    >
+                      👴 Enter Age
+                    </button>
+                  </div>
+                  
+                  {/* Date Input */}
+                  {dateInputType === 'date' && (
+                    <input
+                      type="date"
+                      className="input"
+                      {...register('dob', { required: 'Date of birth is required' })}
+                    />
+                  )}
+                  
+                  {/* Age Input */}
+                  {dateInputType === 'age' && (
+                    <div className="space-y-2">
+                      <input
+                        type="number"
+                        className="input"
+                        placeholder="Enter age (e.g., 25)"
+                        min="0"
+                        max="120"
+                        value={ageInput}
+                        onChange={(e) => handleAgeChange(e.target.value)}
+                      />
+                      <p className="text-xs text-gray-600">
+                        💡 For illiterate patients: Enter their age and we'll generate a random date
+                      </p>
+                      {ageInput && (
+                        <div className="p-2 bg-green-50 rounded text-sm text-green-700">
+                          ✅ Generated date will be automatically filled below
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
                 {errors.dob && <p className="text-red-500 text-sm mt-1">{errors.dob.message}</p>}
               </div>
 
@@ -369,8 +490,8 @@ const PatientRegistration = () => {
                 <select className="input" {...register('type', { required: 'Patient type is required' })}>
                   <option value="">Select Type</option>
                   <option value="REGULAR">Regular</option>
-                  <option value="INSURANCE">Insurance</option>
-                  <option value="EMERGENCY">Emergency</option>
+                  <option value="STAFF">Staff</option>
+                  <option value="CHARITY">Charity</option>
                 </select>
                 {errors.type && <p className="text-red-500 text-sm mt-1">{errors.type.message}</p>}
               </div>
@@ -434,22 +555,7 @@ const PatientRegistration = () => {
             </div>
 
             {/* Medical Information */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div>
-                <label className="label">Blood Type</label>
-                <select className="input" {...register('bloodType')}>
-                  <option value="">Select Blood Type</option>
-                  <option value="A_PLUS">A+</option>
-                  <option value="A_MINUS">A-</option>
-                  <option value="B_PLUS">B+</option>
-                  <option value="B_MINUS">B-</option>
-                  <option value="AB_PLUS">AB+</option>
-                  <option value="AB_MINUS">AB-</option>
-                  <option value="O_PLUS">O+</option>
-                  <option value="O_MINUS">O-</option>
-                </select>
-              </div>
-
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="label">Marital Status</label>
                 <select className="input" {...register('maritalStatus')}>
@@ -474,14 +580,14 @@ const PatientRegistration = () => {
 
             {/* Emergency Contact */}
             <div>
-              <label className="label">Emergency Contact *</label>
+              <label className="label">Emergency Contact</label>
               <input
                 type="text"
                 className="input"
-                placeholder="Name - Phone Number"
-                {...register('emergencyContact', { required: 'Emergency contact is required' })}
+                placeholder="Name - Phone Number (Optional)"
+                {...register('emergencyContact')}
               />
-              {errors.emergencyContact && <p className="text-red-500 text-sm mt-1">{errors.emergencyContact.message}</p>}
+              <p className="text-xs text-gray-500 mt-1">Optional - can be filled later by nurse</p>
             </div>
 
             <div className="flex justify-end space-x-4">

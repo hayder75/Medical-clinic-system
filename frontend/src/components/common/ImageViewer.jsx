@@ -6,6 +6,9 @@ const ImageViewer = ({ isOpen, onClose, images, currentIndex = 0 }) => {
   const [rotation, setRotation] = useState(0);
   const [imageIndex, setImageIndex] = useState(currentIndex);
 
+  // Debug logging
+  console.debug('[ImageViewer] Component render - isOpen:', isOpen, 'images:', images?.length, 'currentIndex:', currentIndex);
+
   useEffect(() => {
     setImageIndex(currentIndex);
   }, [currentIndex]);
@@ -59,6 +62,7 @@ const ImageViewer = ({ isOpen, onClose, images, currentIndex = 0 }) => {
   }, [isOpen, images.length, onClose]);
 
   if (!isOpen || !images || images.length === 0) {
+    console.debug('[ImageViewer] Early return - isOpen:', isOpen, 'images:', images?.length);
     return null;
   }
 
@@ -74,7 +78,7 @@ const ImageViewer = ({ isOpen, onClose, images, currentIndex = 0 }) => {
 
   const handleDownload = () => {
     const link = document.createElement('a');
-    link.href = `http://localhost:3000/${currentImage.fileUrl}`;
+    link.href = `http://localhost:3000/${currentImage.filePath || currentImage.fileUrl}`;
     link.download = currentImage.fileName || 'radiology-image';
     document.body.appendChild(link);
     link.click();
@@ -140,7 +144,7 @@ const ImageViewer = ({ isOpen, onClose, images, currentIndex = 0 }) => {
       {/* Image Container */}
       <div className="relative max-w-full max-h-full p-20">
         <img
-          src={currentImage.fileUrl}
+          src={`http://localhost:3000/${currentImage.filePath || currentImage.fileUrl}`}
           alt={currentImage.fileName || 'Radiology image'}
           className="max-w-full max-h-full object-contain transition-transform duration-200"
           style={{

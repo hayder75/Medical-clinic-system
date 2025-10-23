@@ -25,7 +25,8 @@ const ServiceCatalog = () => {
     { value: 'LAB', label: 'Lab Test' },
     { value: 'RADIOLOGY', label: 'Radiology' },
     { value: 'MEDICATION', label: 'Medication' },
-    { value: 'PROCEDURE', label: 'Procedure' }
+    { value: 'PROCEDURE', label: 'Procedure' },
+    { value: 'NURSE', label: 'Nurse Service' }
   ];
 
   useEffect(() => {

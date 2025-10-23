@@ -25,8 +25,8 @@ const StaffManagement = () => {
   const roles = [
     { value: 'DOCTOR', label: 'Doctor' },
     { value: 'NURSE', label: 'Nurse' },
-    { value: 'LAB_TECHNICIAN', label: 'Lab Technician' },
     { value: 'RADIOLOGIST', label: 'Radiologist' },
+    { value: 'LAB_TECHNICIAN', label: 'Lab Technician' },
     { value: 'PHARMACIST', label: 'Pharmacist' },
     { value: 'BILLING_OFFICER', label: 'Billing Officer' },
     { value: 'PHARMACY_BILLING_OFFICER', label: 'Pharmacy Billing Officer' }

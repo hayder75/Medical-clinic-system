@@ -1,4 +1,4 @@
-# Medical Clinic System - Issues Fixed
+# Tenalesew Medical Center - Issues Fixed
 
 ## ✅ Issues Resolved
 

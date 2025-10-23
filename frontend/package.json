@@ -1,7 +1,7 @@
 {
-  "name": "medical-clinic-frontend",
+  "name": "tenalesew-medical-center-frontend",
   "version": "1.0.0",
-  "description": "Medical Clinic Management System Frontend",
+  "description": "Tenalesew Medical Center Frontend",
   "main": "index.js",
   "scripts": {
     "dev": "vite",
@@ -10,21 +10,22 @@
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0"
   },
   "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-router-dom": "^6.8.1",
     "axios": "^1.3.4",
+    "clsx": "^1.2.1",
+    "date-fns": "^2.29.3",
     "lucide-react": "^0.263.1",
+    "react": "^18.2.0",
+    "react-calendar": "^4.6.0",
+    "react-datepicker": "^4.10.0",
+    "react-dom": "^18.2.0",
+    "react-dropzone": "^14.2.3",
     "react-hook-form": "^7.43.5",
     "react-hot-toast": "^2.4.0",
-    "date-fns": "^2.29.3",
-    "recharts": "^2.5.0",
-    "react-calendar": "^4.6.0",
-    "react-select": "^5.7.0",
-    "react-datepicker": "^4.10.0",
     "react-quill": "^2.0.0",
-    "react-dropzone": "^14.2.3",
-    "clsx": "^1.2.1",
+    "react-router-dom": "^6.8.1",
+    "react-select": "^5.7.0",
+    "react-toastify": "^11.0.5",
+    "recharts": "^2.5.0",
     "tailwind-merge": "^1.10.0"
   },
   "devDependencies": {

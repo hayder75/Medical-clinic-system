@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route } from 'react-router-dom';
-import Layout from '../../components/common/Layout';
 import RadiologyOrders from '../../components/radiology/RadiologyOrders';
 import { 
   Scan, 
@@ -153,12 +152,10 @@ const RadiologyDashboard = () => {
   );
 
   return (
-    <Layout title="Radiology Dashboard" subtitle="Radiology scan processing and image management">
-      <Routes>
-        <Route path="/" element={<DashboardOverview />} />
-        <Route path="/orders" element={<RadiologyOrders />} />
-      </Routes>
-    </Layout>
+    <Routes>
+      <Route path="/" element={<DashboardOverview />} />
+      <Route path="/orders" element={<RadiologyOrders />} />
+    </Routes>
   );
 };
 

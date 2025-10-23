@@ -352,16 +352,18 @@ const PatientQueue = () => {
     try {
       // Submit lab orders if any
       if (selectedLabTests.length > 0) {
-        const labOrders = selectedLabTests.map(testId => ({
-          typeId: testId,
-          instructions: labInstructions
-        }));
-
-        await api.post('/doctors/lab-orders/multiple', {
+        const batchOrderData = {
           visitId: selectedVisit.id,
           patientId: selectedVisit.patient.id,
-          orders: labOrders
-        });
+          type: 'LAB',
+          instructions: labInstructions || 'Lab tests ordered by doctor',
+          services: selectedLabTests.map(testId => ({
+            serviceId: testId.toString(),
+            instructions: labInstructions || `Lab test: ${testId}`
+          }))
+        };
+
+        await api.post('/batch-orders/create', batchOrderData);
         
         setLabOrdered(true);
         toast.success(`${selectedLabTests.length} lab order(s) placed successfully`);
@@ -369,16 +371,18 @@ const PatientQueue = () => {
 
       // Submit radiology orders if any
       if (selectedRadiologyTests.length > 0) {
-        const radiologyOrders = selectedRadiologyTests.map(testId => ({
-          typeId: testId,
-          instructions: radiologyInstructions
-        }));
-
-        await api.post('/doctors/radiology-orders/multiple', {
+        const batchOrderData = {
           visitId: selectedVisit.id,
           patientId: selectedVisit.patient.id,
-          orders: radiologyOrders
-        });
+          type: 'RADIOLOGY',
+          instructions: radiologyInstructions || 'Radiology tests ordered by doctor',
+          services: selectedRadiologyTests.map(testId => ({
+            serviceId: testId.toString(),
+            instructions: radiologyInstructions || `Radiology test: ${testId}`
+          }))
+        };
+
+        await api.post('/batch-orders/create', batchOrderData);
         
         setRadiologyOrdered(true);
         toast.success(`${selectedRadiologyTests.length} radiology order(s) placed successfully`);
