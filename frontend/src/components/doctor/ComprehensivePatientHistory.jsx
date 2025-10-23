@@ -243,35 +243,248 @@ const ComprehensivePatientHistory = () => {
                 {expandedSections.vitals ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
               </button>
               {expandedSections.vitals && (
-                <div className="px-6 pb-4">
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full text-sm">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-3 py-2 text-left">Date</th>
-                          <th className="px-3 py-2 text-left">BP</th>
-                          <th className="px-3 py-2 text-left">Temp</th>
-                          <th className="px-3 py-2 text-left">HR</th>
-                          <th className="px-3 py-2 text-left">RR</th>
-                          <th className="px-3 py-2 text-left">O2 Sat</th>
-                          <th className="px-3 py-2 text-left">BMI</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {visit.vitals.map((vital) => (
-                          <tr key={vital.id} className="border-t">
-                            <td className="px-3 py-2">{formatDateOnly(vital.createdAt)}</td>
-                            <td className="px-3 py-2">{vital.bloodPressure || 'N/A'}</td>
-                            <td className="px-3 py-2">{vital.temperature ? `${vital.temperature}°C` : 'N/A'}</td>
-                            <td className="px-3 py-2">{vital.heartRate ? `${vital.heartRate} bpm` : 'N/A'}</td>
-                            <td className="px-3 py-2">{vital.respiratoryRate ? `${vital.respiratoryRate} /min` : 'N/A'}</td>
-                            <td className="px-3 py-2">{vital.oxygenSaturation ? `${vital.oxygenSaturation}%` : 'N/A'}</td>
-                            <td className="px-3 py-2">{vital.bmi ? vital.bmi.toFixed(1) : 'N/A'}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                <div className="px-6 pb-4 space-y-4">
+                  {visit.vitals.map((vital, index) => (
+                    <div key={vital.id} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                      {/* Header with Date/Time */}
+                      <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-300">
+                        <div className="flex items-center">
+                          <Clock className="h-4 w-4 text-gray-500 mr-2" />
+                          <span className="font-semibold text-gray-900">
+                            {formatDate(vital.createdAt)}
+                          </span>
+                        </div>
+                        <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
+                          Record #{visit.vitals.length - index}
+                        </span>
+                      </div>
+
+                      {/* Basic Vitals Grid */}
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                        <div className="bg-white p-3 rounded border border-gray-200">
+                          <p className="text-xs text-gray-500 mb-1">Blood Pressure</p>
+                          <p className="text-sm font-semibold text-gray-900">
+                            {vital.bloodPressure || (vital.bloodPressureSystolic && vital.bloodPressureDiastolic 
+                              ? `${vital.bloodPressureSystolic}/${vital.bloodPressureDiastolic}` 
+                              : 'N/A')} mmHg
+                          </p>
+                        </div>
+                        <div className="bg-white p-3 rounded border border-gray-200">
+                          <p className="text-xs text-gray-500 mb-1">Temperature</p>
+                          <p className="text-sm font-semibold text-gray-900">
+                            {vital.temperature ? `${vital.temperature}°${vital.tempUnit || 'C'}` : 'N/A'}
+                          </p>
+                        </div>
+                        <div className="bg-white p-3 rounded border border-gray-200">
+                          <p className="text-xs text-gray-500 mb-1">Heart Rate</p>
+                          <p className="text-sm font-semibold text-gray-900">
+                            {vital.heartRate ? `${vital.heartRate} bpm` : 'N/A'}
+                          </p>
+                        </div>
+                        <div className="bg-white p-3 rounded border border-gray-200">
+                          <p className="text-xs text-gray-500 mb-1">Respiration Rate</p>
+                          <p className="text-sm font-semibold text-gray-900">
+                            {vital.respirationRate ? `${vital.respirationRate} /min` : 'N/A'}
+                          </p>
+                        </div>
+                        <div className="bg-white p-3 rounded border border-gray-200">
+                          <p className="text-xs text-gray-500 mb-1">O2 Saturation</p>
+                          <p className="text-sm font-semibold text-gray-900">
+                            {vital.oxygenSaturation ? `${vital.oxygenSaturation}%` : 'N/A'}
+                          </p>
+                        </div>
+                        <div className="bg-white p-3 rounded border border-gray-200">
+                          <p className="text-xs text-gray-500 mb-1">Height</p>
+                          <p className="text-sm font-semibold text-gray-900">
+                            {vital.height ? `${vital.height} cm` : 'N/A'}
+                          </p>
+                        </div>
+                        <div className="bg-white p-3 rounded border border-gray-200">
+                          <p className="text-xs text-gray-500 mb-1">Weight</p>
+                          <p className="text-sm font-semibold text-gray-900">
+                            {vital.weight ? `${vital.weight} kg` : 'N/A'}
+                          </p>
+                        </div>
+                        <div className="bg-white p-3 rounded border border-gray-200">
+                          <p className="text-xs text-gray-500 mb-1">BMI</p>
+                          <p className="text-sm font-semibold text-gray-900">
+                            {vital.bmi ? vital.bmi.toFixed(1) : 'N/A'}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Additional Vitals (if present) */}
+                      {(vital.painScoreRest || vital.painScoreMovement || vital.sedationScore || 
+                        vital.gcsEyes || vital.gcsVerbal || vital.gcsMotor) && (
+                        <div className="mb-4">
+                          <h4 className="text-sm font-semibold text-gray-700 mb-2">Additional Measurements</h4>
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                            {vital.painScoreRest && (
+                              <div className="bg-white p-2 rounded border border-gray-200">
+                                <p className="text-xs text-gray-500">Pain Score (Rest)</p>
+                                <p className="text-sm font-semibold">{vital.painScoreRest}/10</p>
+                              </div>
+                            )}
+                            {vital.painScoreMovement && (
+                              <div className="bg-white p-2 rounded border border-gray-200">
+                                <p className="text-xs text-gray-500">Pain Score (Movement)</p>
+                                <p className="text-sm font-semibold">{vital.painScoreMovement}/10</p>
+                              </div>
+                            )}
+                            {vital.sedationScore && (
+                              <div className="bg-white p-2 rounded border border-gray-200">
+                                <p className="text-xs text-gray-500">Sedation Score</p>
+                                <p className="text-sm font-semibold">{vital.sedationScore}</p>
+                              </div>
+                            )}
+                            {(vital.gcsEyes || vital.gcsVerbal || vital.gcsMotor) && (
+                              <div className="bg-white p-2 rounded border border-gray-200">
+                                <p className="text-xs text-gray-500">GCS Score</p>
+                                <p className="text-sm font-semibold">
+                                  E{vital.gcsEyes || '-'} V{vital.gcsVerbal || '-'} M{vital.gcsMotor || '-'}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Chief Complaint & History */}
+                      {(vital.chiefComplaint || vital.historyOfPresentIllness || vital.onsetOfSymptoms || 
+                        vital.durationOfSymptoms || vital.severityOfSymptoms || vital.associatedSymptoms ||
+                        vital.relievingFactors || vital.aggravatingFactors) && (
+                        <div className="mb-4">
+                          <h4 className="text-sm font-semibold text-gray-700 mb-2">Chief Complaint & History</h4>
+                          <div className="space-y-2">
+                            {vital.chiefComplaint && (
+                              <div className="bg-white p-3 rounded border border-gray-200">
+                                <p className="text-xs text-gray-500 mb-1">Chief Complaint</p>
+                                <p className="text-sm text-gray-900">{vital.chiefComplaint}</p>
+                              </div>
+                            )}
+                            {vital.historyOfPresentIllness && (
+                              <div className="bg-white p-3 rounded border border-gray-200">
+                                <p className="text-xs text-gray-500 mb-1">History of Present Illness</p>
+                                <p className="text-sm text-gray-900">{vital.historyOfPresentIllness}</p>
+                              </div>
+                            )}
+                            <div className="grid grid-cols-2 gap-2">
+                              {vital.onsetOfSymptoms && (
+                                <div className="bg-white p-2 rounded border border-gray-200">
+                                  <p className="text-xs text-gray-500">Onset</p>
+                                  <p className="text-sm text-gray-900">{vital.onsetOfSymptoms}</p>
+                                </div>
+                              )}
+                              {vital.durationOfSymptoms && (
+                                <div className="bg-white p-2 rounded border border-gray-200">
+                                  <p className="text-xs text-gray-500">Duration</p>
+                                  <p className="text-sm text-gray-900">{vital.durationOfSymptoms}</p>
+                                </div>
+                              )}
+                              {vital.severityOfSymptoms && (
+                                <div className="bg-white p-2 rounded border border-gray-200">
+                                  <p className="text-xs text-gray-500">Severity</p>
+                                  <p className="text-sm text-gray-900">{vital.severityOfSymptoms}</p>
+                                </div>
+                              )}
+                              {vital.associatedSymptoms && (
+                                <div className="bg-white p-2 rounded border border-gray-200">
+                                  <p className="text-xs text-gray-500">Associated Symptoms</p>
+                                  <p className="text-sm text-gray-900">{vital.associatedSymptoms}</p>
+                                </div>
+                              )}
+                              {vital.relievingFactors && (
+                                <div className="bg-white p-2 rounded border border-gray-200">
+                                  <p className="text-xs text-gray-500">Relieving Factors</p>
+                                  <p className="text-sm text-gray-900">{vital.relievingFactors}</p>
+                                </div>
+                              )}
+                              {vital.aggravatingFactors && (
+                                <div className="bg-white p-2 rounded border border-gray-200">
+                                  <p className="text-xs text-gray-500">Aggravating Factors</p>
+                                  <p className="text-sm text-gray-900">{vital.aggravatingFactors}</p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Physical Examination */}
+                      {(vital.generalAppearance || vital.headAndNeck || vital.cardiovascularExam || 
+                        vital.respiratoryExam || vital.abdominalExam || vital.extremities || 
+                        vital.neurologicalExam) && (
+                        <div className="mb-4">
+                          <h4 className="text-sm font-semibold text-gray-700 mb-2">Physical Examination</h4>
+                          <div className="space-y-2">
+                            {vital.generalAppearance && (
+                              <div className="bg-white p-2 rounded border border-gray-200">
+                                <p className="text-xs text-gray-500">General Appearance</p>
+                                <p className="text-sm text-gray-900">{vital.generalAppearance}</p>
+                              </div>
+                            )}
+                            {vital.headAndNeck && (
+                              <div className="bg-white p-2 rounded border border-gray-200">
+                                <p className="text-xs text-gray-500">Head & Neck</p>
+                                <p className="text-sm text-gray-900">{vital.headAndNeck}</p>
+                              </div>
+                            )}
+                            {vital.cardiovascularExam && (
+                              <div className="bg-white p-2 rounded border border-gray-200">
+                                <p className="text-xs text-gray-500">Cardiovascular</p>
+                                <p className="text-sm text-gray-900">{vital.cardiovascularExam}</p>
+                              </div>
+                            )}
+                            {vital.respiratoryExam && (
+                              <div className="bg-white p-2 rounded border border-gray-200">
+                                <p className="text-xs text-gray-500">Respiratory</p>
+                                <p className="text-sm text-gray-900">{vital.respiratoryExam}</p>
+                              </div>
+                            )}
+                            {vital.abdominalExam && (
+                              <div className="bg-white p-2 rounded border border-gray-200">
+                                <p className="text-xs text-gray-500">Abdominal</p>
+                                <p className="text-sm text-gray-900">{vital.abdominalExam}</p>
+                              </div>
+                            )}
+                            {vital.extremities && (
+                              <div className="bg-white p-2 rounded border border-gray-200">
+                                <p className="text-xs text-gray-500">Extremities</p>
+                                <p className="text-sm text-gray-900">{vital.extremities}</p>
+                              </div>
+                            )}
+                            {vital.neurologicalExam && (
+                              <div className="bg-white p-2 rounded border border-gray-200">
+                                <p className="text-xs text-gray-500">Neurological</p>
+                                <p className="text-sm text-gray-900">{vital.neurologicalExam}</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Condition & Notes */}
+                      {(vital.condition || vital.notes) && (
+                        <div>
+                          <h4 className="text-sm font-semibold text-gray-700 mb-2">Additional Information</h4>
+                          <div className="space-y-2">
+                            {vital.condition && (
+                              <div className="bg-white p-2 rounded border border-gray-200">
+                                <p className="text-xs text-gray-500">Condition</p>
+                                <p className="text-sm text-gray-900">{vital.condition}</p>
+                              </div>
+                            )}
+                            {vital.notes && (
+                              <div className="bg-white p-3 rounded border border-gray-200">
+                                <p className="text-xs text-gray-500 mb-1">Notes</p>
+                                <p className="text-sm text-gray-900">{vital.notes}</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

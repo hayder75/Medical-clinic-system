@@ -20,6 +20,8 @@ const ContinuousVitals = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [selectedPatient, setSelectedPatient] = useState(null);
+  const [patientVisits, setPatientVisits] = useState([]);
+  const [selectedVisit, setSelectedVisit] = useState(null);
   const [patientVitals, setPatientVitals] = useState([]);
   const [showVitalsForm, setShowVitalsForm] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -58,7 +60,7 @@ const ContinuousVitals = () => {
 
     try {
       setSearchLoading(true);
-      const response = await api.get(`/patients/search?query=${encodeURIComponent(searchQuery)}&type=name`);
+      const response = await api.get(`/patients/search?query=${encodeURIComponent(searchQuery)}`);
       setSearchResults(response.data.patients || []);
     } catch (error) {
       console.error('Error searching patients:', error);
@@ -73,17 +75,42 @@ const ContinuousVitals = () => {
     setSelectedPatient(patient);
     setSearchQuery('');
     setSearchResults([]);
-    await fetchPatientVitals(patient.id);
+    setSelectedVisit(null);
+    setPatientVitals([]);
+    await fetchPatientVisits(patient.id);
   };
 
-  // Fetch vitals history for selected patient
-  const fetchPatientVitals = async (patientId) => {
+  // Fetch all visits for the selected patient
+  const fetchPatientVisits = async (patientId) => {
     try {
       setLoading(true);
-      const response = await api.get(`/nurses/patient-vitals/${patientId}`);
-      setPatientVitals(response.data.vitals || []);
+      const response = await api.get(`/visits/patient/${patientId}`);
+      setPatientVisits(response.data.visits || []);
     } catch (error) {
-      console.error('Error fetching patient vitals:', error);
+      console.error('Error fetching patient visits:', error);
+      toast.error('Failed to fetch patient visits');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Select a visit and fetch its vitals
+  const selectVisit = async (visit) => {
+    setSelectedVisit(visit);
+    await fetchVisitVitals(visit.id);
+  };
+
+  // Fetch vitals history for selected visit
+  const fetchVisitVitals = async (visitId) => {
+    try {
+      setLoading(true);
+      // First check if we can get visit by ID directly
+      const response = await api.get(`/nurses/patient-vitals/${selectedPatient.id}`);
+      // Filter vitals for this specific visit
+      const visitVitals = response.data.vitals?.filter(v => v.visitId === visitId) || [];
+      setPatientVitals(visitVitals);
+    } catch (error) {
+      console.error('Error fetching visit vitals:', error);
       toast.error('Failed to fetch vitals history');
     } finally {
       setLoading(false);
@@ -114,6 +141,7 @@ const ContinuousVitals = () => {
 
       const vitalsData = {
         patientId: selectedPatient.id,
+        visitId: selectedVisit.id,
         ...vitalsForm,
         // Convert string values to numbers where needed, but only if they have valid values
         temperature: vitalsForm.temperature ? parseFloat(vitalsForm.temperature) : undefined,
@@ -140,12 +168,12 @@ const ContinuousVitals = () => {
       });
 
       console.log('Sending vitals data:', vitalsData);
-      await api.post('/nurses/continuous-vitals', vitalsData);
+      await api.post('/nurses/vitals', vitalsData);
       
       toast.success('Vitals recorded successfully');
       setShowVitalsForm(false);
       resetVitalsForm();
-      await fetchPatientVitals(selectedPatient.id);
+      await fetchVisitVitals(selectedVisit.id);
       
     } catch (error) {
       console.error('Error recording vitals:', error);
@@ -224,7 +252,7 @@ const ContinuousVitals = () => {
           <h2 className="text-2xl font-bold text-gray-900">Continuous Vitals Monitoring</h2>
           <p className="text-gray-600">Record and monitor patient vitals throughout their stay</p>
         </div>
-        {selectedPatient && (
+        {selectedVisit && (
           <button
             onClick={() => setShowVitalsForm(true)}
             className="btn btn-primary flex items-center"
@@ -277,7 +305,7 @@ const ContinuousVitals = () => {
         )}
       </div>
 
-      {/* Selected Patient Info */}
+      {/* Selected Patient Info & Visit Selection */}
       {selectedPatient && (
         <div className="card">
           <div className="flex items-center justify-between mb-4">
@@ -291,6 +319,8 @@ const ContinuousVitals = () => {
             <button
               onClick={() => {
                 setSelectedPatient(null);
+                setPatientVisits([]);
+                setSelectedVisit(null);
                 setPatientVitals([]);
                 setShowVitalsForm(false);
               }}
@@ -300,9 +330,75 @@ const ContinuousVitals = () => {
             </button>
           </div>
 
+          {/* Visit Selection */}
+          <div className="mb-6">
+            <h4 className="font-medium text-gray-900 mb-3">Select Visit</h4>
+            {loading ? (
+              <div className="text-center py-4">
+                <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+              </div>
+            ) : patientVisits.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {patientVisits.map((visit) => (
+                  <div
+                    key={visit.id}
+                    onClick={() => selectVisit(visit)}
+                    className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                      selectedVisit?.id === visit.id
+                        ? 'border-blue-500 bg-blue-50'
+                        : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-semibold text-gray-600">{visit.visitUid}</span>
+                      {visit.isEmergency && (
+                        <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded">
+                          Emergency
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-gray-700 mb-1">
+                      {new Date(visit.date).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </p>
+                    <div className="flex items-center justify-between">
+                      <span className={`text-xs px-2 py-1 rounded ${
+                        visit.status === 'COMPLETED' ? 'bg-green-100 text-green-700' :
+                        visit.status === 'WAITING_FOR_TRIAGE' ? 'bg-yellow-100 text-yellow-700' :
+                        visit.status === 'TRIAGED' ? 'bg-blue-100 text-blue-700' :
+                        'bg-gray-100 text-gray-700'
+                      }`}>
+                        {visit.status.replace(/_/g, ' ')}
+                      </span>
+                      {selectedVisit?.id === visit.id && (
+                        <CheckCircle className="h-4 w-4 text-blue-500" />
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <Calendar className="h-12 w-12 mx-auto mb-2 text-gray-300" />
+                <p className="text-sm">No visits found for this patient</p>
+              </div>
+            )}
+          </div>
+
           {/* Vitals History */}
-          <div className="space-y-4">
-            <h4 className="font-medium text-gray-900">Vitals History</h4>
+          {selectedVisit && (
+            <div className="space-y-4 border-t pt-4">
+              <div className="flex items-center justify-between">
+                <h4 className="font-medium text-gray-900">Vitals History for {selectedVisit.visitUid}</h4>
+                <span className="text-xs text-gray-500">
+                  {patientVitals.length} record(s)
+                </span>
+              </div>
             
             {loading ? (
               <div className="text-center py-4">
@@ -397,18 +493,24 @@ const ContinuousVitals = () => {
                 <p className="text-xs">Click "Record Vitals" to add the first reading</p>
               </div>
             )}
-          </div>
+            </div>
+          )}
         </div>
       )}
 
       {/* Vitals Form Modal */}
-      {showVitalsForm && selectedPatient && (
+      {showVitalsForm && selectedPatient && selectedVisit && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
           <div className="relative top-20 mx-auto p-5 border w-full max-w-4xl shadow-lg rounded-md bg-white">
             <div className="mt-3">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">
-                Record Vitals - {selectedPatient.name}
-              </h3>
+              <div className="mb-4">
+                <h3 className="text-lg font-medium text-gray-900">
+                  Record Vitals - {selectedPatient.name}
+                </h3>
+                <p className="text-sm text-gray-600">
+                  Visit: {selectedVisit.visitUid} - {new Date(selectedVisit.date).toLocaleDateString()}
+                </p>
+              </div>
               
               <form onSubmit={(e) => { e.preventDefault(); recordVitals(); }} className="space-y-6">
                 {/* Basic Vitals */}

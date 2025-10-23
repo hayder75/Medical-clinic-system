@@ -106,7 +106,7 @@ exports.recordVitals = async (req, res) => {
       data.bmi = data.weight / (data.height ** 2);
     }
 
-    // Check if visit exists and is in correct status
+    // Check if visit exists
     const visit = await prisma.visit.findUnique({
       where: { id: data.visitId }
     });
@@ -115,9 +115,7 @@ exports.recordVitals = async (req, res) => {
       return res.status(404).json({ error: 'Visit not found' });
     }
 
-    if (visit.status !== 'WAITING_FOR_TRIAGE' && visit.status !== 'TRIAGED' && visit.status !== 'WAITING_FOR_NURSE_SERVICE') {
-      return res.status(400).json({ error: 'Cannot record vitals for this visit status' });
-    }
+    // Allow recording vitals for any visit status (including completed visits for monitoring purposes)
 
     const vital = await prisma.vitalSign.create({ 
       data,
