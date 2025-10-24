@@ -5,6 +5,7 @@ import ServiceCatalog from '../../components/admin/ServiceCatalog';
 import AuditLogs from '../../components/admin/AuditLogs';
 import Reports from '../../components/admin/Reports';
 import InsuranceManagement from '../../components/admin/InsuranceManagement';
+import InsuranceDetail from '../../components/admin/InsuranceDetail';
 import ContinuousInfusionDashboard from '../../components/admin/ContinuousInfusionDashboard';
 import { 
   Users, 
@@ -246,6 +247,7 @@ const AdminDashboard = () => {
       <Route path="/staff" element={<StaffManagement />} />
       <Route path="/services" element={<ServiceCatalog />} />
       <Route path="/insurances" element={<InsuranceManagement />} />
+      <Route path="/insurances/:insuranceId" element={<InsuranceDetail />} />
       <Route path="/audit" element={<AuditLogs />} />
       <Route path="/reports" element={<Reports />} />
       <Route path="/continuous-infusions" element={<ContinuousInfusionDashboard />} />

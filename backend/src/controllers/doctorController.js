@@ -209,6 +209,19 @@ exports.getQueue = async (req, res) => {
             },
             payments: true
           }
+        },
+        appointments: {
+          where: {
+            visitId: { not: null }
+          },
+          select: {
+            id: true,
+            type: true,
+            reason: true,
+            notes: true,
+            appointmentDate: true,
+            appointmentTime: true
+          }
         }
       },
       orderBy: [
@@ -299,6 +312,19 @@ exports.getResultsQueue = async (req, res) => {
               }
             },
             payments: true
+          }
+        },
+        appointments: {
+          where: {
+            visitId: { not: null }
+          },
+          select: {
+            id: true,
+            type: true,
+            reason: true,
+            notes: true,
+            appointmentDate: true,
+            appointmentTime: true
           }
         }
       },
@@ -669,6 +695,7 @@ exports.getUnifiedQueue = async (req, res) => {
     });
     
     const assignmentIds = doctorAssignments.map(a => a.id);
+    console.log('🔍 Assignment IDs:', assignmentIds);
     
     // Get all visits assigned to this doctor (both new consultations and results)
     // Include emergency patients and paid patients only
@@ -681,7 +708,8 @@ exports.getUnifiedQueue = async (req, res) => {
           {
             OR: [
               { assignmentId: { in: assignmentIds } },
-              { batchOrders: { some: { doctorId: doctorId } } }
+              { batchOrders: { some: { doctorId: doctorId } } },
+              { appointments: { some: { doctorId: doctorId } } }
             ]
           },
           {
@@ -771,6 +799,19 @@ exports.getUnifiedQueue = async (req, res) => {
             payments: true
           }
         },
+        appointments: {
+          where: {
+            visitId: { not: null }
+          },
+          select: {
+            id: true,
+            type: true,
+            reason: true,
+            notes: true,
+            appointmentDate: true,
+            appointmentTime: true
+          }
+        },
         dentalRecords: true,
         nurseServiceAssignments: {
           where: {
@@ -793,6 +834,75 @@ exports.getUnifiedQueue = async (req, res) => {
       orderBy: { createdAt: 'asc' }
     });
 
+    console.log('🔍 Found visits:', allVisits.length);
+    allVisits.forEach(visit => {
+      console.log(`  - Visit ${visit.id}: ${visit.patient.name}, Status: ${visit.status}, AssignmentId: ${visit.assignmentId}, HasAppointments: ${visit.appointments?.length || 0}`);
+    });
+
+    // Additional safety check: Find visits from appointments that might not be properly linked
+    const appointmentVisits = await prisma.visit.findMany({
+      where: {
+        status: {
+          in: ['WAITING_FOR_DOCTOR', 'UNDER_DOCTOR_REVIEW', 'NURSE_SERVICES_COMPLETED', 'AWAITING_RESULTS_REVIEW', 'IN_DOCTOR_QUEUE']
+        },
+        appointments: { 
+          some: { 
+            doctorId: doctorId,
+            status: 'IN_PROGRESS'
+          } 
+        },
+        assignmentId: null // Missing assignment link
+      },
+      include: {
+        patient: true,
+        appointments: {
+          where: { doctorId: doctorId }
+        },
+        bills: {
+          include: {
+            services: {
+              include: {
+                service: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (appointmentVisits.length > 0) {
+      console.log(`🔧 Found ${appointmentVisits.length} appointment visits missing assignment links - fixing...`);
+      
+      for (const visit of appointmentVisits) {
+        // Find or create assignment
+        let assignment = await prisma.assignment.findFirst({
+          where: {
+            patientId: visit.patientId,
+            doctorId: doctorId,
+            status: 'Pending'
+          }
+        });
+
+        if (!assignment) {
+          assignment = await prisma.assignment.create({
+            data: {
+              patientId: visit.patientId,
+              doctorId: doctorId,
+              status: 'Pending'
+            }
+          });
+        }
+
+        // Link the visit to the assignment
+        await prisma.visit.update({
+          where: { id: visit.id },
+          data: { assignmentId: assignment.id }
+        });
+
+        console.log(`✅ Fixed visit ${visit.id} - linked to assignment ${assignment.id}`);
+      }
+    }
+
     // All visits are already filtered by assignmentId and batchOrders in the query
     const filteredVisits = allVisits;
 
@@ -801,6 +911,28 @@ exports.getUnifiedQueue = async (req, res) => {
       let priority = 3; // Default: New consultation
       let queueType = 'NEW_CONSULTATION';
       let priorityReason = 'New consultation';
+      let appointmentLabel = null;
+
+      // Check if this visit is from an appointment
+      if (visit.appointments && visit.appointments.length > 0) {
+        const appointment = visit.appointments[0];
+        appointmentLabel = {
+          type: appointment.type,
+          reason: appointment.reason,
+          notes: appointment.notes,
+          appointmentDate: appointment.appointmentDate,
+          appointmentTime: appointment.appointmentTime
+        };
+        
+        // Set queue type based on appointment type
+        if (appointment.type === 'FOLLOW_UP') {
+          queueType = 'FOLLOW_UP_APPOINTMENT';
+          priorityReason = 'Follow-up appointment';
+        } else if (appointment.type === 'CONSULTATION') {
+          queueType = 'CONSULTATION_APPOINTMENT';
+          priorityReason = 'Consultation appointment';
+        }
+      }
 
       // Determine priority based on status and urgency
       if (visit.status === 'AWAITING_RESULTS_REVIEW') {
@@ -831,6 +963,7 @@ exports.getUnifiedQueue = async (req, res) => {
         priority,
         queueType,
         priorityReason,
+        appointmentLabel,
         // Add timestamp for sorting within same priority
         priorityTimestamp: visit.status === 'AWAITING_RESULTS_REVIEW' 
           ? visit.updatedAt || visit.createdAt 
@@ -951,6 +1084,19 @@ exports.getVisitDetails = async (req, res) => {
               }
             },
             payments: true
+          }
+        },
+        appointments: {
+          where: {
+            visitId: { not: null }
+          },
+          select: {
+            id: true,
+            type: true,
+            reason: true,
+            notes: true,
+            appointmentDate: true,
+            appointmentTime: true
           }
         },
         dentalRecords: true,
@@ -1115,6 +1261,19 @@ exports.selectVisit = async (req, res) => {
             },
             payments: true
           }
+        },
+        appointments: {
+          where: {
+            visitId: { not: null }
+          },
+          select: {
+            id: true,
+            type: true,
+            reason: true,
+            notes: true,
+            appointmentDate: true,
+            appointmentTime: true
+          }
         }
       }
     });
@@ -1218,6 +1377,19 @@ exports.updateVisit = async (req, res) => {
               }
             },
             payments: true
+          }
+        },
+        appointments: {
+          where: {
+            visitId: { not: null }
+          },
+          select: {
+            id: true,
+            type: true,
+            reason: true,
+            notes: true,
+            appointmentDate: true,
+            appointmentTime: true
           }
         }
       }
@@ -2587,6 +2759,19 @@ exports.getPatientHistory = async (req, res) => {
             payments: true
           }
         },
+        appointments: {
+          where: {
+            visitId: { not: null }
+          },
+          select: {
+            id: true,
+            type: true,
+            reason: true,
+            notes: true,
+            appointmentDate: true,
+            appointmentTime: true
+          }
+        },
         pharmacyInvoices: {
           include: {
             dispensedMedicines: {
@@ -2609,7 +2794,17 @@ exports.getPatientHistory = async (req, res) => {
         dentalRecords: true,
         dentalPhotos: true,
         attachedImages: true,
-        diagnosisNotes: true,
+        diagnosisNotes: {
+          include: {
+            doctor: {
+              select: {
+                id: true,
+                fullname: true,
+                role: true
+              }
+            }
+          }
+        },
         galleryImages: {
           include: {
             uploadedBy: {
@@ -2687,44 +2882,60 @@ exports.getPatientHistory = async (req, res) => {
       });
 
       // Convert detailed lab results to the expected format
-      const labResults = detailedLabResults.map(result => ({
-        id: result.id,
-        testType: {
-          name: result.template.name,
-          category: result.template.category
-        },
-        resultText: `Detailed results for ${result.template.name}`,
-        detailedResults: result.results, // Include the actual detailed results
-        additionalNotes: result.additionalNotes || '',
-        status: result.status,
-        attachments: [], // Detailed lab results don't have separate attachments
-        createdAt: result.createdAt,
-        verifiedBy: result.verifiedBy,
-        verifiedAt: result.verifiedAt
-      }));
+      const labResults = detailedLabResults.map(result => {
+        // Get template fields
+        const templateFields = result.template.fields || {};
+        
+        // Convert results object to array format
+        let detailedResultsArray = [];
+        if (result.results && typeof result.results === 'object') {
+          // If results is an object (key-value pairs), convert to array
+          detailedResultsArray = Object.entries(templateFields).map(([fieldName, fieldConfig]) => ({
+            testName: fieldName,
+            result: result.results[fieldName] || null,
+            unit: fieldConfig.unit || '',
+            referenceRange: fieldConfig.referenceRange || ''
+          }));
+        }
+        
+        return {
+          id: result.id,
+          testType: {
+            name: result.template.name,
+            category: result.template.category
+          },
+          resultText: detailedResultsArray.length > 0 ? `Detailed results for ${result.template.name}` : null,
+          detailedResults: detailedResultsArray,
+          additionalNotes: result.additionalNotes || '',
+          status: result.status,
+          attachments: [], // Detailed lab results don't have separate attachments
+          createdAt: result.createdAt,
+          verifiedBy: result.verifiedBy,
+          verifiedAt: result.verifiedAt
+        };
+      });
 
-      // Also include legacy lab results from batch order services (for backward compatibility)
+      // Also include lab orders from batch order services (both filled and unfilled)
       for (const batchOrder of visit.batchOrders) {
         if (batchOrder.type === 'LAB') {
           for (const service of batchOrder.services) {
-            if (service.investigationType && service.result) {
-              // Check if we already have a detailed result for this service
-              const hasDetailedResult = detailedLabResults.some(dr => 
-                dr.labOrderId === batchOrder.id && 
-                dr.template.name === service.investigationType.name
-              );
-              
-              if (!hasDetailedResult) {
-                labResults.push({
-                  id: `batch-${batchOrder.id}-${service.id}`,
-                  testType: service.investigationType,
-                  resultText: service.result,
-                  additionalNotes: service.additionalNotes || '',
-                  status: service.status,
-                  attachments: [], // Lab results from batch orders don't have separate attachments
-                  createdAt: batchOrder.updatedAt || batchOrder.createdAt
-                });
-              }
+            // Check if we already have a detailed result for this service
+            const hasDetailedResult = detailedLabResults.some(dr => 
+              dr.labOrderId === batchOrder.id
+            );
+            
+            // If no detailed result exists, still show the order
+            if (!hasDetailedResult) {
+              labResults.push({
+                id: `batch-${batchOrder.id}-${service.id}`,
+                testType: service.investigationType || { name: 'Lab Test', category: 'GENERAL' },
+                resultText: service.result || null,
+                detailedResults: [],
+                additionalNotes: service.additionalNotes || '',
+                status: service.status,
+                attachments: [],
+                createdAt: batchOrder.createdAt
+              });
             }
           }
         }
@@ -2999,21 +3210,26 @@ exports.completeVisit = async (req, res) => {
       })),
       
       // Diagnosis Notes
-      diagnosisNotes: visit.diagnosisNotes.length > 0 ? {
-        chiefComplaint: visit.diagnosisNotes[0].chiefComplaint,
-        historyOfPresentIllness: visit.diagnosisNotes[0].historyOfPresentIllness,
-        pastMedicalHistory: visit.diagnosisNotes[0].pastMedicalHistory,
-        allergicHistory: visit.diagnosisNotes[0].allergicHistory,
-        physicalExamination: visit.diagnosisNotes[0].physicalExamination,
-        investigationFindings: visit.diagnosisNotes[0].investigationFindings,
-        assessmentAndDiagnosis: visit.diagnosisNotes[0].assessmentAndDiagnosis,
-        treatmentPlan: visit.diagnosisNotes[0].treatmentPlan,
-        treatmentGiven: visit.diagnosisNotes[0].treatmentGiven,
-        medicationIssued: visit.diagnosisNotes[0].medicationIssued,
-        additional: visit.diagnosisNotes[0].additional,
-        prognosis: visit.diagnosisNotes[0].prognosis,
-        createdAt: visit.diagnosisNotes[0].createdAt
-      } : null,
+      diagnosisNotes: visit.diagnosisNotes.map(note => ({
+        id: note.id,
+        diagnosis: note.assessmentAndDiagnosis,
+        notes: note.additional || note.treatmentPlan || '',
+        chiefComplaint: note.chiefComplaint,
+        historyOfPresentIllness: note.historyOfPresentIllness,
+        pastMedicalHistory: note.pastMedicalHistory,
+        allergicHistory: note.allergicHistory,
+        physicalExamination: note.physicalExamination,
+        investigationFindings: note.investigationFindings,
+        assessmentAndDiagnosis: note.assessmentAndDiagnosis,
+        treatmentPlan: note.treatmentPlan,
+        treatmentGiven: note.treatmentGiven,
+        medicationIssued: note.medicationIssued,
+        additional: note.additional,
+        prognosis: note.prognosis,
+        doctor: note.doctor,
+        createdAt: note.createdAt,
+        updatedAt: note.updatedAt
+      })),
       
       // Nurse Services
       nurseServices: visit.nurseServiceAssignments.map(assignment => ({
@@ -3059,11 +3275,12 @@ exports.completeVisit = async (req, res) => {
           data: {
             patientId: visit.patientId,
             doctorId: doctorId,
-            date: new Date(appointmentDate),
-            time: appointmentTime,
+            appointmentDate: new Date(appointmentDate),
+            appointmentTime: appointmentTime,
             type: 'FOLLOW_UP',
             status: 'SCHEDULED',
-            notes: appointmentNotes || 'Follow-up appointment'
+            notes: appointmentNotes || 'Follow-up appointment',
+            createdById: doctorId
           }
         });
       }
@@ -3085,8 +3302,8 @@ exports.completeVisit = async (req, res) => {
       if (appointment) {
         medicalHistoryData.appointment = {
           id: appointment.id,
-          date: appointment.date,
-          time: appointment.time,
+          appointmentDate: appointment.appointmentDate,
+          appointmentTime: appointment.appointmentTime,
           type: appointment.type,
           status: appointment.status,
           notes: appointment.notes

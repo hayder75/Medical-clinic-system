@@ -371,26 +371,35 @@ const ComprehensivePatientHistory = () => {
               {activeTab === 'attachedImages' && (
                 <div className="bg-white rounded-lg border shadow-sm p-6" style={{ borderColor: '#E5E7EB' }}>
                   <h3 className="text-lg font-semibold mb-4" style={{ color: '#0C0E0B' }}>Attached Images</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    {selectedVisit.attachedImages.map((image) => (
-                      <div key={image.id}>
-                        <img
-                          src={`http://localhost:3000/${image.filePath}`}
-                          alt={image.description || 'Attached image'}
-                          className="w-full h-48 object-cover rounded border"
-                          style={{ borderColor: '#E5E7EB' }}
-                        />
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                    {selectedVisit.attachedImages.map((image, index) => (
+                      <div key={image.id} className="relative group">
+                        <div className="w-full h-48 bg-gray-200 rounded-lg border-2 border-gray-200 overflow-hidden">
+                          <img
+                            src={`http://localhost:3000/${image.filePath}`}
+                            alt={image.description || 'Medical image'}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        {image.description && (
+                          <p className="text-xs mt-2" style={{ color: '#6B7280' }}>{image.description}</p>
+                        )}
                         <button
-                          onClick={() => openImageViewer([image], 0)}
-                          className="mt-2 w-full px-3 py-2 text-sm text-white rounded hover:opacity-90 transition flex items-center justify-center space-x-2"
+                          className="mt-2 w-full px-3 py-2 text-sm rounded transition flex items-center justify-center space-x-2 text-white hover:opacity-90"
                           style={{ backgroundColor: '#2e13d1' }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const allImages = selectedVisit.attachedImages.map(img => ({
+                              filePath: img.filePath,
+                              fileName: img.fileName,
+                              description: img.description
+                            }));
+                            openImageViewer(allImages, index);
+                          }}
                         >
                           <Eye className="h-4 w-4" />
                           <span>View Image</span>
                         </button>
-                        {image.description && (
-                          <p className="text-xs mt-2" style={{ color: '#6B7280' }}>{image.description}</p>
-                        )}
                       </div>
                     ))}
                   </div>
@@ -437,39 +446,71 @@ const ComprehensivePatientHistory = () => {
                     {selectedVisit.labResults.map((result, index) => (
                       <div key={index} className="p-4 border rounded-lg" style={{ borderColor: '#E5E7EB', backgroundColor: '#F9FAFB' }}>
                         <div className="flex justify-between items-start mb-3">
-                          <h4 className="font-medium" style={{ color: '#0C0E0B' }}>{result.serviceName}</h4>
+                          <h4 className="font-medium text-lg" style={{ color: '#0C0E0B' }}>
+                            {result.testType?.name || result.serviceName || 'Lab Test'}
+                          </h4>
                           <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(result.status)}`}>
                             {result.status}
                           </span>
                         </div>
-                        {result.results && result.results.length > 0 && (
+                        
+                        {result.detailedResults && result.detailedResults.length > 0 ? (
                           <div className="mt-3 overflow-x-auto">
-                            <table className="w-full text-sm">
+                            <table className="w-full text-sm border" style={{ borderColor: '#E5E7EB' }}>
                               <thead style={{ backgroundColor: '#F3F4F6' }}>
                                 <tr>
-                                  <th className="px-3 py-2 text-left" style={{ color: '#6B7280' }}>Test Name</th>
-                                  <th className="px-3 py-2 text-left" style={{ color: '#6B7280' }}>Result</th>
-                                  <th className="px-3 py-2 text-left" style={{ color: '#6B7280' }}>Reference Range</th>
+                                  <th className="px-3 py-2 text-left border" style={{ color: '#6B7280', borderColor: '#E5E7EB' }}>Test Name</th>
+                                  <th className="px-3 py-2 text-left border" style={{ color: '#6B7280', borderColor: '#E5E7EB' }}>Result</th>
+                                  <th className="px-3 py-2 text-left border" style={{ color: '#6B7280', borderColor: '#E5E7EB' }}>Unit</th>
+                                  <th className="px-3 py-2 text-left border" style={{ color: '#6B7280', borderColor: '#E5E7EB' }}>Reference Range</th>
                                 </tr>
                               </thead>
                               <tbody>
-                                {result.results.map((test, idx) => (
-                                  <tr key={idx} className="border-t" style={{ borderColor: '#E5E7EB' }}>
-                                    <td className="px-3 py-2" style={{ color: '#0C0E0B' }}>{test.testName}</td>
-                                    <td className="px-3 py-2 font-semibold" style={{ color: '#0C0E0B' }}>{test.result} {test.unit}</td>
-                                    <td className="px-3 py-2" style={{ color: '#6B7280' }}>{test.referenceRange}</td>
+                                {result.detailedResults.map((test, idx) => (
+                                  <tr key={idx} style={{ borderColor: '#E5E7EB' }}>
+                                    <td className="px-3 py-2 border" style={{ color: '#0C0E0B', borderColor: '#E5E7EB' }}>
+                                      {test.testName || 'Details not given'}
+                                    </td>
+                                    <td className="px-3 py-2 font-semibold border" style={{ color: '#0C0E0B', borderColor: '#E5E7EB' }}>
+                                      {test.result || 'Details not given'}
+                                    </td>
+                                    <td className="px-3 py-2 border" style={{ color: '#0C0E0B', borderColor: '#E5E7EB' }}>
+                                      {test.unit || '-'}
+                                    </td>
+                                    <td className="px-3 py-2 border" style={{ color: '#6B7280', borderColor: '#E5E7EB' }}>
+                                      {test.referenceRange || 'Details not given'}
+                                    </td>
                                   </tr>
                                 ))}
                               </tbody>
                             </table>
                           </div>
-                        )}
-                        {result.notes && (
-                          <div className="mt-3 pt-3 border-t" style={{ borderColor: '#E5E7EB' }}>
-                            <p style={{ color: '#6B7280' }} className="text-sm">Notes:</p>
-                            <p className="text-sm" style={{ color: '#0C0E0B' }}>{result.notes}</p>
+                        ) : result.resultText ? (
+                          <div className="mt-3 p-3 rounded" style={{ backgroundColor: '#FFF3CD', color: '#856404' }}>
+                            <p className="text-sm font-medium">Result Summary:</p>
+                            <p className="text-sm mt-1">{result.resultText}</p>
+                          </div>
+                        ) : (
+                          <div className="mt-3 p-3 rounded" style={{ backgroundColor: '#FFF3CD', color: '#856404' }}>
+                            <p className="text-sm italic">📋 Lab test was ordered but detailed results have not been entered yet.</p>
                           </div>
                         )}
+                        
+                        {result.additionalNotes && (
+                          <div className="mt-3 pt-3 border-t" style={{ borderColor: '#E5E7EB' }}>
+                            <p style={{ color: '#6B7280' }} className="text-sm font-semibold">Additional Notes:</p>
+                            <p className="text-sm mt-1" style={{ color: '#0C0E0B' }}>{result.additionalNotes}</p>
+                          </div>
+                        )}
+                        
+                        <div className="mt-3 pt-3 border-t text-xs" style={{ borderColor: '#E5E7EB', color: '#6B7280' }}>
+                          <div className="flex justify-between">
+                            <span>Ordered: {result.createdAt ? new Date(result.createdAt).toLocaleString() : 'N/A'}</span>
+                            {result.verifiedBy && result.verifiedAt && (
+                              <span>Verified by: {result.verifiedBy} on {new Date(result.verifiedAt).toLocaleString()}</span>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -565,27 +606,101 @@ const ComprehensivePatientHistory = () => {
               {activeTab === 'diagnosisNotes' && (
                 <div className="bg-white rounded-lg border shadow-sm p-6" style={{ borderColor: '#E5E7EB' }}>
                   <h3 className="text-lg font-semibold mb-4" style={{ color: '#0C0E0B' }}>Diagnosis & Notes</h3>
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     {selectedVisit.diagnosisNotes.map((note) => (
                       <div key={note.id} className="p-4 border rounded-lg" style={{ borderColor: '#E5E7EB', backgroundColor: '#F9FAFB' }}>
-                        <div className="flex justify-between items-start mb-2">
+                        <div className="flex justify-between items-start mb-4">
                           <span className="text-sm" style={{ color: '#6B7280' }}>{formatDate(note.createdAt)}</span>
                           <span className="text-sm font-medium" style={{ color: '#2e13d1' }}>
                             Dr. {note.doctor?.fullname || 'Unknown'}
                           </span>
                         </div>
-                        {note.diagnosis && (
-                          <div className="mb-2">
-                            <p style={{ color: '#6B7280' }} className="text-sm font-medium">Diagnosis:</p>
-                            <p className="text-sm" style={{ color: '#0C0E0B' }}>{note.diagnosis}</p>
-                          </div>
-                        )}
-                        {note.notes && (
-                          <div>
-                            <p style={{ color: '#6B7280' }} className="text-sm font-medium">Notes:</p>
-                            <p className="text-sm" style={{ color: '#0C0E0B' }}>{note.notes}</p>
-                          </div>
-                        )}
+
+                        <div className="space-y-3">
+                          {note.chiefComplaint && (
+                            <div>
+                              <p style={{ color: '#6B7280' }} className="text-sm font-semibold">Chief Complaint:</p>
+                              <p className="text-sm" style={{ color: '#0C0E0B' }}>{note.chiefComplaint}</p>
+                            </div>
+                          )}
+
+                          {note.historyOfPresentIllness && (
+                            <div>
+                              <p style={{ color: '#6B7280' }} className="text-sm font-semibold">History of Present Illness:</p>
+                              <p className="text-sm" style={{ color: '#0C0E0B' }}>{note.historyOfPresentIllness}</p>
+                            </div>
+                          )}
+
+                          {note.pastMedicalHistory && (
+                            <div>
+                              <p style={{ color: '#6B7280' }} className="text-sm font-semibold">Past Medical History:</p>
+                              <p className="text-sm" style={{ color: '#0C0E0B' }}>{note.pastMedicalHistory}</p>
+                            </div>
+                          )}
+
+                          {note.allergicHistory && (
+                            <div>
+                              <p style={{ color: '#6B7280' }} className="text-sm font-semibold">Allergic History:</p>
+                              <p className="text-sm" style={{ color: '#0C0E0B' }}>{note.allergicHistory}</p>
+                            </div>
+                          )}
+
+                          {note.physicalExamination && (
+                            <div>
+                              <p style={{ color: '#6B7280' }} className="text-sm font-semibold">Physical Examination:</p>
+                              <p className="text-sm" style={{ color: '#0C0E0B' }}>{note.physicalExamination}</p>
+                            </div>
+                          )}
+
+                          {note.investigationFindings && (
+                            <div>
+                              <p style={{ color: '#6B7280' }} className="text-sm font-semibold">Investigation Findings:</p>
+                              <p className="text-sm" style={{ color: '#0C0E0B' }}>{note.investigationFindings}</p>
+                            </div>
+                          )}
+
+                          {note.assessmentAndDiagnosis && (
+                            <div>
+                              <p style={{ color: '#6B7280' }} className="text-sm font-semibold">Assessment & Diagnosis:</p>
+                              <p className="text-sm font-medium" style={{ color: '#0C0E0B' }}>{note.assessmentAndDiagnosis}</p>
+                            </div>
+                          )}
+
+                          {note.treatmentPlan && (
+                            <div>
+                              <p style={{ color: '#6B7280' }} className="text-sm font-semibold">Treatment Plan:</p>
+                              <p className="text-sm" style={{ color: '#0C0E0B' }}>{note.treatmentPlan}</p>
+                            </div>
+                          )}
+
+                          {note.treatmentGiven && (
+                            <div>
+                              <p style={{ color: '#6B7280' }} className="text-sm font-semibold">Treatment Given:</p>
+                              <p className="text-sm" style={{ color: '#0C0E0B' }}>{note.treatmentGiven}</p>
+                            </div>
+                          )}
+
+                          {note.medicationIssued && (
+                            <div>
+                              <p style={{ color: '#6B7280' }} className="text-sm font-semibold">Medication Issued:</p>
+                              <p className="text-sm" style={{ color: '#0C0E0B' }}>{note.medicationIssued}</p>
+                            </div>
+                          )}
+
+                          {note.prognosis && (
+                            <div>
+                              <p style={{ color: '#6B7280' }} className="text-sm font-semibold">Prognosis:</p>
+                              <p className="text-sm" style={{ color: '#0C0E0B' }}>{note.prognosis}</p>
+                            </div>
+                          )}
+
+                          {note.additional && (
+                            <div>
+                              <p style={{ color: '#6B7280' }} className="text-sm font-semibold">Additional Notes:</p>
+                              <p className="text-sm" style={{ color: '#0C0E0B' }}>{note.additional}</p>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>

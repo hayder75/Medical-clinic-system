@@ -27,6 +27,7 @@ model User {
   dispenseLogs  DispenseLog[]
   auditLogs     AuditLog[]
   appointments  Appointment[] @relation("DoctorAppointments")
+  appointmentsCreated Appointment[] @relation("AppointmentCreator")
   labOrders     LabOrder[]
   radiologyOrders RadiologyOrder[]
   batchOrders   BatchOrder[]     // batch orders created by this doctor
@@ -86,6 +87,7 @@ model Insurance {
   patients    Patient[]
   billings    Billing[]
   billPayments BillPayment[]
+  transactions InsuranceTransaction[]
 }
 
 model BillingService {
@@ -149,6 +151,7 @@ model Patient {
   cardActivations CardActivation[]
   cashTransactions CashTransaction[]
   galleryImages   PatientGallery[]
+  insuranceTransactions InsuranceTransaction[]
 
   @@index([status])
   @@index([type])
@@ -189,6 +192,7 @@ model Visit {
   medicalHistories MedicalHistory[] @relation("VisitHistory")
   nurseServiceAssignments NurseServiceAssignment[]
   galleryImages   PatientGallery[]
+  insuranceTransactions InsuranceTransaction[]
   completedAt    DateTime?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
@@ -273,20 +277,39 @@ model VitalSign {
 }
 
 model Appointment {
-  id            Int      @id @default(autoincrement())
-  patientId     String
-  patient       Patient  @relation(fields: [patientId], references: [id])
-  doctorId      String
-  doctor        User     @relation(fields: [doctorId], references: [id], name: "DoctorAppointments")
-  date          DateTime
-  time          String?
-  type          AppointmentType @default(CONSULTATION)
-  status        AppointmentStatus @default(PENDING)
-  duration      String?  // e.g., "30 minutes"
-  notes         String?
-  medicalHistories MedicalHistory[] @relation("AppointmentHistory")
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id                Int      @id @default(autoincrement())
+  patientId         String
+  patient           Patient  @relation(fields: [patientId], references: [id])
+  doctorId          String
+  doctor            User     @relation(fields: [doctorId], references: [id], name: "DoctorAppointments")
+  
+  // Appointment Scheduling
+  appointmentDate   DateTime
+  appointmentTime   String   // e.g., "09:00 AM"
+  
+  // Appointment Details
+  type              AppointmentType @default(CONSULTATION)
+  status            AppointmentStatus @default(SCHEDULED)
+  duration          String?  // e.g., "30 minutes"
+  notes             String?
+  reason            String?  // Reason for appointment
+  
+  // Tracking
+  createdById       String
+  createdBy         User     @relation("AppointmentCreator", fields: [createdById], references: [id])
+  lastDiagnosedBy   String?  // Track which doctor last saw this patient
+  visitId           Int?     // Link to visit when appointment is converted
+  
+  // Audit
+  medicalHistories  MedicalHistory[] @relation("AppointmentHistory")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  @@index([patientId])
+  @@index([doctorId])
+  @@index([createdById])
+  @@index([appointmentDate])
+  @@index([status])
 }
 
 model Billing {
@@ -758,10 +781,12 @@ enum AppointmentType {
 }
 
 enum AppointmentStatus {
-  PENDING
-  SCHEDULED
-  COMPLETED
-  CANCELLED
+  SCHEDULED   // Appointment booked, waiting for patient
+  ARRIVED     // Patient has arrived at reception
+  IN_PROGRESS // Patient is with the doctor
+  COMPLETED   // Appointment completed
+  CANCELLED   // Appointment cancelled
+  NO_SHOW     // Patient didn't show up
 }
 
 enum BillingStatus {
@@ -1377,4 +1402,78 @@ model PatientGallery {
 enum ImageType {
   BEFORE
   AFTER
+}
+
+// Insurance Transaction Tracking System
+model InsuranceTransaction {
+  id            String   @id @default(uuid())
+  insuranceId   String
+  insurance     Insurance @relation(fields: [insuranceId], references: [id])
+  
+  // Patient and Visit Information
+  patientId     String
+  patient       Patient  @relation(fields: [patientId], references: [id])
+  visitId       Int?
+  visit         Visit?   @relation(fields: [visitId], references: [id])
+  
+  // Service Details
+  serviceType   InsuranceServiceType
+  serviceId     String?  // Service ID (for lab, radiology, consultation)
+  serviceName   String   // Service name for display
+  serviceCode   String?  // Service code
+  
+  // Medication Details (for pharmacy transactions)
+  medicationId  String?  // Medication catalog ID
+  medicationName String? // Medication name
+  
+  // Financial Information
+  unitPrice     Float
+  totalAmount   Float
+  quantity      Int      @default(1)
+  
+  // Transaction Status
+  status        InsuranceTransactionStatus @default(PENDING)
+  claimNumber   String?  // Insurance claim number
+  transactionNumber String? // Transaction reference from insurance
+  
+  // Dates
+  serviceDate   DateTime @default(now()) // When service was provided
+  claimDate     DateTime? // When claim was submitted
+  collectedDate DateTime? // When money was collected
+  
+  // Notes and Documentation
+  notes         String?
+  receiptPath   String?  // Path to uploaded receipt
+  
+  // Audit
+  createdById   String?  // User who created this transaction
+  collectedById String?  // User who marked as collected
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@index([insuranceId])
+  @@index([patientId])
+  @@index([visitId])
+  @@index([status])
+  @@index([serviceDate])
+  @@index([createdAt])
+}
+
+enum InsuranceServiceType {
+  CONSULTATION
+  LAB_TEST
+  RADIOLOGY
+  MEDICATION
+  PROCEDURE
+  NURSE_SERVICE
+  OTHER
+}
+
+enum InsuranceTransactionStatus {
+  PENDING      // Service provided, claim not yet submitted
+  SUBMITTED    // Claim submitted to insurance company
+  APPROVED     // Claim approved by insurance
+  COLLECTED    // Money received from insurance
+  REJECTED     // Claim rejected by insurance
 }

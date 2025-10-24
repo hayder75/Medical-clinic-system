@@ -21,9 +21,11 @@ import LabDashboard from './pages/lab/LabDashboard';
 import LabOrders from './pages/lab/LabOrders';
 import PharmacyDashboard from './pages/pharmacy/PharmacyDashboard';
 import AppointmentsPage from './pages/appointments/AppointmentsPage';
+import DoctorAppointments from './pages/doctor/DoctorAppointments';
 import ReceptionDashboard from './pages/reception/ReceptionDashboard';
 import ReceptionPatientRegistration from './pages/reception/ReceptionPatientRegistration';
 import PatientManagement from './pages/reception/PatientManagement';
+import ReceptionAppointments from './pages/reception/ReceptionAppointments';
 import PreRegistration from './pages/reception/PreRegistration';
 import ReceptionDoctorQueueManagement from './pages/reception/DoctorQueueManagement';
 import PatientGallery from './pages/shared/PatientGallery';
@@ -171,6 +173,16 @@ const AppRoutes = () => {
           } 
         />
         
+        <Route 
+          path="/reception/appointments" 
+          element={
+            <ProtectedRoute allowedRoles={['RECEPTIONIST', 'ADMIN']}>
+              <Layout title="Appointments Management" subtitle="View all appointments and send patients to doctor queue">
+                <ReceptionAppointments />
+              </Layout>
+            </ProtectedRoute>
+          } 
+        />
         
         <Route 
           path="/reception/pre-registration" 
@@ -340,9 +352,7 @@ const AppRoutes = () => {
           path="/appointments/*" 
           element={
             <ProtectedRoute allowedRoles={['ADMIN', 'DOCTOR']}>
-              <Layout title="Appointments" subtitle="Schedule and manage patient appointments">
-                <AppointmentsPage />
-              </Layout>
+              <DoctorAppointments />
             </ProtectedRoute>
           } 
         />

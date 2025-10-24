@@ -115,18 +115,9 @@ const EmergencyBilling = () => {
       return;
     }
 
-    if (paymentAmount !== selectedPatient.billing.totalAmount) {
-      toast.error(`Payment amount must be exactly ETB ${selectedPatient.billing.totalAmount}`);
-      return;
-    }
-
     try {
       const response = await api.post('/emergency-billing/process-payment', {
         billingId: selectedPatient.billing.id,
-        amount: paymentAmount,
-        type: paymentType,
-        bankName: bankName || undefined,
-        transNumber: transNumber || undefined,
         notes: paymentNotes || undefined
       });
 
@@ -141,7 +132,7 @@ const EmergencyBilling = () => {
       fetchEmergencyPatients(); // Refresh data
     } catch (error) {
       console.error('Error processing payment:', error);
-      const errorMessage = error.response?.data?.message || 'Failed to process payment';
+      const errorMessage = error.response?.data?.error || 'Failed to process payment';
       toast.error(errorMessage);
     }
   };
@@ -229,10 +220,8 @@ const EmergencyBilling = () => {
               onChange={(e) => setFilterStatus(e.target.value)}
             >
               <option value="ALL">All Status</option>
-              <option value="IN_DOCTOR_QUEUE">Emergency Queue</option>
-              <option value="IN_PROGRESS">In Progress</option>
-              <option value="WAITING_FOR_DOCTOR">Waiting for Doctor</option>
-              <option value="UNDER_DOCTOR_REVIEW">Under Doctor Review</option>
+              <option value="EMERGENCY_PENDING">Pending Payment</option>
+              <option value="PAID">Payment Acknowledged</option>
             </select>
           </div>
         </div>
@@ -252,11 +241,15 @@ const EmergencyBilling = () => {
           </div>
         ) : (
           filteredPatients.map((patient) => (
-            <div key={patient.visitId} className="card">
+            <div key={patient.visitId} className={`card ${patient.billing?.status === 'PAID' ? 'border-green-200 bg-green-50' : ''}`}>
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center space-x-4">
-                  <div className="bg-red-100 p-3 rounded-full">
-                    <User className="h-6 w-6 text-red-600" />
+                  <div className={`p-3 rounded-full ${patient.billing?.status === 'PAID' ? 'bg-green-100' : 'bg-red-100'}`}>
+                    {patient.billing?.status === 'PAID' ? (
+                      <CheckCircle className="h-6 w-6 text-green-600" />
+                    ) : (
+                      <User className="h-6 w-6 text-red-600" />
+                    )}
                   </div>
                   <div>
                     <h3 className="text-lg font-semibold text-gray-900">
@@ -272,10 +265,12 @@ const EmergencyBilling = () => {
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="text-2xl font-bold text-red-600">
+                  <div className={`text-2xl font-bold ${patient.billing?.status === 'PAID' ? 'text-green-600' : 'text-red-600'}`}>
                     ETB {patient.billing?.totalAmount || 0}
                   </div>
-                  <div className="text-sm text-gray-500">Running Total</div>
+                  <div className="text-sm text-gray-500">
+                    {patient.billing?.status === 'PAID' ? 'Amount Accepted' : 'Running Total'}
+                  </div>
                 </div>
               </div>
 
@@ -296,13 +291,15 @@ const EmergencyBilling = () => {
                             </div>
                           </div>
                         </div>
-                        <button
-                          onClick={() => handleRemoveService(service.id)}
-                          className="text-red-600 hover:text-red-800 p-1"
-                          title="Remove service"
-                        >
-                          <XCircle className="h-4 w-4" />
-                        </button>
+                        {patient.billing?.status !== 'PAID' && (
+                          <button
+                            onClick={() => handleRemoveService(service.id)}
+                            className="text-red-600 hover:text-red-800 p-1"
+                            title="Remove service"
+                          >
+                            <XCircle className="h-4 w-4" />
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -316,28 +313,41 @@ const EmergencyBilling = () => {
                   Started: {new Date(patient.createdAt).toLocaleString()}
                 </div>
                 <div className="flex space-x-2">
-                  <button
-                    onClick={() => {
-                      setSelectedPatient(patient);
-                      setShowAddServiceModal(true);
-                    }}
-                    className="btn btn-outline btn-sm flex items-center"
-                  >
-                    <Plus className="h-4 w-4 mr-1" />
-                    Add Service
-                  </button>
-                  <button
-                    onClick={() => {
-                      setSelectedPatient(patient);
-                      setPaymentAmount(patient.billing?.totalAmount || 0);
-                      setShowPaymentModal(true);
-                    }}
-                    disabled={!patient.billing || patient.billing.totalAmount === 0}
-                    className="btn btn-primary btn-sm flex items-center"
-                  >
-                    <CreditCard className="h-4 w-4 mr-1" />
-                    Process Payment
-                  </button>
+                  {patient.billing?.status === 'PAID' ? (
+                    <div className="flex items-center space-x-2">
+                      <div className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium flex items-center">
+                        <CheckCircle className="h-4 w-4 mr-1" />
+                        Payment Acknowledged
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        ETB {patient.billing.totalAmount} accepted
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => {
+                          setSelectedPatient(patient);
+                          setShowAddServiceModal(true);
+                        }}
+                        className="btn btn-outline btn-sm flex items-center"
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add Service
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSelectedPatient(patient);
+                          setShowPaymentModal(true);
+                        }}
+                        disabled={!patient.billing || patient.billing.totalAmount === 0}
+                        className="btn btn-primary btn-sm flex items-center"
+                      >
+                        <CheckCircle className="h-4 w-4 mr-1" />
+                        Acknowledge Payment
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -405,63 +415,25 @@ const EmergencyBilling = () => {
         </div>
       )}
 
-      {/* Payment Modal */}
+      {/* Payment Acknowledgment Modal */}
       {showPaymentModal && selectedPatient && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h3 className="text-lg font-semibold mb-4">Process Emergency Payment</h3>
+            <h3 className="text-lg font-semibold mb-4">Acknowledge Emergency Payment</h3>
+            
             <div className="space-y-4">
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <div className="text-sm text-gray-600">Patient: {selectedPatient.patient.name}</div>
-                <div className="text-sm text-gray-600">Visit: {selectedPatient.visitUid}</div>
-                <div className="text-lg font-semibold text-gray-900 mt-2">
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <p className="text-sm text-blue-800 font-medium">Payment Acknowledgment</p>
+                <p className="text-sm text-blue-600">Patient: {selectedPatient.patient.name}</p>
+                <p className="text-sm text-blue-600">Visit: {selectedPatient.visitUid}</p>
+                <p className="text-lg font-semibold text-blue-900 mt-2">
                   Total Amount: ETB {selectedPatient.billing?.totalAmount || 0}
-                </div>
+                </p>
+                <p className="text-xs text-blue-500 mt-2">
+                  Note: Money is already tracked in the main billing system. This just acknowledges the payment.
+                </p>
               </div>
-              <div>
-                <label className="label">Payment Amount</label>
-                <input
-                  type="number"
-                  className="input"
-                  value={paymentAmount}
-                  onChange={(e) => setPaymentAmount(parseFloat(e.target.value) || 0)}
-                  disabled
-                />
-              </div>
-              <div>
-                <label className="label">Payment Type</label>
-                <select
-                  className="input"
-                  value={paymentType}
-                  onChange={(e) => setPaymentType(e.target.value)}
-                >
-                  <option value="CASH">Cash</option>
-                  <option value="BANK">Bank Transfer</option>
-                  <option value="INSURANCE">Insurance</option>
-                </select>
-              </div>
-              {paymentType === 'BANK' && (
-                <>
-                  <div>
-                    <label className="label">Bank Name</label>
-                    <input
-                      type="text"
-                      className="input"
-                      value={bankName}
-                      onChange={(e) => setBankName(e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <label className="label">Transaction Number</label>
-                    <input
-                      type="text"
-                      className="input"
-                      value={transNumber}
-                      onChange={(e) => setTransNumber(e.target.value)}
-                    />
-                  </div>
-                </>
-              )}
+              
               <div>
                 <label className="label">Notes (Optional)</label>
                 <textarea
@@ -469,7 +441,7 @@ const EmergencyBilling = () => {
                   rows="3"
                   value={paymentNotes}
                   onChange={(e) => setPaymentNotes(e.target.value)}
-                  placeholder="Payment notes..."
+                  placeholder="Add any notes about this payment acknowledgment..."
                 />
               </div>
             </div>
@@ -485,7 +457,7 @@ const EmergencyBilling = () => {
                 className="btn btn-primary flex items-center"
               >
                 <CheckCircle className="h-4 w-4 mr-1" />
-                Process Payment
+                Acknowledge Payment
               </button>
             </div>
           </div>

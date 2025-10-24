@@ -13,8 +13,8 @@ const addServiceSchema = z.object({
 
 // Schema for emergency payment processing
 const emergencyPaymentSchema = z.object({
-  billingId: z.string(),
-  amount: z.number().min(0),
+  billingId: z.union([z.string(), z.number()]).transform(val => parseInt(val)),
+  amount: z.union([z.string(), z.number()]).transform(val => parseFloat(val)),
   type: z.enum(['CASH', 'BANK', 'INSURANCE']),
   bankName: z.string().optional(),
   transNumber: z.string().optional(),
@@ -44,7 +44,9 @@ exports.getEmergencyPatients = async (req, res) => {
         bills: {
           where: {
             billingType: 'EMERGENCY',
-            status: 'EMERGENCY_PENDING'
+            status: {
+              in: ['EMERGENCY_PENDING', 'PAID']
+            }
           },
           include: {
             services: {
@@ -275,15 +277,21 @@ exports.removeServiceFromEmergency = async (req, res) => {
   }
 };
 
-// Process emergency payment
+// Process emergency payment - Simplified status update
 exports.processEmergencyPayment = async (req, res) => {
   try {
-    const validatedData = emergencyPaymentSchema.parse(req.body);
+    console.log('Emergency payment request body:', JSON.stringify(req.body, null, 2));
+    
+    const { billingId, notes } = req.body;
     const billingOfficerId = req.user.id;
+
+    if (!billingId) {
+      return res.status(400).json({ error: 'Billing ID is required' });
+    }
 
     // Get the billing record
     const billing = await prisma.billing.findUnique({
-      where: { id: validatedData.billingId },
+      where: { id: billingId },
       include: {
         patient: true,
         visit: true,
@@ -307,36 +315,18 @@ exports.processEmergencyPayment = async (req, res) => {
       return res.status(400).json({ error: 'Emergency billing is not pending payment' });
     }
 
-    // Validate payment amount
-    if (validatedData.amount !== billing.totalAmount) {
-      return res.status(400).json({ 
-        error: `Payment amount (ETB ${validatedData.amount}) does not match total amount (ETB ${billing.totalAmount})` 
-      });
-    }
+    console.log('Updating emergency billing status...');
 
-    // Create payment record
-    const payment = await prisma.billPayment.create({
-      data: {
-        billingId: validatedData.billingId,
-        patientId: billing.patientId,
-        amount: validatedData.amount,
-        type: validatedData.type,
-        bankName: validatedData.bankName || null,
-        transNumber: validatedData.transNumber || null,
-        insuranceId: validatedData.insuranceId || null,
-        notes: validatedData.notes || null,
-        processedBy: billingOfficerId
-      }
-    });
-
-    // Update billing status
+    // Update billing status to PAID (just a status change, money already tracked in main billing)
     await prisma.billing.update({
-      where: { id: validatedData.billingId },
+      where: { id: billingId },
       data: { 
         status: 'PAID',
-        notes: `Emergency payment processed. ${validatedData.notes || ''}`
+        notes: `Emergency payment acknowledged by billing officer. ${notes || ''}`
       }
     });
+
+    console.log('Billing status updated');
 
     // Update visit status to completed
     await prisma.visit.update({
@@ -347,39 +337,30 @@ exports.processEmergencyPayment = async (req, res) => {
       }
     });
 
+    console.log('Visit status updated');
+
     // Log action
     await prisma.auditLog.create({
       data: {
-        action: 'EMERGENCY_PAYMENT_PROCESSED',
-        entity: 'BillPayment',
-        entityId: payment.id,
+        action: 'EMERGENCY_PAYMENT_ACKNOWLEDGED',
+        entity: 'Billing',
+        entityId: 0, // Use 0 since billing ID is a string UUID
         userId: billingOfficerId,
-        details: `Emergency payment processed for patient ${billing.patient.name}. Amount: ETB ${validatedData.amount}, Type: ${validatedData.type}`
+        details: `Emergency payment acknowledged for patient ${billing.patient.name}. Amount: ETB ${billing.totalAmount}. Money already tracked in main billing system.`
       }
     });
 
+    console.log('Audit log created');
+
     res.json({
-      payment,
       billing: {
         ...billing,
         status: 'PAID'
       },
-      message: `Emergency payment of ETB ${validatedData.amount} processed successfully. Visit completed.`
+      message: `Emergency payment of ETB ${billing.totalAmount} acknowledged. Visit completed. Money already tracked in main billing system.`
     });
   } catch (error) {
     console.error('Error processing emergency payment:', error);
-    if (error instanceof z.ZodError) {
-      const errorMessages = error.errors.map(err => {
-        const field = err.path.join('.');
-        const message = err.message;
-        return `${field}: ${message}`;
-      });
-      return res.status(400).json({ 
-        error: 'Validation error', 
-        details: errorMessages,
-        message: `Please fix the following errors: ${errorMessages.join(', ')}`
-      });
-    }
     res.status(500).json({ error: error.message });
   }
 };

@@ -35,6 +35,8 @@ const receptionRoutes = require('./src/routes/reception');
 const emergencyBillingRoutes = require('./src/routes/emergencyBilling');
 const cashManagementRoutes = require('./src/routes/cashManagement');
 const galleryRoutes = require('./src/routes/gallery');
+const appointmentsRoutes = require('./src/routes/appointments');
+const insuranceRoutes = require('./src/routes/insurance');
 
 // Middleware
 const authMiddleware = require('./src/middleware/auth');
@@ -91,6 +93,8 @@ app.use('/api/reception', receptionRoutes);
 app.use('/api/emergency-billing', authMiddleware, roleGuard(['BILLING_OFFICER', 'ADMIN']), emergencyBillingRoutes);
 app.use('/api/cash-management', cashManagementRoutes);
 app.use('/api/gallery', galleryRoutes);
+app.use('/api/appointments', authMiddleware, appointmentsRoutes);
+app.use('/api/insurance', insuranceRoutes);
 
 // Cron for inactivity (run daily)
 cron.schedule('0 0 * * *', async () => {

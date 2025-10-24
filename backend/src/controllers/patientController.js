@@ -89,6 +89,9 @@ exports.searchPatients = async (req, res) => {
         gender: true,
         bloodType: true,
         status: true,
+        cardStatus: true,
+        cardActivatedAt: true,
+        cardExpiryDate: true,
         createdAt: true
       },
       orderBy: { name: 'asc' },
@@ -116,6 +119,9 @@ exports.searchPatients = async (req, res) => {
               gender: true,
               bloodType: true,
               status: true,
+              cardStatus: true,
+              cardActivatedAt: true,
+              cardExpiryDate: true,
               createdAt: true
             }
           }

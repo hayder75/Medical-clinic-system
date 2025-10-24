@@ -12,6 +12,25 @@ const fonts = {
 
 const printer = new PdfPrinter(fonts);
 
+// Helper function to map service categories to insurance service types
+function getServiceTypeFromCategory(category) {
+  const categoryMap = {
+    'CONSULTATION': 'CONSULTATION',
+    'LAB': 'LAB_TEST',
+    'RADIOLOGY': 'RADIOLOGY',
+    'MEDICATION': 'MEDICATION',
+    'PROCEDURE': 'PROCEDURE',
+    'NURSE': 'NURSE_SERVICE',
+    'CONTINUOUS_INFUSION': 'NURSE_SERVICE',
+    'EMERGENCY': 'OTHER',
+    'DIAGNOSTIC': 'OTHER',
+    'TREATMENT': 'PROCEDURE',
+    'OTHER': 'OTHER'
+  };
+  
+  return categoryMap[category] || 'OTHER';
+}
+
 // Validation schemas
 const paymentSchema = z.object({
   billingId: z.string(),
@@ -729,6 +748,29 @@ exports.processPayment = async (req, res) => {
       }
     });
 
+    // If this is an insurance payment, create insurance transactions for each service
+    if (type === 'INSURANCE' && insuranceId) {
+      for (const billingService of billing.services) {
+        await prisma.insuranceTransaction.create({
+          data: {
+            insuranceId,
+            patientId: billing.patientId,
+            visitId: billing.visitId,
+            serviceType: getServiceTypeFromCategory(billingService.service.category),
+            serviceId: billingService.serviceId,
+            serviceName: billingService.service.name,
+            serviceCode: billingService.service.code,
+            unitPrice: billingService.unitPrice,
+            totalAmount: billingService.totalPrice,
+            quantity: billingService.quantity,
+            status: 'PENDING',
+            notes: notes || 'Insurance payment processed',
+            createdById: req.user.id
+          }
+        });
+      }
+    }
+
     // Create audit log
     await prisma.auditLog.create({
       data: {
@@ -1213,6 +1255,34 @@ exports.getBillingDashboardStats = async (req, res) => {
 
     const pendingAmount = pendingBillingsData.reduce((sum, billing) => sum + billing.totalAmount, 0);
 
+    // Get insurance totals for the period (separate from cash/bank)
+    const insuranceTransactions = await prisma.insuranceTransaction.findMany({
+      where: {
+        serviceDate: {
+          gte: startDate,
+          lt: endDate
+        }
+      },
+      select: {
+        totalAmount: true,
+        status: true,
+        insurance: {
+          select: {
+            name: true,
+            code: true
+          }
+        }
+      }
+    });
+
+    const insuranceTotal = insuranceTransactions.reduce((sum, t) => sum + t.totalAmount, 0);
+    const insurancePending = insuranceTransactions
+      .filter(t => ['PENDING', 'SUBMITTED', 'APPROVED'].includes(t.status))
+      .reduce((sum, t) => sum + t.totalAmount, 0);
+    const insuranceCollected = insuranceTransactions
+      .filter(t => t.status === 'COLLECTED')
+      .reduce((sum, t) => sum + t.totalAmount, 0);
+
     // Get recent transactions (last 10 payments processed by this user)
     const recentTransactions = userProcessedPayments.slice(0, 10).map(payment => ({
       id: payment.id,
@@ -1232,11 +1302,17 @@ exports.getBillingDashboardStats = async (req, res) => {
         end: endDate
       },
       stats: {
-        totalAmount,
+        totalAmount, // Cash/Bank payments only
         totalCount,
         pendingBillings,
         pendingAmount,
-        byType: statsByType
+        byType: statsByType,
+        insurance: {
+          totalAmount: insuranceTotal,
+          pendingAmount: insurancePending,
+          collectedAmount: insuranceCollected,
+          totalTransactions: insuranceTransactions.length
+        }
       },
       recentTransactions
     });

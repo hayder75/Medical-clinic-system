@@ -1,5 +1,5 @@
 import React from 'react';
-import { Users, Calendar, Phone, CreditCard } from 'lucide-react';
+import { Users, Calendar, Phone, CreditCard, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const ReceptionDashboard = () => {
@@ -21,17 +21,24 @@ const ReceptionDashboard = () => {
       link: '/reception/patients'
     },
     {
+      title: 'Appointments Management',
+      description: 'View all appointments and send patients to doctor queue',
+      icon: Clock,
+      color: 'bg-purple-500',
+      link: '/reception/appointments'
+    },
+    {
       title: 'Pre-Registration',
       description: 'Handle phone call registrations and appointments',
       icon: Phone,
-      color: 'bg-purple-500',
+      color: 'bg-orange-500',
       link: '/reception/pre-registration'
     },
     {
       title: 'Billing Status',
       description: 'View pending billings and payment status',
       icon: CreditCard,
-      color: 'bg-orange-500',
+      color: 'bg-red-500',
       link: '/billing'
     }
   ];

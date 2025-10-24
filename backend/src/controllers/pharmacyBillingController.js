@@ -513,6 +513,28 @@ exports.processPharmacyPayment = async (req, res) => {
       }
     });
 
+    // If this is an insurance payment, create insurance transactions for each medication
+    if (type === 'INSURANCE' && insuranceId) {
+      for (const item of invoice.pharmacyInvoiceItems) {
+        await prisma.insuranceTransaction.create({
+          data: {
+            insuranceId,
+            patientId: invoice.patientId,
+            visitId: invoice.visitId,
+            serviceType: 'MEDICATION',
+            medicationId: item.medicationCatalogId,
+            medicationName: item.name,
+            unitPrice: item.unitPrice,
+            totalAmount: item.totalPrice,
+            quantity: item.quantity,
+            status: 'PENDING',
+            notes: notes || 'Pharmacy insurance payment processed',
+            createdById: processedBy
+          }
+        });
+      }
+    }
+
     // Create audit log (optional - skip if user doesn't exist in database)
     try {
       await prisma.auditLog.create({

@@ -92,6 +92,7 @@ const Layout = ({ children, title, subtitle }) => {
           ...baseItems,
           { name: 'Patient Registration', href: '/reception/register', icon: Calendar },
           { name: 'Patient Management', href: '/reception/patients', icon: Users },
+          { name: 'Appointments', href: '/reception/appointments', icon: Clock },
           { name: 'Pre-Registration', href: '/reception/pre-registration', icon: Phone },
           { name: 'Doctor Queue Management', href: '/reception/doctor-queue', icon: Stethoscope },
           { name: 'Patient Gallery', href: '/reception/gallery', icon: Image },

@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2, Search, Building2 } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, Building2, Eye, FileText, DollarSign } from 'lucide-react';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 
 const InsuranceManagement = () => {
+  const navigate = useNavigate();
   const [insurances, setInsurances] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -23,7 +25,11 @@ const InsuranceManagement = () => {
     try {
       setLoading(true);
       const response = await api.get('/admin/insurances');
-      setInsurances(response.data.insurances || []);
+      const basicInsurances = response.data.insurances || [];
+      
+      // For now, just use basic insurance data
+      // TODO: Add transaction data when the detailed API is working
+      setInsurances(basicInsurances);
     } catch (error) {
       toast.error('Failed to fetch insurances');
       console.error('Error fetching insurances:', error);
@@ -120,7 +126,11 @@ const InsuranceManagement = () => {
       {/* Insurances List */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredInsurances.map((insurance) => (
-          <div key={insurance.id} className="card">
+          <div 
+            key={insurance.id} 
+            className="card cursor-pointer hover:shadow-lg transition-all duration-200 border-2 border-transparent hover:border-blue-200"
+            onClick={() => navigate(`/admin/insurances/${insurance.id}`)}
+          >
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-center">
                 <div className="h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center">
@@ -133,15 +143,31 @@ const InsuranceManagement = () => {
               </div>
               <div className="flex space-x-2">
                 <button
-                  onClick={() => handleEdit(insurance)}
-                  className="text-blue-600 hover:text-blue-800"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate(`/admin/insurances/${insurance.id}`);
+                  }}
+                  className="text-green-600 hover:text-green-800 p-1 rounded hover:bg-green-50"
+                  title="View Details"
+                >
+                  <Eye className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleEdit(insurance);
+                  }}
+                  className="text-blue-600 hover:text-blue-800 p-1 rounded hover:bg-blue-50"
                   title="Edit"
                 >
                   <Edit className="h-4 w-4" />
                 </button>
                 <button
-                  onClick={() => handleDelete(insurance.id)}
-                  className="text-red-600 hover:text-red-800"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(insurance.id);
+                  }}
+                  className="text-red-600 hover:text-red-800 p-1 rounded hover:bg-red-50"
                   title="Delete"
                 >
                   <Trash2 className="h-4 w-4" />
@@ -159,6 +185,13 @@ const InsuranceManagement = () => {
                 <span className={`badge ${insurance.isActive ? 'badge-success' : 'badge-danger'}`}>
                   {insurance.isActive ? 'Active' : 'Inactive'}
                 </span>
+              </div>
+              
+              {/* Transaction Summary - Will be added when API is working */}
+              <div className="border-t pt-2 mt-2">
+                <div className="text-center text-sm text-blue-600 font-medium">
+                  <p>Click anywhere on this card to view transactions</p>
+                </div>
               </div>
             </div>
           </div>
