@@ -109,5 +109,18 @@ cron.schedule('0 0 * * *', async () => {
 });
 
 const PORT = process.env.PORT || 3000;
-const HOST = process.env.HOST || 'localhost';
-app.listen(PORT, HOST, () => console.log(`Server running on http://${HOST}:${PORT}`));
+const HOST = process.env.HOST || '0.0.0.0';
+
+// Health check endpoint for Render
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
+
+app.listen(PORT, HOST, () => {
+  console.log(`🚀 Server running on http://${HOST}:${PORT}`);
+  console.log(`📊 Health check: http://${HOST}:${PORT}/api/health`);
+});

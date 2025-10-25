@@ -1,0 +1,38 @@
+services:
+  - type: web
+    name: medical-clinic-backend
+    env: node
+    plan: free
+    buildCommand: cd backend && npm install
+    startCommand: cd backend && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        fromDatabase:
+          name: medical-clinic-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CLOUDINARY_CLOUD_NAME
+        value: ddgukdjyd
+      - key: CLOUDINARY_API_KEY
+        value: 769494294237147
+      - key: CLOUDINARY_API_SECRET
+        value: Ao9fnxTLDliaZoUYxSufOBIHVdQ
+
+  - type: web
+    name: medical-clinic-frontend
+    env: static
+    plan: free
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: ./frontend/dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://medical-clinic-backend.onrender.com/api
+
+databases:
+  - name: medical-clinic-db
+    plan: free
