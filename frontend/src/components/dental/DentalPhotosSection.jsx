@@ -96,7 +96,7 @@ const DentalPhotosSection = ({ visitId, patientId, photoType, title, onPhotosCha
 
   const downloadImage = (photo) => {
     const link = document.createElement('a');
-    const url = `http://localhost:3000/${photo.filePath}`;
+    const url = photo.filePath;
     link.href = url;
     link.download = photo.fileName;
     link.target = '_blank';
@@ -160,7 +160,7 @@ const DentalPhotosSection = ({ visitId, patientId, photoType, title, onPhotosCha
                 onClick={() => handleImageClick(index)}
               >
                   <img
-                    src={`http://localhost:3000/${photo.filePath}`}
+                    src={photo.filePath}
                     alt={photo.description || photo.fileName}
                     className="w-full h-full object-cover"
                     onError={(e) => {
@@ -227,7 +227,7 @@ const DentalPhotosSection = ({ visitId, patientId, photoType, title, onPhotosCha
         isOpen={showImageViewer}
         onClose={() => setShowImageViewer(false)}
         images={photos.map(photo => ({
-          fileUrl: `http://localhost:3000/${photo.filePath}`,
+          fileUrl: photo.filePath,
           fileName: photo.fileName,
           description: photo.description
         }))}

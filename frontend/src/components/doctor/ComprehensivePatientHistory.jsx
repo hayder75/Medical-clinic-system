@@ -376,7 +376,7 @@ const ComprehensivePatientHistory = () => {
                       <div key={image.id} className="relative group">
                         <div className="w-full h-48 bg-gray-200 rounded-lg border-2 border-gray-200 overflow-hidden">
                           <img
-                            src={`http://localhost:3000/${image.filePath}`}
+                            src={image.filePath}
                             alt={image.description || 'Medical image'}
                             className="w-full h-full object-cover"
                           />
@@ -414,7 +414,7 @@ const ComprehensivePatientHistory = () => {
                     {selectedVisit.galleryImages.map((image) => (
                       <div key={image.id} className="relative group">
                         <img
-                          src={`http://localhost:3000/${image.filePath}`}
+                          src={image.filePath}
                           alt={image.imageType}
                           className="w-full h-48 object-cover rounded border cursor-pointer hover:opacity-80 transition"
                           style={{ borderColor: '#E5E7EB' }}
@@ -547,7 +547,7 @@ const ComprehensivePatientHistory = () => {
                             {result.attachments.map((attachment, idx) => (
                               <div key={idx}>
                                 <img
-                                  src={`http://localhost:3000/${attachment.fileUrl}`}
+                                  src={attachment.fileUrl}
                                   alt={`Radiology ${idx + 1}`}
                                   className="w-full h-24 object-cover rounded border cursor-pointer hover:opacity-80"
                                   style={{ borderColor: '#E5E7EB' }}

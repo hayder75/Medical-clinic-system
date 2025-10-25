@@ -96,7 +96,7 @@ const DentalBeforeAfterPhotos = ({ visitId, patientId }) => {
 
   const downloadImage = (photo) => {
     const link = document.createElement('a');
-    link.href = `http://localhost:3000/${photo.filePath}`;
+    link.href = photo.filePath;
     link.download = photo.fileName;
     link.target = '_blank';
     document.body.appendChild(link);
@@ -136,7 +136,7 @@ const DentalBeforeAfterPhotos = ({ visitId, patientId }) => {
                 onClick={() => handleImageClick(index)}
               >
                 <img
-                  src={`http://localhost:3000/${photo.filePath}`}
+                  src={photo.filePath}
                   alt={photo.description || photo.fileName}
                   className="w-full h-full object-cover"
                   onError={(e) => {
@@ -308,7 +308,7 @@ const DentalBeforeAfterPhotos = ({ visitId, patientId }) => {
         isOpen={showImageViewer}
         onClose={() => setShowImageViewer(false)}
         images={[...beforePhotos, ...afterPhotos].map(photo => ({
-          fileUrl: `http://localhost:3000/${photo.filePath}`,
+          fileUrl: photo.filePath,
           fileName: photo.fileName,
           description: photo.description
         }))}

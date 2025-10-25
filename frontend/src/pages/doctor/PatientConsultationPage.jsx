@@ -556,7 +556,7 @@ const PatientConsultationPage = () => {
                     <div key={image.id} className="relative group">
                       <div className="w-full h-48 bg-gray-200 rounded-lg border-2 border-gray-200 overflow-hidden">
                         <img
-                          src={`http://localhost:3000/${image.filePath}`}
+                          src={image.filePath}
                           alt={image.description || 'Medical image'}
                           className="w-full h-full object-cover"
                           onError={(e) => {
@@ -985,7 +985,7 @@ const PatientConsultationPage = () => {
                                               {/* Show image preview */}
                                               <div className="relative w-full h-32 bg-gray-200 rounded overflow-hidden">
                                                 <img
-                                                  src={`http://localhost:3000/${attachment.fileUrl}`}
+                                                  src={attachment.fileUrl}
                                                   alt={attachment.fileName || `Image ${attIndex + 1}`}
                                                   className="w-full h-full object-cover transition-transform group-hover:scale-105"
                                                   onError={(e) => {
@@ -1019,7 +1019,7 @@ const PatientConsultationPage = () => {
                                                   onClick={(e) => {
                                                     e.stopPropagation();
                                                     const link = document.createElement('a');
-                                                    link.href = `http://localhost:3000/${attachment.fileUrl}`;
+                                                    link.href = attachment.fileUrl;
                                                     link.download = attachment.fileName || 'download';
                                                     link.click();
                                                   }}

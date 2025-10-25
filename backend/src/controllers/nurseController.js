@@ -308,12 +308,12 @@ exports.assignDoctor = async (req, res) => {
     const consultationPrice = doctor.consultationFee || consultationService.price;
 
     // Check if this is an emergency visit
-    const visit = await prisma.visit.findUnique({
+    const emergencyVisit = await prisma.visit.findUnique({
       where: { id: visitId }
     });
 
     let billing;
-    if (visit.isEmergency) {
+    if (emergencyVisit.isEmergency) {
       // For emergency patients, add consultation to emergency billing
       console.log('🚨 Emergency patient - Adding consultation to emergency billing');
       

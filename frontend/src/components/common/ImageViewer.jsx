@@ -78,7 +78,7 @@ const ImageViewer = ({ isOpen, onClose, images, currentIndex = 0 }) => {
 
   const handleDownload = () => {
     const link = document.createElement('a');
-    link.href = `http://localhost:3000/${currentImage.filePath || currentImage.fileUrl}`;
+    link.href = currentImage.filePath || currentImage.fileUrl;
     link.download = currentImage.fileName || 'radiology-image';
     document.body.appendChild(link);
     link.click();
@@ -144,7 +144,7 @@ const ImageViewer = ({ isOpen, onClose, images, currentIndex = 0 }) => {
       {/* Image Container */}
       <div className="relative max-w-full max-h-full p-20">
         <img
-          src={`http://localhost:3000/${currentImage.filePath || currentImage.fileUrl}`}
+          src={currentImage.filePath || currentImage.fileUrl}
           alt={currentImage.fileName || 'Radiology image'}
           className="max-w-full max-h-full object-contain transition-transform duration-200"
           style={{

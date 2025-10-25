@@ -185,7 +185,9 @@ const PatientGallery = () => {
 
   // Open image viewer
   const openImageViewer = (image) => {
-    setCurrentImage(image);
+    const imagesArray = visitImages.map(img => ({ filePath: img.filePath }));
+    const currentIndex = visitImages.findIndex(img => img.id === image.id);
+    setCurrentImage({ images: imagesArray, currentIndex });
     setImageViewerOpen(true);
   };
 
@@ -455,7 +457,7 @@ const PatientGallery = () => {
               {visitImages.map((image) => (
                 <div key={image.id} className="relative group">
                   <img
-                    src={`http://localhost:3000/${image.filePath}`}
+                    src={image.filePath}
                     alt={image.imageType}
                     className="w-full h-48 object-cover rounded-lg border cursor-pointer"
                     onClick={() => openImageViewer(image)}
@@ -509,8 +511,10 @@ const PatientGallery = () => {
       {/* Image Viewer */}
       {imageViewerOpen && currentImage && (
         <ImageViewer
-          filePath={currentImage.filePath}
+          isOpen={imageViewerOpen}
           onClose={closeImageViewer}
+          images={currentImage.images}
+          currentIndex={currentImage.currentIndex}
         />
       )}
     </div>
