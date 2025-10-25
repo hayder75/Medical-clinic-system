@@ -708,8 +708,7 @@ exports.getUnifiedQueue = async (req, res) => {
           {
             OR: [
               { assignmentId: { in: assignmentIds } },
-              { batchOrders: { some: { doctorId: doctorId } } },
-              { appointments: { some: { doctorId: doctorId } } }
+              { batchOrders: { some: { doctorId: doctorId } } }
             ]
           },
           {
@@ -799,19 +798,6 @@ exports.getUnifiedQueue = async (req, res) => {
             payments: true
           }
         },
-        appointments: {
-          where: {
-            visitId: { not: null }
-          },
-          select: {
-            id: true,
-            type: true,
-            reason: true,
-            notes: true,
-            appointmentDate: true,
-            appointmentTime: true
-          }
-        },
         dentalRecords: true,
         nurseServiceAssignments: {
           where: {
@@ -836,28 +822,36 @@ exports.getUnifiedQueue = async (req, res) => {
 
     console.log('🔍 Found visits:', allVisits.length);
     allVisits.forEach(visit => {
-      console.log(`  - Visit ${visit.id}: ${visit.patient.name}, Status: ${visit.status}, AssignmentId: ${visit.assignmentId}, HasAppointments: ${visit.appointments?.length || 0}`);
+      console.log(`  - Visit ${visit.id}: ${visit.patient.name}, Status: ${visit.status}, AssignmentId: ${visit.assignmentId}`);
     });
 
     // Additional safety check: Find visits from appointments that might not be properly linked
-    const appointmentVisits = await prisma.visit.findMany({
+    // First, find appointments for this doctor that are in progress and have a visitId
+    const appointmentVisits = await prisma.appointment.findMany({
       where: {
+        doctorId: doctorId,
+        status: 'IN_PROGRESS',
+        visitId: { not: null }
+      },
+      include: {
+        patient: true
+      }
+    });
+
+    // Get the visitIds from appointments
+    const appointmentVisitIds = appointmentVisits.map(apt => apt.visitId).filter(id => id !== null);
+    
+    // Get the actual visits for these appointment visitIds
+    const visitsToFix = await prisma.visit.findMany({
+      where: {
+        id: { in: appointmentVisitIds },
         status: {
           in: ['WAITING_FOR_DOCTOR', 'UNDER_DOCTOR_REVIEW', 'NURSE_SERVICES_COMPLETED', 'AWAITING_RESULTS_REVIEW', 'IN_DOCTOR_QUEUE']
-        },
-        appointments: { 
-          some: { 
-            doctorId: doctorId,
-            status: 'IN_PROGRESS'
-          } 
         },
         assignmentId: null // Missing assignment link
       },
       include: {
         patient: true,
-        appointments: {
-          where: { doctorId: doctorId }
-        },
         bills: {
           include: {
             services: {
@@ -870,10 +864,10 @@ exports.getUnifiedQueue = async (req, res) => {
       }
     });
 
-    if (appointmentVisits.length > 0) {
-      console.log(`🔧 Found ${appointmentVisits.length} appointment visits missing assignment links - fixing...`);
+    if (visitsToFix.length > 0) {
+      console.log(`🔧 Found ${visitsToFix.length} appointment visits missing assignment links - fixing...`);
       
-      for (const visit of appointmentVisits) {
+      for (const visit of visitsToFix) {
         // Find or create assignment
         let assignment = await prisma.assignment.findFirst({
           where: {
@@ -907,6 +901,29 @@ exports.getUnifiedQueue = async (req, res) => {
     const filteredVisits = allVisits;
 
     // Add priority and queue type to each visit
+    // Get appointment information for visits that have appointments
+    const visitIds = filteredVisits.map(v => v.id);
+    const visitAppointments = await prisma.appointment.findMany({
+      where: {
+        visitId: { in: visitIds },
+        doctorId: doctorId
+      },
+      select: {
+        visitId: true,
+        type: true,
+        reason: true,
+        notes: true,
+        appointmentDate: true,
+        appointmentTime: true
+      }
+    });
+
+    // Create a map of visitId to appointment for quick lookup
+    const appointmentMap = {};
+    visitAppointments.forEach(apt => {
+      appointmentMap[apt.visitId] = apt;
+    });
+
     const unifiedQueue = filteredVisits.map(visit => {
       let priority = 3; // Default: New consultation
       let queueType = 'NEW_CONSULTATION';
@@ -914,8 +931,8 @@ exports.getUnifiedQueue = async (req, res) => {
       let appointmentLabel = null;
 
       // Check if this visit is from an appointment
-      if (visit.appointments && visit.appointments.length > 0) {
-        const appointment = visit.appointments[0];
+      const appointment = appointmentMap[visit.id];
+      if (appointment) {
         appointmentLabel = {
           type: appointment.type,
           reason: appointment.reason,
@@ -1084,19 +1101,6 @@ exports.getVisitDetails = async (req, res) => {
               }
             },
             payments: true
-          }
-        },
-        appointments: {
-          where: {
-            visitId: { not: null }
-          },
-          select: {
-            id: true,
-            type: true,
-            reason: true,
-            notes: true,
-            appointmentDate: true,
-            appointmentTime: true
           }
         },
         dentalRecords: true,
@@ -2759,19 +2763,6 @@ exports.getPatientHistory = async (req, res) => {
             payments: true
           }
         },
-        appointments: {
-          where: {
-            visitId: { not: null }
-          },
-          select: {
-            id: true,
-            type: true,
-            reason: true,
-            notes: true,
-            appointmentDate: true,
-            appointmentTime: true
-          }
-        },
         pharmacyInvoices: {
           include: {
             dispensedMedicines: {
@@ -3033,8 +3024,8 @@ exports.completeVisit = async (req, res) => {
       return res.status(404).json({ error: 'Visit not found' });
     }
 
-    if (!['UNDER_DOCTOR_REVIEW', 'SENT_TO_PHARMACY', 'AWAITING_RESULTS_REVIEW'].includes(visit.status)) {
-      return res.status(400).json({ error: 'Visit must be under doctor review, sent to pharmacy, or awaiting results review to complete' });
+    if (!['UNDER_DOCTOR_REVIEW', 'SENT_TO_PHARMACY', 'AWAITING_RESULTS_REVIEW', 'NURSE_SERVICES_COMPLETED'].includes(visit.status)) {
+      return res.status(400).json({ error: 'Visit must be under doctor review, sent to pharmacy, awaiting results review, or nurse services completed to complete' });
     }
 
     // Fetch detailed lab and radiology results

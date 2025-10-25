@@ -174,7 +174,14 @@ const AuditLogs = () => {
                     {log.ip}
                   </td>
                   <td className="max-w-xs truncate">
-                    {log.details ? JSON.stringify(JSON.parse(log.details), null, 2) : 'N/A'}
+                    {log.details ? (() => {
+                      try {
+                        const parsed = JSON.parse(log.details);
+                        return JSON.stringify(parsed, null, 2);
+                      } catch (e) {
+                        return log.details;
+                      }
+                    })() : 'N/A'}
                   </td>
                   <td>
                     <button
@@ -230,7 +237,14 @@ const AuditLogs = () => {
                 <div>
                   <label className="text-sm font-medium text-gray-500">Details</label>
                   <pre className="text-xs text-gray-900 bg-gray-100 p-2 rounded overflow-auto max-h-32">
-                    {JSON.stringify(JSON.parse(selectedLog.details || '{}'), null, 2)}
+                    {(() => {
+                      try {
+                        const parsed = JSON.parse(selectedLog.details || '{}');
+                        return JSON.stringify(parsed, null, 2);
+                      } catch (e) {
+                        return selectedLog.details || 'No details available';
+                      }
+                    })()}
                   </pre>
                 </div>
               </div>

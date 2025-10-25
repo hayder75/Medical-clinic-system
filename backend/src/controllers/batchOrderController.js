@@ -33,9 +33,9 @@ exports.createBatchOrder = async (req, res) => {
     }
 
     // Allow emergency patients or visits in correct status
-    const allowedStatuses = ['WAITING_FOR_DOCTOR', 'UNDER_DOCTOR_REVIEW', 'SENT_TO_LAB', 'SENT_TO_RADIOLOGY', 'SENT_TO_BOTH', 'NURSE_SERVICES_COMPLETED'];
+    const allowedStatuses = ['WAITING_FOR_DOCTOR', 'IN_DOCTOR_QUEUE', 'UNDER_DOCTOR_REVIEW', 'SENT_TO_LAB', 'SENT_TO_RADIOLOGY', 'SENT_TO_BOTH', 'NURSE_SERVICES_COMPLETED'];
     if (!visit.isEmergency && !allowedStatuses.includes(visit.status)) {
-      return res.status(400).json({ error: 'Visit must be waiting for doctor, under doctor review, or sent to lab/radiology to create orders' });
+      return res.status(400).json({ error: 'Visit must be waiting for doctor, in doctor queue, under doctor review, or sent to lab/radiology to create orders' });
     }
 
     // For emergency patients, use the assigned doctor's ID instead of requesting user's ID
@@ -253,63 +253,65 @@ exports.createBatchOrder = async (req, res) => {
     let billing;
     
     if (visit.isEmergency) {
-      // For emergency patients, add to existing emergency billing
-      billing = await prisma.billing.findFirst({
-        where: {
-          visitId: visitId,
-          billingType: 'EMERGENCY',
-          status: 'EMERGENCY_PENDING'
-        }
-      });
+      // For emergency patients, use the new unified emergency billing system
+      console.log('Emergency patient detected - using unified emergency billing system');
       
-      if (billing) {
-        // Get existing billing services to check for duplicates
-        const existingBillingServices = await prisma.billingService.findMany({
-          where: { billingId: billing.id },
-          select: { serviceId: true }
-        });
+      // Import the emergency controller function
+      const { getOrCreateEmergencyBilling } = require('./emergencyController');
+      
+      try {
+        // Get or create emergency billing
+        billing = await getOrCreateEmergencyBilling(visitId);
         
-        const existingServiceIds = existingBillingServices.map(s => s.serviceId);
-        
-        // Add only the new services to emergency billing
+        // Add services to emergency billing
         for (const service of newServicesAdded) {
-          // Skip if service already exists in billing
-          if (existingServiceIds.includes(service.serviceId)) {
-            console.log(`Service ${service.serviceId} already exists in emergency billing ${billing.id}, skipping`);
-            continue;
-          }
-          
           const serviceData = validServices.find(s => s.id === service.serviceId);
           const investigationData = service.investigationTypeId ? 
             validInvestigationTypes.find(i => i.id === service.investigationTypeId) : null;
           const price = investigationData ? investigationData.price : serviceData.price;
           
-          await prisma.billingService.create({
-            data: {
+          // Check if service already exists
+          const existingService = await prisma.billingService.findFirst({
+            where: {
               billingId: billing.id,
-              serviceId: service.serviceId,
-              quantity: 1,
-              unitPrice: price,
-              totalPrice: price
+              serviceId: service.serviceId
             }
           });
+          
+          if (!existingService) {
+            await prisma.billingService.create({
+              data: {
+                billingId: billing.id,
+                serviceId: service.serviceId,
+                quantity: 1,
+                unitPrice: price,
+                totalPrice: price
+              }
+            });
+            
+            // Update total amount
+            await prisma.billing.update({
+              where: { id: billing.id },
+              data: {
+                totalAmount: {
+                  increment: price
+                }
+              }
+            });
+          }
         }
         
-        // Update emergency billing total with only the new services amount
-        const newServicesAmount = newServicesAdded.reduce((total, service) => {
-          const serviceData = validServices.find(s => s.id === service.serviceId);
-          const investigationData = service.investigationTypeId ? 
-            validInvestigationTypes.find(i => i.id === service.investigationTypeId) : null;
-          const price = investigationData ? investigationData.price : serviceData.price;
-          return total + price;
-        }, 0);
-        
-        await prisma.billing.update({
-          where: { id: billing.id },
+        console.log(`✅ Emergency services added to billing ${billing.id}`);
+      } catch (error) {
+        console.error('Error with emergency billing:', error);
+        // Fallback to regular billing if emergency system fails
+        billing = await prisma.billing.create({
           data: {
-            totalAmount: {
-              increment: newServicesAmount
-            }
+            patientId: visit.patientId,
+            visitId: visitId,
+            totalAmount: totalAmount,
+            status: 'PENDING',
+            notes: 'Emergency services - fallback billing'
           }
         });
       }

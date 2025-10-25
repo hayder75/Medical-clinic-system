@@ -419,11 +419,14 @@ const ReceptionPatientRegistration = () => {
                 <select className="input" {...register('type', { required: 'Patient type is required' })}>
                   <option value="">Select Type</option>
                   <option value="REGULAR">Regular</option>
-                  <option value="EMERGENCY">Emergency</option>
+                  <option value="EMERGENCY" style={{color: 'red', fontWeight: 'bold'}}>🚨 Emergency</option>
                   <option value="STAFF">Staff</option>
                   <option value="CHARITY">Charity</option>
                 </select>
                 {errors.type && <p className="text-red-500 text-sm mt-1">{errors.type.message}</p>}
+                <p className="text-xs text-gray-600 mt-1">
+                  💡 <strong>Emergency patients:</strong> Skip card payment, go directly to emergency billing
+                </p>
               </div>
             </div>
 
@@ -607,36 +610,44 @@ const ReceptionPatientRegistration = () => {
             {/* Visit Type Selection */}
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <h3 className="text-lg font-semibold text-blue-900 mb-3">Visit Type</h3>
-              <div className="flex space-x-4">
-                <label className="flex items-center">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <label className={`flex items-center p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                  visitType === 'REGULAR' 
+                    ? 'border-blue-500 bg-blue-50' 
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}>
                   <input
                     type="radio"
                     name="visitType"
                     value="REGULAR"
                     checked={visitType === 'REGULAR'}
                     onChange={(e) => setVisitType(e.target.value)}
-                    className="mr-2"
+                    className="mr-3"
                   />
-                  <span className="text-blue-800">Regular Visit</span>
+                  <div>
+                    <span className="text-blue-800 font-medium">Regular Visit</span>
+                    <p className="text-xs text-gray-600">Normal billing and triage process</p>
+                  </div>
                 </label>
-                <label className="flex items-center">
+                <label className={`flex items-center p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                  visitType === 'EMERGENCY' 
+                    ? 'border-red-500 bg-red-50' 
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}>
                   <input
                     type="radio"
                     name="visitType"
                     value="EMERGENCY"
                     checked={visitType === 'EMERGENCY'}
                     onChange={(e) => setVisitType(e.target.value)}
-                    className="mr-2"
+                    className="mr-3"
                   />
-                  <span className="text-red-800 font-medium">Emergency Visit</span>
+                  <div>
+                    <span className="text-red-800 font-bold">🚨 Emergency Visit</span>
+                    <p className="text-xs text-gray-600">Skip payment, go to emergency billing</p>
+                  </div>
                 </label>
               </div>
-              <p className="text-sm text-blue-700 mt-2">
-                {visitType === 'EMERGENCY' 
-                  ? 'Emergency visits bypass normal payment flow and go directly to emergency billing'
-                  : 'Regular visits follow normal billing and triage process'
-                }
-              </p>
             </div>
 
             {/* Search Results */}

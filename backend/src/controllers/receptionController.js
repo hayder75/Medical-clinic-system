@@ -181,7 +181,7 @@ exports.createPatient = async (req, res) => {
       return res.status(400).json({ error: 'Card registration service not found. Please contact admin.' });
     }
     
-    // Create patient with INACTIVE card status
+    // Create patient with INACTIVE card status (emergency patients still need to pay card fee)
     const patient = await prisma.patient.create({
       data: {
         id: patientId,
@@ -196,11 +196,11 @@ exports.createPatient = async (req, res) => {
         bloodType: validatedData.bloodType || null,
         maritalStatus: validatedData.maritalStatus || null,
         insuranceId: validatedData.insuranceId || null,
-        cardStatus: 'INACTIVE' // Card is INACTIVE until payment is processed
+        cardStatus: 'INACTIVE' // All patients start with INACTIVE card until payment
       }
     });
     
-    // Create billing for card registration (300 Birr)
+    // Create billing for card registration (300 Birr) - ALL patients need to pay card fee
     const billing = await prisma.billing.create({
       data: {
         patientId: patient.id,
@@ -232,7 +232,7 @@ exports.createPatient = async (req, res) => {
         entity: 'Patient',
         entityId: parseInt(patient.id.split('-').pop()) || 0,
         userId: receptionistId,
-        details: `New patient registered: ${patient.name} (${patient.id}). Bill created: ${billing.id}`
+        details: `New ${validatedData.type.toLowerCase()} patient registered: ${patient.name} (${patient.id}). Card registration bill created: ${billing.id}`
       }
     });
     
@@ -415,9 +415,24 @@ exports.createVisit = async (req, res) => {
         notes: validatedData.notes || null,
         queueType: validatedData.queueType,
         isEmergency: validatedData.isEmergency,
-        status: 'WAITING_FOR_TRIAGE'
+        status: validatedData.isEmergency ? 'WAITING_FOR_TRIAGE' : 'WAITING_FOR_TRIAGE'
       }
     });
+    
+    // For emergency visits, create emergency billing (no consultation fee upfront)
+    let billing = null;
+    if (validatedData.isEmergency) {
+      billing = await prisma.billing.create({
+        data: {
+          patientId: patient.id,
+          visitId: visit.id,
+          totalAmount: 0,
+          status: 'EMERGENCY_PENDING',
+          billingType: 'EMERGENCY',
+          notes: 'Emergency visit - services will be added as needed'
+        }
+      });
+    }
     
     // Log action
     await prisma.auditLog.create({
@@ -426,13 +441,16 @@ exports.createVisit = async (req, res) => {
         entity: 'Visit',
         entityId: visit.id,
         userId: receptionistId,
-        details: `Visit created: ${visit.visitUid} for patient ${patient.name} (${patient.id}). ${validatedData.suggestedDoctorId ? `Suggested doctor: ${validatedData.suggestedDoctorId}` : 'No doctor suggested'}`
+        details: `Visit created: ${visit.visitUid} for patient ${patient.name} (${patient.id}). ${validatedData.isEmergency ? 'EMERGENCY visit - no consultation fee required' : 'Regular visit'}. ${validatedData.suggestedDoctorId ? `Suggested doctor: ${validatedData.suggestedDoctorId}` : 'No doctor suggested'}`
       }
     });
     
     res.json({
       visit,
-      message: 'Visit created successfully and sent to triage.'
+      billing,
+      message: validatedData.isEmergency 
+        ? 'Emergency visit created successfully. No consultation fee required - services will be tracked separately.'
+        : 'Visit created successfully and sent to triage.'
     });
   } catch (error) {
     console.error('Error creating visit:', error);

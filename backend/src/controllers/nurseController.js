@@ -305,28 +305,70 @@ exports.assignDoctor = async (req, res) => {
       return res.status(404).json({ error: 'Consultation service not found. Please add consultation service to the catalog.' });
     }
 
-    // Create consultation billing for all patients
     const consultationPrice = doctor.consultationFee || consultationService.price;
-    const billing = await prisma.billing.create({
-      data: {
-        patientId,
-        visitId,
-        totalAmount: consultationPrice,
-        status: 'PENDING',
-        notes: 'Doctor consultation fee'
-      }
+
+    // Check if this is an emergency visit
+    const visit = await prisma.visit.findUnique({
+      where: { id: visitId }
     });
 
-    // Add consultation service to billing
-    await prisma.billingService.create({
-      data: {
-        billingId: billing.id,
-        serviceId: consultationService.id,
-        quantity: 1,
-        unitPrice: consultationPrice,
-        totalPrice: consultationPrice
-      }
-    });
+    let billing;
+    if (visit.isEmergency) {
+      // For emergency patients, add consultation to emergency billing
+      console.log('🚨 Emergency patient - Adding consultation to emergency billing');
+      
+      // Import emergency controller function
+      const { getOrCreateEmergencyBilling } = require('./emergencyController');
+      
+      // Get or create emergency billing
+      const emergencyBilling = await getOrCreateEmergencyBilling(visitId);
+      
+      // Add consultation service to emergency billing
+      await prisma.billingService.create({
+        data: {
+          billingId: emergencyBilling.id,
+          serviceId: consultationService.id,
+          quantity: 1,
+          unitPrice: consultationPrice,
+          totalPrice: consultationPrice
+        }
+      });
+
+      // Update emergency billing total
+      await prisma.billing.update({
+        where: { id: emergencyBilling.id },
+        data: {
+          totalAmount: {
+            increment: consultationPrice
+          }
+        }
+      });
+
+      billing = emergencyBilling;
+      console.log(`✅ Consultation added to emergency billing: ${emergencyBilling.id}, Total: ${emergencyBilling.totalAmount + consultationPrice}`);
+    } else {
+      // For regular patients, create normal billing
+      billing = await prisma.billing.create({
+        data: {
+          patientId,
+          visitId,
+          totalAmount: consultationPrice,
+          status: 'PENDING',
+          notes: 'Doctor consultation fee'
+        }
+      });
+
+      // Add consultation service to billing
+      await prisma.billingService.create({
+        data: {
+          billingId: billing.id,
+          serviceId: consultationService.id,
+          quantity: 1,
+          unitPrice: consultationPrice,
+          totalPrice: consultationPrice
+        }
+      });
+    }
 
     res.json({
       message: 'Doctor assigned successfully',
@@ -1222,28 +1264,71 @@ exports.assignNurseServices = async (req, res) => {
       // Calculate total amount for all services
       const totalAmount = services.reduce((sum, service) => sum + service.price, 0);
 
-      // Create single billing entry for all services
-      const billing = await tx.billing.create({
-        data: {
-          patientId,
-          visitId,
-          totalAmount,
-          status: 'PENDING',
-          notes: `Nurse services: ${services.map(s => s.name).join(', ')}`
-        }
+      // Check if this is an emergency visit
+      const visit = await tx.visit.findUnique({
+        where: { id: visitId }
       });
 
-      // Add all services to the single billing entry
-      for (const service of services) {
-        await tx.billingService.create({
+      let billing;
+      if (visit.isEmergency) {
+        // For emergency patients, add nurse services to emergency billing
+        console.log('🚨 Emergency patient - Adding nurse services to emergency billing');
+        
+        // Import emergency controller function
+        const { getOrCreateEmergencyBilling } = require('./emergencyController');
+        
+        // Get or create emergency billing
+        const emergencyBilling = await getOrCreateEmergencyBilling(visitId);
+        
+        // Add all nurse services to emergency billing
+        for (const service of services) {
+          await tx.billingService.create({
+            data: {
+              billingId: emergencyBilling.id,
+              serviceId: service.id,
+              quantity: 1,
+              unitPrice: service.price,
+              totalPrice: service.price
+            }
+          });
+        }
+
+        // Update emergency billing total
+        await tx.billing.update({
+          where: { id: emergencyBilling.id },
           data: {
-            billingId: billing.id,
-            serviceId: service.id,
-            quantity: 1,
-            unitPrice: service.price,
-            totalPrice: service.price
+            totalAmount: {
+              increment: totalAmount
+            }
           }
         });
+
+        billing = emergencyBilling;
+        console.log(`✅ Nurse services added to emergency billing: ${emergencyBilling.id}, Total: ${emergencyBilling.totalAmount + totalAmount}`);
+      } else {
+        // For regular patients, create normal billing
+        billing = await tx.billing.create({
+          data: {
+            patientId,
+            visitId,
+            totalAmount,
+            status: 'PENDING',
+            notes: `Nurse services: ${services.map(s => s.name).join(', ')}`
+          }
+        });
+
+        // Add all services to the single billing entry
+        for (const service of services) {
+          await tx.billingService.create({
+            data: {
+              billingId: billing.id,
+              serviceId: service.id,
+              quantity: 1,
+              unitPrice: service.price,
+              totalPrice: service.price
+            }
+          });
+        }
       }
 
       return { nurseAssignments, billing };
@@ -1451,25 +1536,65 @@ exports.assignCombined = async (req, res) => {
         }
       });
 
-      // Create single billing entry for all services
-      const billing = await tx.billing.create({
-        data: {
-          patientId,
-          visitId,
-          totalAmount,
-          status: 'PENDING',
-          notes: `Combined assignment: ${serviceIds?.length ? `${serviceIds.length} nurse service(s)` : ''}${serviceIds?.length && doctorId ? ' + ' : ''}${doctorId ? 'doctor consultation' : ''}`
-        }
+      // Check if this is an emergency visit
+      const visit = await tx.visit.findUnique({
+        where: { id: visitId }
       });
 
-      // Add all services to the single billing entry
-      for (const serviceData of billingServices) {
-        await tx.billingService.create({
+      let billing;
+      if (visit.isEmergency) {
+        // For emergency patients, add all services to emergency billing
+        console.log('🚨 Emergency patient - Adding combined services to emergency billing');
+        
+        // Import emergency controller function
+        const { getOrCreateEmergencyBilling } = require('./emergencyController');
+        
+        // Get or create emergency billing
+        const emergencyBilling = await getOrCreateEmergencyBilling(visitId);
+        
+        // Add all services to emergency billing
+        for (const serviceData of billingServices) {
+          await tx.billingService.create({
+            data: {
+              billingId: emergencyBilling.id,
+              ...serviceData
+            }
+          });
+        }
+
+        // Update emergency billing total
+        await tx.billing.update({
+          where: { id: emergencyBilling.id },
           data: {
-            billingId: billing.id,
-            ...serviceData
+            totalAmount: {
+              increment: totalAmount
+            }
           }
         });
+
+        billing = emergencyBilling;
+        console.log(`✅ Combined services added to emergency billing: ${emergencyBilling.id}, Total: ${emergencyBilling.totalAmount + totalAmount}`);
+      } else {
+        // For regular patients, create normal billing
+        billing = await tx.billing.create({
+          data: {
+            patientId,
+            visitId,
+            totalAmount,
+            status: 'PENDING',
+            notes: `Combined assignment: ${serviceIds?.length ? `${serviceIds.length} nurse service(s)` : ''}${serviceIds?.length && doctorId ? ' + ' : ''}${doctorId ? 'doctor consultation' : ''}`
+          }
+        });
+
+        // Add all services to the single billing entry
+        for (const serviceData of billingServices) {
+          await tx.billingService.create({
+            data: {
+              billingId: billing.id,
+              ...serviceData
+            }
+          });
+        }
       }
 
       return { assignments, billing };
@@ -1602,8 +1727,9 @@ exports.completeNurseService = async (req, res) => {
     if (remainingServices === 0) {
       // All nurse services completed
       if (doctorAssignment) {
-        // Doctor is assigned - use two-phase completion
-        newVisitStatus = 'NURSE_SERVICES_COMPLETED';
+        // Doctor is assigned - keep current status, don't change it
+        // The doctor will see completed nurse services in the UI
+        newVisitStatus = visitWithAssignment?.status || 'WAITING_FOR_NURSE_SERVICE';
       } else {
         // No doctor assigned - complete the visit
         newVisitStatus = 'COMPLETED';

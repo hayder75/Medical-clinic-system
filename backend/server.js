@@ -33,6 +33,7 @@ const medicalCertificatesRoutes = require('./src/routes/medicalCertificates');
 const continuousInfusionsRoutes = require('./src/routes/continuousInfusions');
 const receptionRoutes = require('./src/routes/reception');
 const emergencyBillingRoutes = require('./src/routes/emergencyBilling');
+const emergencyRoutes = require('./src/routes/emergency');
 const cashManagementRoutes = require('./src/routes/cashManagement');
 const galleryRoutes = require('./src/routes/gallery');
 const appointmentsRoutes = require('./src/routes/appointments');
@@ -91,6 +92,7 @@ app.use('/api/medical-certificates', authMiddleware, roleGuard(['DOCTOR', 'ADMIN
 app.use('/api/continuous-infusions', continuousInfusionsRoutes);
 app.use('/api/reception', receptionRoutes);
 app.use('/api/emergency-billing', authMiddleware, roleGuard(['BILLING_OFFICER', 'ADMIN']), emergencyBillingRoutes);
+app.use('/api/emergency', emergencyRoutes);
 app.use('/api/cash-management', cashManagementRoutes);
 app.use('/api/gallery', galleryRoutes);
 app.use('/api/appointments', authMiddleware, appointmentsRoutes);
