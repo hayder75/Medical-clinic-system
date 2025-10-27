@@ -1,92 +1,69 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Calendar, TrendingUp, Users, CreditCard, ChevronLeft, ChevronRight, BarChart3, PieChart as PieChartIcon, DollarSign, Activity } from 'lucide-react';
+import { Download, Calendar, TrendingUp, Users, CreditCard, ChevronLeft, ChevronRight, BarChart3, PieChart as PieChartIcon, DollarSign, Activity, Eye, EyeOff, Stethoscope } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
+import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
 
 const Reports = () => {
-  const [reports, setReports] = useState({
-    daily: null,
-    weekly: null,
-    revenue: null
-  });
-  const [billingStats, setBillingStats] = useState(null);
-  const [insuranceStats, setInsuranceStats] = useState(null);
-  const [monthlyData, setMonthlyData] = useState([]);
-  const [dailyData, setDailyData] = useState([]);
+  const navigate = useNavigate();
+  const [revenueStats, setRevenueStats] = useState(null);
+  const [dailyBreakdown, setDailyBreakdown] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [selectedPeriod, setSelectedPeriod] = useState('monthly');
+  const [selectedPeriod, setSelectedPeriod] = useState('daily');
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [viewMode, setViewMode] = useState('calendar'); // calendar, table, charts
-  const [dateRange, setDateRange] = useState({
-    start: new Date().toISOString().split('T')[0],
-    end: new Date().toISOString().split('T')[0]
-  });
+  const [viewMode, setViewMode] = useState('calendar');
+  const [revenueType, setRevenueType] = useState('combined'); // medical, pharmacy, combined
+  const [showPending, setShowPending] = useState(false);
+  const [showDayPopup, setShowDayPopup] = useState(false);
+  const [popupDayData, setPopupDayData] = useState(null);
 
   const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
   useEffect(() => {
-    fetchReports();
-  }, [selectedPeriod, dateRange]);
+    fetchRevenueStats();
+    fetchDailyBreakdown();
+  }, [selectedPeriod, selectedYear, selectedMonth]);
 
   useEffect(() => {
-    if (billingStats) {
-      generateRealMonthlyData();
-    }
-  }, [selectedYear, billingStats]);
+    fetchDailyBreakdown();
+  }, [selectedMonth, selectedYear]);
 
-  useEffect(() => {
-    if (monthlyData.length > 0) {
-      generateRealDailyData();
+  const fetchRevenueStats = async () => {
+    try {
+      setLoading(true);
+      const response = await api.get(`/admin/reports/revenue-stats?period=${selectedPeriod}`);
+      setRevenueStats(response.data);
+    } catch (error) {
+      console.error('Error fetching revenue stats:', error);
+      toast.error('Failed to fetch revenue statistics');
+    } finally {
+      setLoading(false);
     }
-  }, [selectedMonth, selectedYear, monthlyData]);
-
-  // Generate calendar days for the selected month
-  const generateCalendarDays = () => {
-    const year = selectedYear;
-    const month = selectedMonth;
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const daysInMonth = lastDay.getDate();
-    const startingDayOfWeek = firstDay.getDay();
-    
-    const days = [];
-    
-    // Add empty cells for days before the first day of the month
-    for (let i = 0; i < startingDayOfWeek; i++) {
-      days.push({ key: `empty-${i}`, isEmpty: true });
-    }
-    
-    // Add days of the month
-    for (let day = 1; day <= daysInMonth; day++) {
-      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-      const dayData = dailyData.find(d => d.date === dateStr);
-      days.push({
-        key: `day-${day}`,
-        day,
-        date: dateStr,
-        revenue: dayData?.revenue || 0,
-        transactions: dayData?.transactions || 0,
-        patients: dayData?.patients || 0,
-        isEmpty: false
-      });
-    }
-    
-    return days;
   };
 
-  // Get month name
+  const fetchDailyBreakdown = async () => {
+    try {
+      const response = await api.get(`/admin/reports/daily-breakdown?year=${selectedYear}&month=${selectedMonth}`);
+      setDailyBreakdown(response.data.dailyData || []);
+    } catch (error) {
+      console.error('Error fetching daily breakdown:', error);
+    }
+  };
+
   const getMonthName = (monthIndex) => {
-    const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
-    ];
+    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
     return months[monthIndex];
   };
 
-  // Navigate months
+  const handleDayClick = (day) => {
+    const dayData = dailyBreakdown.find(d => d.date === day.date);
+    setPopupDayData({ ...day, dayData });
+    setShowDayPopup(true);
+  };
+
   const navigateMonth = (direction) => {
     if (direction === 'prev') {
       if (selectedMonth === 0) {
@@ -105,184 +82,42 @@ const Reports = () => {
     }
   };
 
-  const fetchReports = async () => {
-    try {
-      setLoading(true);
-      
-      // Check if user is authenticated
-      const token = sessionStorage.getItem('token');
-      if (!token) {
-        toast.error('Please log in to view reports');
-        return;
-      }
-      
-      // Fetch data from working APIs only
-      const [billingRes, insuranceRes] = await Promise.all([
-        api.get('/billing/dashboard-stats?period=daily').catch(error => {
-          if (error.response?.status === 401) {
-            toast.error('Session expired. Please log in again.');
-            return { data: null };
-          }
-          throw error;
-        }),
-        api.get('/insurance/dashboard/stats').catch(() => ({ data: null }))
-      ]);
-      
-      if (billingRes?.data) {
-        setBillingStats(billingRes.data);
-      }
-      if (insuranceRes?.data) {
-        setInsuranceStats(insuranceRes.data);
-      }
-      
-      // Generate real monthly and daily data based on actual billing data
-      if (billingRes?.data) {
-        await generateRealMonthlyData();
-        await generateRealDailyData();
-      }
-      
-    } catch (error) {
-      console.error('Error fetching reports:', error);
-      if (error.response?.status === 401) {
-        toast.error('Session expired. Please log in again.');
-      } else {
-        toast.error('Failed to fetch reports');
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Generate real monthly data from actual billing data
-  const generateRealMonthlyData = async () => {
-    const months = [];
-    const currentYear = selectedYear;
-    
-    for (let month = 0; month < 12; month++) {
-      const monthName = getMonthName(month);
-      
-      // Only show data for current month and past months, set future months to 0
-      const currentDate = new Date();
-      const isCurrentOrPastMonth = month <= currentDate.getMonth() && currentYear === currentDate.getFullYear();
-      
-      if (isCurrentOrPastMonth) {
-        // Use current billing stats as base for current month
-        if (month === currentDate.getMonth() && currentYear === currentDate.getFullYear()) {
-          const currentRevenue = billingStats?.stats?.totalAmount || 0;
-          const currentTransactions = billingStats?.stats?.totalCount || 0;
-          
-          months.push({
-            month: monthName,
-            monthIndex: month,
-            revenue: currentRevenue,
-            transactions: currentTransactions,
-            patients: Math.floor(currentTransactions * 0.8),
-            avgDailyRevenue: Math.floor(currentRevenue / new Date(currentYear, month + 1, 0).getDate()),
-            growth: month > 0 ? 0 : 0
-          });
-        } else {
-          // For past months, use a realistic estimate based on current data
-          const baseRevenue = billingStats?.stats?.totalAmount || 0;
-          const monthlyRevenue = Math.floor(baseRevenue * (0.6 + Math.random() * 0.8)); // 60-140% of current
-          const transactions = Math.floor((billingStats?.stats?.totalCount || 0) * (0.5 + Math.random() * 1.0));
-          
-          months.push({
-            month: monthName,
-            monthIndex: month,
-            revenue: monthlyRevenue,
-            transactions,
-            patients: Math.floor(transactions * 0.8),
-            avgDailyRevenue: Math.floor(monthlyRevenue / new Date(currentYear, month + 1, 0).getDate()),
-            growth: month > 0 ? 0 : 0
-          });
-        }
-      } else {
-        // Future months = 0
-        months.push({
-          month: monthName,
-          monthIndex: month,
-          revenue: 0,
-          transactions: 0,
-          patients: 0,
-          avgDailyRevenue: 0,
-          growth: 0
-        });
-      }
-    }
-    
-    // Calculate growth percentages
-    for (let i = 1; i < months.length; i++) {
-      if (months[i-1].revenue > 0) {
-        months[i].growth = Math.round(((months[i].revenue - months[i-1].revenue) / months[i-1].revenue) * 100);
-      }
-    }
-    
-    setMonthlyData(months);
-  };
-
-  // Generate real daily data from actual billing data
-  const generateRealDailyData = async () => {
-    const days = [];
+  // Generate calendar days for the selected month
+  const generateCalendarDays = () => {
     const year = selectedYear;
     const month = selectedMonth;
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const currentDate = new Date();
-    const isCurrentMonth = month === currentDate.getMonth() && year === currentDate.getFullYear();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startingDayOfWeek = firstDay.getDay();
     
-    // Get monthly data for this month
-    const monthData = monthlyData.find(m => m.monthIndex === month);
-    const avgDailyRevenue = monthData?.avgDailyRevenue || 0;
+    const days = [];
     
-    for (let day = 1; day <= daysInMonth; day++) {
-      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-      const dayDate = new Date(year, month, day);
-      const isPastDay = dayDate < currentDate;
-      const isWeekend = dayDate.getDay() === 0 || dayDate.getDay() === 6;
-      
-      if (isCurrentMonth && isPastDay) {
-        // For past days in current month, use realistic daily breakdown
-        const baseRevenue = isWeekend ? avgDailyRevenue * 0.3 : avgDailyRevenue;
-        const revenue = Math.floor(baseRevenue * (0.3 + Math.random() * 1.4)); // 30-170% variation
-        const transactions = Math.floor(revenue / (150 + Math.random() * 100)); // Realistic transaction size
-        const patients = Math.floor(transactions * (0.7 + Math.random() * 0.6));
-        
-        days.push({
-          date: dateStr,
-          day,
-          revenue,
-          transactions,
-          patients,
-          isWeekend
-        });
-      } else if (!isCurrentMonth && isPastDay) {
-        // For past months, use monthly average
-        const baseRevenue = isWeekend ? avgDailyRevenue * 0.3 : avgDailyRevenue;
-        const revenue = Math.floor(baseRevenue * (0.5 + Math.random() * 1.0));
-        const transactions = Math.floor(revenue / (200 + Math.random() * 100));
-        const patients = Math.floor(transactions * (0.8 + Math.random() * 0.4));
-        
-        days.push({
-          date: dateStr,
-          day,
-          revenue,
-          transactions,
-          patients,
-          isWeekend
-        });
-      } else {
-        // Future days = 0
-        days.push({
-          date: dateStr,
-          day,
-          revenue: 0,
-          transactions: 0,
-          patients: 0,
-          isWeekend
-        });
-      }
+    // Add empty cells for days before the first day of the month
+    for (let i = 0; i < startingDayOfWeek; i++) {
+      days.push({ key: `empty-${i}`, isEmpty: true });
     }
     
-    setDailyData(days);
+    // Add days of the month with revenue data
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const dayData = dailyBreakdown.find(d => d.date === dateStr);
+      
+      let revenue = 0;
+      if (dayData) {
+        revenue = dayData[revenueType].revenue || dayData.combined.revenue || 0;
+      }
+      
+      days.push({
+        key: `day-${day}`,
+        day,
+        date: dateStr,
+        revenue,
+        isEmpty: false
+      });
+    }
+    
+    return days;
   };
 
   const formatCurrency = (amount) => {
@@ -292,69 +127,57 @@ const Reports = () => {
     }).format(amount);
   };
 
-  const getRevenueChartData = () => {
-    if (!reports.revenue?.revenueTrends) return [];
+  // Get revenue data based on selected type
+  const getRevenueData = () => {
+    if (!revenueStats) return { revenue: 0, transactions: 0 };
     
-    return reports.revenue.revenueTrends.map(item => ({
-      date: new Date(item.createdAt).toLocaleDateString(),
-      revenue: item._sum?.totalAmount || 0
-    }));
+    switch (revenueType) {
+      case 'medical':
+        return {
+          revenue: revenueStats.completed.medical.revenue,
+          transactions: revenueStats.completed.medical.transactions,
+          consultations: revenueStats.completed.medical.consultations,
+          labTests: revenueStats.completed.medical.labTests,
+          radiologyScans: revenueStats.completed.medical.radiologyScans,
+          label: 'Medical'
+        };
+      case 'pharmacy':
+        return {
+          revenue: revenueStats.completed.pharmacy.revenue,
+          transactions: revenueStats.completed.pharmacy.transactions,
+          prescriptions: revenueStats.completed.pharmacy.prescriptions,
+          medications: revenueStats.completed.pharmacy.medications,
+          label: 'Pharmacy'
+        };
+      default: // combined
+        return {
+          revenue: revenueStats.completed.combined.totalRevenue,
+          transactions: revenueStats.completed.combined.totalTransactions,
+          label: 'Combined'
+        };
+    }
   };
 
-  const getServiceDistributionData = () => {
-    if (!reports.revenue?.topServices) return [];
+  const getPendingData = () => {
+    if (!revenueStats || !showPending) return null;
     
-    return reports.revenue.topServices.map((item, index) => ({
-      name: item.service?.name || 'Unknown Service',
-      value: item._sum?.totalPrice || 0,
-      color: COLORS[index % COLORS.length]
-    }));
-  };
-
-  const getPaymentMethodData = () => {
-    if (!reports.revenue?.paymentMethods) return [];
-    
-    return reports.revenue.paymentMethods.map((item, index) => ({
-      name: item.type,
-      value: item._sum?.amount || 0,
-      color: COLORS[index % COLORS.length]
-    }));
-  };
-
-  const getDailyStats = () => {
-    if (!reports.daily) return null;
-    
-    return [
-      {
-        title: 'Total Revenue',
-        value: formatCurrency(reports.daily.revenue?.total || 0),
-        icon: CreditCard,
-        color: 'text-green-600',
-        bgColor: 'bg-green-100'
-      },
-      {
-        title: 'Patients Served',
-        value: reports.daily.patients?.total || 0,
-        icon: Users,
-        color: 'text-blue-600',
-        bgColor: 'bg-blue-100'
-      },
-      {
-        title: 'Completed Visits',
-        value: reports.daily.visits?.total || 0,
-        icon: TrendingUp,
-        color: 'text-purple-600',
-        bgColor: 'bg-purple-100'
-      },
-      {
-        title: 'Pending Orders',
-        value: reports.daily.pendingOrders ? 
-          Object.values(reports.daily.pendingOrders).reduce((sum, count) => sum + count, 0) : 0,
-        icon: Calendar,
-        color: 'text-yellow-600',
-        bgColor: 'bg-yellow-100'
-      }
-    ];
+    switch (revenueType) {
+      case 'medical':
+        return {
+          revenue: revenueStats.pending.medical.revenue,
+          bills: revenueStats.pending.medical.bills
+        };
+      case 'pharmacy':
+        return {
+          revenue: revenueStats.pending.pharmacy.revenue,
+          invoices: revenueStats.pending.pharmacy.invoices
+        };
+      default:
+        return {
+          revenue: revenueStats.pending.combined.totalRevenue,
+          bills: revenueStats.pending.combined.totalBills
+        };
+    }
   };
 
   if (loading) {
@@ -365,28 +188,18 @@ const Reports = () => {
     );
   }
 
-  // Show message if no data is available
-  if (!billingStats && !insuranceStats) {
+  if (!revenueStats) {
     return (
-      <div className="space-y-6">
-        <div className="text-center py-12">
-          <div className="text-gray-500 text-lg mb-4">
-            <BarChart3 className="h-16 w-16 mx-auto mb-4 text-gray-300" />
-            <h3 className="text-xl font-semibold text-gray-700 mb-2">No Data Available</h3>
-            <p className="text-gray-500 mb-4">
-              Please log in as an admin user to view financial reports.
-            </p>
-            <button 
-              onClick={() => window.location.href = '/login'}
-              className="btn btn-primary"
-            >
-              Go to Login
-            </button>
-          </div>
-        </div>
+      <div className="text-center py-12">
+        <BarChart3 className="h-16 w-16 mx-auto mb-4 text-gray-300" />
+        <h3 className="text-xl font-semibold text-gray-700 mb-2">No Data Available</h3>
+        <p className="text-gray-500">Unable to load revenue statistics.</p>
       </div>
     );
   }
+
+  const revenueData = getRevenueData();
+  const pendingData = getPendingData();
 
   return (
     <div className="space-y-6">
@@ -408,103 +221,205 @@ const Reports = () => {
               Calendar
             </button>
             <button
-              onClick={() => setViewMode('table')}
-              className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                viewMode === 'table' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <BarChart3 className="h-4 w-4 inline mr-1" />
-              Table
-            </button>
-            <button
-              onClick={() => setViewMode('charts')}
-              className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                viewMode === 'charts' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <PieChartIcon className="h-4 w-4 inline mr-1" />
-              Charts
-            </button>
+          onClick={() => setViewMode('table')}
+          className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+            viewMode === 'table' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          <BarChart3 className="h-4 w-4 inline mr-1" />
+          Table
+        </button>
           </div>
-          <button
-            onClick={() => window.print()}
-            className="btn btn-secondary flex items-center"
-          >
+          <button onClick={() => window.print()} className="btn btn-secondary flex items-center">
             <Download className="h-5 w-5 mr-2" />
             Export Report
           </button>
         </div>
       </div>
 
+      {/* Revenue Type Toggle */}
+      <div className="flex gap-2 justify-center">
+        <button
+          onClick={() => setRevenueType('medical')}
+          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+            revenueType === 'medical' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+          }`}
+        >
+          Medical
+        </button>
+        <button
+          onClick={() => setRevenueType('pharmacy')}
+          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+            revenueType === 'pharmacy' ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+          }`}
+        >
+          Pharmacy
+        </button>
+        <button
+          onClick={() => setRevenueType('combined')}
+          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+            revenueType === 'combined' ? 'bg-purple-500 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+          }`}
+        >
+          Combined
+        </button>
+      </div>
+
       {/* Financial Overview */}
-      {billingStats && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div className="card">
-            <div className="flex items-center">
-              <div className="p-3 rounded-lg bg-green-100">
-                <CreditCard className="h-6 w-6 text-green-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Today's Collected</p>
-                <p className="text-2xl font-semibold text-gray-900">
-                  {formatCurrency(billingStats.stats?.totalAmount || 0)}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">Cash & Bank payments</p>
-              </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="card">
+          <div className="flex items-center">
+            <div className="p-3 rounded-lg bg-green-100">
+              <CreditCard className="h-6 w-6 text-green-600" />
             </div>
-          </div>
-
-          <div className="card">
-            <div className="flex items-center">
-              <div className="p-3 rounded-lg bg-blue-100">
-                <TrendingUp className="h-6 w-6 text-blue-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Insurance Claims</p>
-                <p className="text-2xl font-semibold text-gray-900">
-                  {formatCurrency(insuranceStats?.stats?.totalAmount || 0)}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">Total insurance transactions</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="card">
-            <div className="flex items-center">
-              <div className="p-3 rounded-lg bg-yellow-100">
-                <Calendar className="h-6 w-6 text-yellow-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Pending Bills</p>
-                <p className="text-2xl font-semibold text-gray-900">
-                  {formatCurrency(billingStats.stats?.pendingAmount || 0)}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">Unpaid bills</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="card">
-            <div className="flex items-center">
-              <div className="p-3 rounded-lg bg-purple-100">
-                <Users className="h-6 w-6 text-purple-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Today's Transactions</p>
-                <p className="text-2xl font-semibold text-gray-900">
-                  {billingStats.stats?.totalCount || 0}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">Processed payments</p>
-              </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-600">{revenueType === 'combined' ? 'Total' : revenueType === 'medical' ? 'Medical' : 'Pharmacy'} Revenue</p>
+              <p className="text-2xl font-semibold text-gray-900">{formatCurrency(revenueData.revenue)}</p>
+              <p className="text-xs text-gray-500 mt-1">{revenueData.transactions} transactions</p>
             </div>
           </div>
         </div>
-      )}
+
+        {revenueType === 'medical' && (
+          <>
+            <div className="card">
+              <div className="flex items-center">
+                <div className="p-3 rounded-lg bg-blue-100">
+                  <Users className="h-6 w-6 text-blue-600" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-600">Consultations</p>
+                  <p className="text-2xl font-semibold text-gray-900">{revenueData.consultations || 0}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="flex items-center">
+                <div className="p-3 rounded-lg bg-purple-100">
+                  <Activity className="h-6 w-6 text-purple-600" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-600">Lab Tests</p>
+                  <p className="text-2xl font-semibold text-gray-900">{revenueData.labTests || 0}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="flex items-center">
+                <div className="p-3 rounded-lg bg-orange-100">
+                  <BarChart3 className="h-6 w-6 text-orange-600" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-600">Radiology</p>
+                  <p className="text-2xl font-semibold text-gray-900">{revenueData.radiologyScans || 0}</p>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {revenueType === 'pharmacy' && (
+          <>
+            <div className="card">
+              <div className="flex items-center">
+                <div className="p-3 rounded-lg bg-blue-100">
+                  <Users className="h-6 w-6 text-blue-600" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-600">Prescriptions</p>
+                  <p className="text-2xl font-semibold text-gray-900">{revenueData.prescriptions || 0}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="flex items-center">
+                <div className="p-3 rounded-lg bg-purple-100">
+                  <Activity className="h-6 w-6 text-purple-600" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-600">Medications</p>
+                  <p className="text-2xl font-semibold text-gray-900">{revenueData.medications || 0}</p>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {revenueType === 'combined' && (
+          <>
+            <div className="card">
+              <div className="flex items-center">
+                <div className="p-3 rounded-lg bg-blue-100">
+                  <DollarSign className="h-6 w-6 text-blue-600" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-600">Medical</p>
+                  <p className="text-2xl font-semibold text-gray-900">{formatCurrency(revenueStats.completed.medical.revenue)}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="flex items-center">
+                <div className="p-3 rounded-lg bg-green-100">
+                  <DollarSign className="h-6 w-6 text-green-600" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-600">Pharmacy</p>
+                  <p className="text-2xl font-semibold text-gray-900">{formatCurrency(revenueStats.completed.pharmacy.revenue)}</p>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Pending Payments Toggle */}
+      <div className="card">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-900">Pending Payments</h3>
+          <button
+            onClick={() => setShowPending(!showPending)}
+            className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900"
+          >
+            {showPending ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            {showPending ? 'Hide' : 'Show'} Pending
+          </button>
+        </div>
+
+        {showPending && pendingData && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="p-4 bg-yellow-50 rounded-lg">
+              <p className="text-sm text-gray-600 mb-1">Pending {revenueType === 'combined' ? 'Total' : revenueType}</p>
+              <p className="text-2xl font-bold text-yellow-600">{formatCurrency(pendingData.revenue)}</p>
+              <p className="text-xs text-gray-500 mt-1">
+                {pendingData.bills || pendingData.invoices || 0} {revenueType === 'pharmacy' ? 'invoices' : 'bills'}
+              </p>
+            </div>
+            {revenueType === 'combined' && (
+              <>
+                <div className="p-4 bg-yellow-50 rounded-lg">
+                  <p className="text-sm text-gray-600 mb-1">Pending Medical</p>
+                  <p className="text-2xl font-bold text-yellow-600">{formatCurrency(revenueStats.pending.medical.revenue)}</p>
+                  <p className="text-xs text-gray-500 mt-1">{revenueStats.pending.medical.bills} bills</p>
+                </div>
+                <div className="p-4 bg-yellow-50 rounded-lg">
+                  <p className="text-sm text-gray-600 mb-1">Pending Pharmacy</p>
+                  <p className="text-2xl font-bold text-yellow-600">{formatCurrency(revenueStats.pending.pharmacy.revenue)}</p>
+                  <p className="text-xs text-gray-500 mt-1">{revenueStats.pending.pharmacy.invoices} invoices</p>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Calendar View */}
       {viewMode === 'calendar' && (
         <div className="space-y-6">
-          {/* Month Navigation */}
           <div className="card">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center space-x-4">
@@ -525,9 +440,9 @@ const Reports = () => {
                 </button>
               </div>
               <div className="text-right">
-                <p className="text-sm text-gray-600">Monthly Total</p>
+                <p className="text-sm text-gray-600">Monthly {revenueType === 'combined' ? 'Total' : revenueType} Revenue</p>
                 <p className="text-2xl font-bold text-green-600">
-                  {formatCurrency(monthlyData.find(m => m.monthIndex === selectedMonth)?.revenue || 0)}
+                  {formatCurrency(revenueData.revenue)}
                 </p>
               </div>
             </div>
@@ -547,277 +462,156 @@ const Reports = () => {
                   return <div key={day.key} className="p-3"></div>;
                 }
                 
-                const isToday = day.date === new Date().toISOString().split('T')[0];
+                // Get today's date in local timezone (YYYY-MM-DD format)
+                const today = new Date();
+                const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+                
+                const isToday = day.date === todayStr;
                 const isSelected = day.date === selectedDate;
                 const isWeekend = new Date(day.date).getDay() === 0 || new Date(day.date).getDay() === 6;
-                const revenueIntensity = day.revenue > 0 ? Math.min(day.revenue / 2000, 1) : 0; // Normalize to 0-1
+                
+                // Professional subtle revenue styling
+                const getRevenueStyle = () => {
+                  if (day.revenue === 0) return { text: 'text-gray-400', border: 'border-gray-200' };
+                  if (day.revenue > 5000) return { text: 'text-green-700 font-semibold', border: 'border-green-400' };
+                  if (day.revenue > 2000) return { text: 'text-green-600 font-medium', border: 'border-green-300' };
+                  return { text: 'text-green-600', border: 'border-green-200' };
+                };
+                
+                const revenueStyle = getRevenueStyle();
                 
                 return (
-                  <div
-                    key={day.key}
-                    onClick={() => setSelectedDate(day.date)}
-                    className={`p-3 rounded-lg cursor-pointer transition-all hover:shadow-md ${
-                      isSelected 
-                        ? 'bg-blue-500 text-white' 
-                        : isToday 
-                          ? 'bg-blue-100 text-blue-900 border-2 border-blue-300' 
-                          : isWeekend 
-                            ? 'bg-gray-50 text-gray-600' 
-                            : 'bg-white hover:bg-gray-50'
-                    }`}
-                  >
-                    <div className="text-sm font-medium mb-1">{day.day}</div>
-                    <div className={`text-xs ${isSelected ? 'text-blue-100' : 'text-gray-600'}`}>
-                      {formatCurrency(day.revenue)}
+                  <div key={day.key} className="relative group">
+                    <div
+                      onClick={() => handleDayClick(day)}
+                      className={`relative p-3 rounded-lg cursor-pointer transition-all duration-200 border-2 ${
+                        isSelected 
+                          ? 'bg-blue-50 border-blue-400 shadow-md ring-2 ring-blue-100' 
+                          : isToday 
+                            ? 'bg-blue-50 border-blue-300 shadow-sm' 
+                            : isWeekend
+                              ? 'bg-gray-50 border-gray-200' 
+                              : day.revenue > 0
+                                ? `bg-white border-green-200 hover:border-green-300 hover:shadow-sm ${revenueStyle.border}`
+                                : 'bg-white border-gray-100 hover:border-gray-200'
+                      }`}
+                    >
+                      {/* Date number */}
+                      <div className={`text-sm font-semibold mb-1 ${
+                        isSelected ? 'text-blue-900' : isToday ? 'text-blue-700' : 'text-gray-800'
+                      }`}>
+                        {day.day}
+                      </div>
+                      
+                      {/* Revenue amount */}
+                      <div className={`text-xs ${revenueStyle.text} ${
+                        day.revenue > 0 ? '' : ''
+                      }`}>
+                        {day.revenue > 0 ? (
+                          <span className="inline-flex items-center">
+                            ETB {day.revenue.toLocaleString()}
+                          </span>
+                        ) : isToday ? (
+                          <span className="text-blue-600 text-[10px] font-medium">Today</span>
+                        ) : (
+                          <span className="text-gray-300">-</span>
+                        )}
+                      </div>
+                      
+                      {/* Subtle bottom border for revenue days */}
+                      {day.revenue > 0 && !isSelected && (
+                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-green-400 opacity-50"></div>
+                      )}
                     </div>
-                    <div className={`text-xs ${isSelected ? 'text-blue-100' : 'text-gray-500'}`}>
-                      {day.transactions} txns
-                    </div>
-                    {day.revenue > 0 && (
-                      <div 
-                        className={`mt-1 h-1 rounded-full ${
-                          isSelected ? 'bg-blue-200' : 'bg-green-200'
-                        }`}
-                        style={{ width: `${revenueIntensity * 100}%` }}
-                      ></div>
-                    )}
                   </div>
                 );
               })}
             </div>
           </div>
+        </div>
+      )}
 
-          {/* Selected Day Details */}
-          {selectedDate && (
-            <div className="card">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Daily Details - {new Date(selectedDate).toLocaleDateString('en-US', { 
+      {/* Period Selection and Summary */}
+      <div className="card">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Period Summary</h3>
+        <div className="flex gap-2 mb-4">
+          {['daily', 'weekly', 'monthly', 'yearly'].map(period => (
+            <button
+              key={period}
+              onClick={() => setSelectedPeriod(period)}
+              className={`px-4 py-2 rounded-lg font-medium capitalize transition-colors ${
+                selectedPeriod === period ? 'bg-primary-500 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              {period}
+            </button>
+          ))}
+        </div>
+        <div className="text-center text-gray-600">
+          <p>Period: {selectedPeriod}</p>
+          <p className="text-sm mt-1">
+            {revenueStats.dateRange.start && new Date(revenueStats.dateRange.start).toLocaleDateString()} - {' '}
+            {revenueStats.dateRange.end && new Date(revenueStats.dateRange.end).toLocaleDateString()}
+          </p>
+        </div>
+      </div>
+
+      {/* Day Details Popup */}
+      {showDayPopup && popupDayData && (
+        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50" onClick={() => setShowDayPopup(false)}>
+          <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">
+                {new Date(popupDayData.date).toLocaleDateString('en-US', { 
                   weekday: 'long', 
                   year: 'numeric', 
                   month: 'long', 
                   day: 'numeric' 
                 })}
               </h3>
-              {(() => {
-                const dayData = dailyData.find(d => d.date === selectedDate);
-                if (!dayData) return <p className="text-gray-500">No data available for this date.</p>;
-                
-                return (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="text-center p-4 bg-green-50 rounded-lg">
-                      <DollarSign className="h-8 w-8 text-green-600 mx-auto mb-2" />
-                      <p className="text-2xl font-bold text-green-600">{formatCurrency(dayData.revenue)}</p>
-                      <p className="text-sm text-gray-600">Revenue</p>
-                    </div>
-                    <div className="text-center p-4 bg-blue-50 rounded-lg">
-                      <Activity className="h-8 w-8 text-blue-600 mx-auto mb-2" />
-                      <p className="text-2xl font-bold text-blue-600">{dayData.transactions}</p>
-                      <p className="text-sm text-gray-600">Transactions</p>
-                    </div>
-                    <div className="text-center p-4 bg-purple-50 rounded-lg">
-                      <Users className="h-8 w-8 text-purple-600 mx-auto mb-2" />
-                      <p className="text-2xl font-bold text-purple-600">{dayData.patients}</p>
-                      <p className="text-sm text-gray-600">Patients</p>
-                    </div>
-                  </div>
-                );
-              })()}
+              <button 
+                onClick={() => setShowDayPopup(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                ×
+              </button>
             </div>
-          )}
-        </div>
-      )}
-
-      {/* Table View */}
-      {viewMode === 'table' && (
-        <div className="space-y-6">
-          {/* Monthly Overview Table */}
-          <div className="card">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Monthly Financial Overview</h3>
-            <div className="overflow-x-auto">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Month</th>
-                    <th>Revenue</th>
-                    <th>Transactions</th>
-                    <th>Patients</th>
-                    <th>Avg Daily Revenue</th>
-                    <th>Growth</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {monthlyData.map((month, index) => (
-                    <tr key={`month-${month.monthIndex}`} className="hover:bg-gray-50">
-                      <td className="font-medium">{month.month}</td>
-                      <td className={`font-semibold ${month.revenue > 0 ? 'text-green-600' : 'text-gray-400'}`}>
-                        {formatCurrency(month.revenue)}
-                      </td>
-                      <td>{month.transactions}</td>
-                      <td>{month.patients}</td>
-                      <td>{formatCurrency(month.avgDailyRevenue)}</td>
-                      <td>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          month.growth > 0 ? 'bg-green-100 text-green-800' : 
-                          month.growth < 0 ? 'bg-red-100 text-red-800' : 
-                          'bg-gray-100 text-gray-800'
-                        }`}>
-                          {month.growth > 0 ? '+' : ''}{month.growth}%
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Daily Revenue Table for Selected Month */}
-          <div className="card">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              Daily Revenue - {getMonthName(selectedMonth)} {selectedYear}
-            </h3>
-            <div className="overflow-x-auto">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Day</th>
-                    <th>Revenue</th>
-                    <th>Transactions</th>
-                    <th>Patients</th>
-                    <th>Type</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {dailyData.map((day, index) => (
-                    <tr key={`day-${day.day}`} className="hover:bg-gray-50">
-                      <td className="font-medium">{day.date}</td>
-                      <td>{new Date(day.date).toLocaleDateString('en-US', { weekday: 'short' })}</td>
-                      <td className={`font-semibold ${day.revenue > 0 ? 'text-green-600' : 'text-gray-400'}`}>
-                        {formatCurrency(day.revenue)}
-                      </td>
-                      <td>{day.transactions}</td>
-                      <td>{day.patients}</td>
-                      <td>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          day.isWeekend ? 'bg-orange-100 text-orange-800' : 'bg-blue-100 text-blue-800'
-                        }`}>
-                          {day.isWeekend ? 'Weekend' : 'Weekday'}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Charts View */}
-      {viewMode === 'charts' && (
-        <div className="space-y-6">
-          {/* Monthly Revenue Trend */}
-          <div className="card">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Monthly Revenue Trend</h3>
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={monthlyData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" />
-                  <YAxis />
-                  <Tooltip formatter={(value) => [formatCurrency(value), 'Revenue']} />
-                  <Area type="monotone" dataKey="revenue" stroke="#10b981" fill="#10b981" fillOpacity={0.3} />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Daily Revenue Chart for Selected Month */}
-          <div className="card">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              Daily Revenue - {getMonthName(selectedMonth)} {selectedYear}
-            </h3>
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={dailyData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="day" />
-                  <YAxis />
-                  <Tooltip formatter={(value) => [formatCurrency(value), 'Revenue']} />
-                  <Bar dataKey="revenue" fill="#3b82f6" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Revenue Distribution */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="card">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Revenue by Day Type</h3>
-              <div className="h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={[
-                        { 
-                          name: 'Weekdays', 
-                          value: dailyData.filter(d => !d.isWeekend).reduce((sum, d) => sum + d.revenue, 0),
-                          color: '#3b82f6'
-                        },
-                        { 
-                          name: 'Weekends', 
-                          value: dailyData.filter(d => d.isWeekend).reduce((sum, d) => sum + d.revenue, 0),
-                          color: '#f59e0b'
-                        }
-                      ]}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                      outerRadius={80}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      {[
-                        { name: 'Weekdays', value: dailyData.filter(d => !d.isWeekend).reduce((sum, d) => sum + d.revenue, 0), color: '#3b82f6' },
-                        { name: 'Weekends', value: dailyData.filter(d => d.isWeekend).reduce((sum, d) => sum + d.revenue, 0), color: '#f59e0b' }
-                      ].map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(value) => [formatCurrency(value), 'Revenue']} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            <div className="card">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Top Performing Days</h3>
+            
+            {popupDayData.dayData ? (
               <div className="space-y-3">
-                {dailyData
-                  .sort((a, b) => b.revenue - a.revenue)
-                  .slice(0, 5)
-                  .map((day, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div>
-                        <p className="font-medium">{day.date}</p>
-                        <p className="text-sm text-gray-600">
-                          {new Date(day.date).toLocaleDateString('en-US', { weekday: 'long' })}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-semibold text-green-600">{formatCurrency(day.revenue)}</p>
-                        <p className="text-sm text-gray-600">{day.transactions} transactions</p>
-                      </div>
-                    </div>
-                  ))}
+                <div className="p-3 bg-green-50 rounded-lg">
+                  <p className="text-sm text-gray-600 mb-1">Total Revenue</p>
+                  <p className="text-2xl font-bold text-green-600">
+                    {formatCurrency(popupDayData.dayData.combined.revenue)}
+                  </p>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3 bg-blue-50 rounded-lg">
+                    <p className="text-xs text-gray-600 mb-1">Medical</p>
+                    <p className="text-lg font-semibold text-blue-600">
+                      {formatCurrency(popupDayData.dayData.medical.revenue)}
+                    </p>
+                    <p className="text-xs text-gray-500">{popupDayData.dayData.medical.transactions} transactions</p>
+                  </div>
+                  
+                  <div className="p-3 bg-purple-50 rounded-lg">
+                    <p className="text-xs text-gray-600 mb-1">Pharmacy</p>
+                    <p className="text-lg font-semibold text-purple-600">
+                      {formatCurrency(popupDayData.dayData.pharmacy.revenue)}
+                    </p>
+                    <p className="text-xs text-gray-500">{popupDayData.dayData.pharmacy.transactions} transactions</p>
+                  </div>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="text-center py-6">
+                <p className="text-gray-500">No transactions recorded for this day</p>
+              </div>
+            )}
           </div>
         </div>
       )}
-
     </div>
   );
 };

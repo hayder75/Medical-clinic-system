@@ -1377,3 +1377,542 @@ exports.getNurses = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+// Comprehensive Revenue Stats for Admin Dashboard (ALL users, not just current user)
+exports.getRevenueStats = async (req, res) => {
+  try {
+    const { period = 'daily', startDate, endDate } = req.query;
+    
+    // Calculate date range based on period
+    let start, end;
+    const now = new Date();
+    
+    if (startDate && endDate) {
+      start = new Date(startDate);
+      end = new Date(endDate);
+    } else {
+      switch (period) {
+        case 'daily':
+          start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          end = new Date(start);
+          end.setDate(end.getDate() + 1);
+          break;
+        case 'weekly':
+          const dayOfWeek = now.getDay();
+          start = new Date(now);
+          start.setDate(start.getDate() - dayOfWeek);
+          start.setHours(0, 0, 0, 0);
+          end = new Date(start);
+          end.setDate(end.getDate() + 7);
+          break;
+        case 'monthly':
+          start = new Date(now.getFullYear(), now.getMonth(), 1);
+          end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+          break;
+        case 'yearly':
+          start = new Date(now.getFullYear(), 0, 1);
+          end = new Date(now.getFullYear() + 1, 0, 1);
+          break;
+        default:
+          start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          end = new Date(start);
+          end.setDate(end.getDate() + 1);
+      }
+    }
+
+    // ========== MEDICAL REVENUE (Completed/PAID) ==========
+    // Get all PAID payments from BillPayment (not user-specific)
+    const medicalPayments = await prisma.billPayment.findMany({
+      where: {
+        createdAt: {
+          gte: start,
+          lt: end
+        }
+      },
+      include: {
+        billing: {
+          include: {
+            services: {
+              include: {
+                service: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    // Count completed visits
+    const completedVisits = await prisma.visit.count({
+      where: {
+        status: 'COMPLETED',
+        updatedAt: {
+          gte: start,
+          lt: end
+        }
+      }
+    });
+
+    // Count lab tests completed
+    const labTests = await prisma.labOrder.count({
+      where: {
+        status: 'COMPLETED',
+        updatedAt: {
+          gte: start,
+          lt: end
+        }
+      }
+    });
+
+    // Count radiology scans completed
+    const radiologyScans = await prisma.radiologyOrder.count({
+      where: {
+        status: 'COMPLETED',
+        updatedAt: {
+          gte: start,
+          lt: end
+        }
+      }
+    });
+
+    // Calculate medical revenue breakdown
+    const medicalRevenue = medicalPayments.reduce((sum, p) => sum + p.amount, 0);
+    const medicalByType = medicalPayments.reduce((acc, p) => {
+      acc[p.type] = acc[p.type] || { count: 0, amount: 0 };
+      acc[p.type].count += 1;
+      acc[p.type].amount += p.amount;
+      return acc;
+    }, {});
+
+    // ========== PHARMACY REVENUE (Completed/PAID) ==========
+    // Get all PAID pharmacy invoices
+    const pharmacyInvoices = await prisma.pharmacyInvoice.findMany({
+      where: {
+        status: 'PAID',
+        createdAt: {
+          gte: start,
+          lt: end
+        }
+      },
+      include: {
+        dispensedMedicines: true
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    const pharmacyRevenue = pharmacyInvoices.reduce((sum, inv) => sum + inv.totalAmount, 0);
+    const prescriptions = pharmacyInvoices.length;
+    const medicationsDispensed = pharmacyInvoices.reduce((sum, inv) => 
+      sum + inv.dispensedMedicines.length, 0
+    );
+
+    // ========== PENDING MEDICAL BILLS ==========
+    const pendingMedicalBills = await prisma.billing.findMany({
+      where: {
+        status: 'PENDING',
+        createdAt: {
+          gte: start,
+          lt: end
+        },
+        NOT: {
+          billingType: 'EMERGENCY'
+        }
+      },
+      select: {
+        totalAmount: true
+      }
+    });
+
+    const pendingMedicalRevenue = pendingMedicalBills.reduce((sum, b) => sum + b.totalAmount, 0);
+
+    // ========== PENDING PHARMACY INVOICES ==========
+    const pendingPharmacyInvoices = await prisma.pharmacyInvoice.findMany({
+      where: {
+        status: 'PENDING',
+        createdAt: {
+          gte: start,
+          lt: end
+        }
+      },
+      select: {
+        totalAmount: true
+      }
+    });
+
+    const pendingPharmacyRevenue = pendingPharmacyInvoices.reduce((sum, inv) => sum + inv.totalAmount, 0);
+
+    // ========== RESPONSE STRUCTURE ==========
+    const response = {
+      period,
+      dateRange: {
+        start: start.toISOString(),
+        end: end.toISOString()
+      },
+      completed: {
+        medical: {
+          revenue: medicalRevenue,
+          transactions: medicalPayments.length,
+          consultations: completedVisits,
+          labTests,
+          radiologyScans,
+          byType: medicalByType
+        },
+        pharmacy: {
+          revenue: pharmacyRevenue,
+          prescriptions,
+          medications: medicationsDispensed,
+          transactions: pharmacyInvoices.length
+        },
+        combined: {
+          totalRevenue: medicalRevenue + pharmacyRevenue,
+          totalTransactions: medicalPayments.length + pharmacyInvoices.length
+        }
+      },
+      pending: {
+        medical: {
+          revenue: pendingMedicalRevenue,
+          bills: pendingMedicalBills.length
+        },
+        pharmacy: {
+          revenue: pendingPharmacyRevenue,
+          invoices: pendingPharmacyInvoices.length
+        },
+        combined: {
+          totalRevenue: pendingMedicalRevenue + pendingPharmacyRevenue,
+          totalBills: pendingMedicalBills.length + pendingPharmacyInvoices.length
+        }
+      }
+    };
+
+    res.json(response);
+  } catch (error) {
+    console.error('Error getting revenue stats:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Get daily breakdown for a specific month
+exports.getDailyBreakdown = async (req, res) => {
+  try {
+    const { year, month } = req.query; // e.g., year=2025, month=10 (0-based)
+    
+    const daysInMonth = new Date(year, parseInt(month) + 1, 0).getDate();
+    const dailyData = [];
+    
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dayStart = new Date(year, month, day);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(year, month, day);
+      dayEnd.setHours(23, 59, 59, 999);
+      
+      // Get medical payments for this day
+      const medicalPayments = await prisma.billPayment.findMany({
+        where: {
+          createdAt: {
+            gte: dayStart,
+            lte: dayEnd
+          }
+        }
+      });
+      
+      // Get pharmacy invoices for this day
+      const pharmacyInvoices = await prisma.pharmacyInvoice.findMany({
+        where: {
+          status: 'PAID',
+          createdAt: {
+            gte: dayStart,
+            lte: dayEnd
+          }
+        }
+      });
+      
+      const medicalRevenue = medicalPayments.reduce((sum, p) => sum + p.amount, 0);
+      const pharmacyRevenue = pharmacyInvoices.reduce((sum, inv) => sum + inv.totalAmount, 0);
+      const totalRevenue = medicalRevenue + pharmacyRevenue;
+      
+      dailyData.push({
+        date: `${year}-${String(parseInt(month) + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+        day,
+        medical: {
+          revenue: medicalRevenue,
+          transactions: medicalPayments.length
+        },
+        pharmacy: {
+          revenue: pharmacyRevenue,
+          transactions: pharmacyInvoices.length
+        },
+        combined: {
+          revenue: totalRevenue,
+          transactions: medicalPayments.length + pharmacyInvoices.length
+        }
+      });
+    }
+    
+    res.json({ dailyData });
+  } catch (error) {
+    console.error('Error getting daily breakdown:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Get doctor performance statistics
+exports.getDoctorPerformanceStats = async (req, res) => {
+  try {
+    const { period = 'daily', doctorId } = req.query;
+    
+    // Calculate date range based on period
+    const now = new Date();
+    let startDate, endDate;
+    
+    if (period === 'daily') {
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    } else if (period === 'weekly') {
+      startDate = new Date(now);
+      startDate.setDate(now.getDate() - now.getDay());
+      startDate.setHours(0, 0, 0, 0);
+      endDate = new Date(startDate);
+      endDate.setDate(startDate.getDate() + 6);
+      endDate.setHours(23, 59, 59, 999);
+    } else if (period === 'monthly') {
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    } else if (period === 'yearly') {
+      startDate = new Date(now.getFullYear(), 0, 1);
+      endDate = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
+    }
+    
+    // Get all doctors with consultation fees
+    const doctors = await prisma.user.findMany({
+      where: {
+        role: 'DOCTOR',
+        ...(doctorId && { id: doctorId })
+      },
+      select: {
+        id: true,
+        fullname: true,
+        consultationFee: true
+      }
+    });
+    
+    // Find consultation service (not used in this function but keeping for consistency)
+    // const consultationService = await prisma.service.findFirst({
+    //   where: {
+    //     category: 'CONSULTATION',
+    //     name: { contains: 'Consultation', mode: 'insensitive' }
+    //   }
+    // });
+    
+    const results = await Promise.all(doctors.map(async (doctor) => {
+      // Find all visits with this doctor assigned
+      const visits = await prisma.visit.findMany({
+        where: {
+          suggestedDoctorId: doctor.id,
+          createdAt: {
+            gte: startDate,
+            lte: endDate
+          }
+        },
+        select: {
+          id: true,
+          createdAt: true,
+          patientId: true,
+          patient: {
+            select: {
+              name: true
+            }
+          }
+        }
+      });
+      
+      // Get consultation billing for these visits
+      const billings = await prisma.billing.findMany({
+        where: {
+          visitId: { in: visits.map(v => v.id) },
+          services: {
+            some: {
+              service: {
+                category: 'CONSULTATION'
+              }
+            }
+          }
+        },
+        include: {
+          services: {
+            where: {
+              service: {
+                category: 'CONSULTATION'
+              }
+            }
+          },
+          payments: true // Include all payment types
+        }
+      });
+      
+      // Calculate statistics
+      const totalPatients = visits.length;
+      const totalRevenue = billings.reduce((sum, b) => {
+        const paidAmount = b.payments.reduce((pSum, p) => pSum + p.amount, 0);
+        return sum + paidAmount;
+      }, 0);
+      const avgPerPatient = totalPatients > 0 ? totalRevenue / totalPatients : 0;
+      
+      return {
+        doctorId: doctor.id,
+        doctorName: doctor.fullname,
+        consultationFee: doctor.consultationFee,
+        totalPatients,
+        totalRevenue,
+        avgPerPatient,
+        visits: visits.map(v => ({
+          id: v.id,
+          date: v.createdAt,
+          patientId: v.patientId,
+          patientName: v.patient.name
+        }))
+      };
+    }));
+    
+    // Calculate summary statistics
+    const summary = {
+      totalConsultationFees: results.reduce((sum, r) => sum + r.totalRevenue, 0),
+      avgPerDoctor: results.length > 0 ? results.reduce((sum, r) => sum + r.totalRevenue, 0) / results.length : 0,
+      totalConsultations: results.reduce((sum, r) => sum + r.totalPatients, 0),
+      topPerformer: results.reduce((top, current) => current.totalRevenue > top.totalRevenue ? current : top, results[0] || null)
+    };
+    
+    res.json({
+      period,
+      dateRange: { startDate, endDate },
+      summary,
+      doctors: results
+    });
+  } catch (error) {
+    console.error('Error getting doctor performance stats:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Get doctor daily breakdown for calendar view
+exports.getDoctorDailyBreakdown = async (req, res) => {
+  try {
+    const { doctorId, year, month } = req.query;
+    
+    if (!doctorId) {
+      return res.status(400).json({ error: 'Doctor ID is required' });
+    }
+    
+    const y = parseInt(year || new Date().getFullYear());
+    const m = parseInt(month || new Date().getMonth());
+    const daysInMonth = new Date(y, m + 1, 0).getDate();
+    const dailyData = [];
+    
+    // Find consultation service
+    const consultationService = await prisma.service.findFirst({
+      where: {
+        category: 'CONSULTATION',
+        name: { contains: 'Consultation', mode: 'insensitive' }
+      }
+    });
+    
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dayStart = new Date(y, m, day);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(y, m, day);
+      dayEnd.setHours(23, 59, 59, 999);
+      
+      // Find visits for this doctor on this day
+      const visits = await prisma.visit.findMany({
+        where: {
+          suggestedDoctorId: doctorId,
+          createdAt: {
+            gte: dayStart,
+            lte: dayEnd
+          }
+        },
+        select: {
+          id: true
+        }
+      });
+      
+      // Get consultation billing for these visits
+      const billings = await prisma.billing.findMany({
+        where: {
+          visitId: { in: visits.map(v => v.id) },
+          services: {
+            some: {
+              service: {
+                category: 'CONSULTATION'
+              }
+            }
+          }
+        },
+        include: {
+          services: {
+            where: {
+              service: {
+                category: 'CONSULTATION'
+              }
+            }
+          },
+          payments: true,
+          visit: {
+            include: {
+              patient: {
+                select: {
+                  name: true
+                }
+              }
+            }
+          }
+        }
+      });
+      
+      // Calculate revenue for this day
+      const revenue = billings.reduce((sum, b) => {
+        const paidAmount = b.payments.reduce((pSum, p) => pSum + p.amount, 0);
+        return sum + paidAmount;
+      }, 0);
+      
+      // Get patient details for this day
+      const patients = await Promise.all(billings.map(async (b) => {
+        // Get visit details including patient name if not already loaded
+        let visitDetails = b.visit;
+        if (!visitDetails || !visitDetails.patient) {
+          visitDetails = await prisma.visit.findUnique({
+            where: { id: b.visitId },
+            include: {
+              patient: {
+                select: {
+                  name: true
+                }
+              }
+            }
+          });
+        }
+        
+        return {
+          visitId: b.visitId,
+          patientName: visitDetails?.patient?.name || 'Unknown',
+          amount: b.services.reduce((s, sv) => s + sv.totalPrice, 0),
+          paymentStatus: b.payments.length > 0 ? 'PAID' : 'PENDING',
+          date: visitDetails?.createdAt || b.createdAt
+        };
+      }));
+      
+      dailyData.push({
+        date: `${y}-${String(m + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+        day,
+        revenue,
+        patients: patients.length,
+        details: patients
+      });
+    }
+    
+    res.json({ dailyData });
+  } catch (error) {
+    console.error('Error getting doctor daily breakdown:', error);
+    res.status(500).json({ error: error.message });
+  }
+};

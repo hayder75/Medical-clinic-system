@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate } from 'react-router-dom';
 import BillingQueue from '../../components/billing/BillingQueue';
 import PreRegistration from './PreRegistration';
+import LoanDisbursement from '../../components/billing/LoanDisbursement';
 import { 
   CreditCard, 
   Users, 
@@ -395,6 +396,7 @@ const BillingDashboard = () => {
       <Route path="/" element={<DashboardOverview />} />
       <Route path="/queue" element={<BillingQueue />} />
       <Route path="/pre-registration" element={<PreRegistration />} />
+      <Route path="/loan-disbursement" element={<LoanDisbursement />} />
     </Routes>
   );
 };

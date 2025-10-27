@@ -24,7 +24,8 @@ import {
   Phone,
   FileCheck,
   Clock,
-  Image
+  Image,
+  DollarSign
 } from 'lucide-react';
 
 const Layout = ({ children, title, subtitle }) => {
@@ -65,6 +66,8 @@ const Layout = ({ children, title, subtitle }) => {
           { name: 'Continuous Infusions', href: '/admin/continuous-infusions', icon: Clock },
           { name: 'Audit Logs', href: '/admin/audit', icon: FileText },
           { name: 'Reports', href: '/admin/reports', icon: BarChart3 },
+          { name: 'Doctor Performance', href: '/admin/doctor-performance', icon: Stethoscope },
+          { name: 'Loan Approval', href: '/admin/loan-approval', icon: DollarSign },
           { name: 'Appointments', href: '/appointments', icon: Calendar },
         ];
       
@@ -75,6 +78,7 @@ const Layout = ({ children, title, subtitle }) => {
           { name: 'Patient History', href: '/doctor/history', icon: FileText },
           { name: 'Medical Certificate', href: '/doctor/medical-certificates', icon: FileCheck },
           { name: 'Appointments', href: '/appointments', icon: Calendar },
+          { name: 'Request Loan', href: '/loan-request', icon: DollarSign },
         ];
       
       case 'NURSE':
@@ -85,6 +89,7 @@ const Layout = ({ children, title, subtitle }) => {
           { name: 'Daily Tasks', href: '/nurse/tasks', icon: Calendar },
           { name: 'Continuous Vitals', href: '/nurse/continuous-vitals', icon: Activity },
           { name: 'Patient Gallery', href: '/nurse/gallery', icon: Image },
+          { name: 'Request Loan', href: '/loan-request', icon: DollarSign },
         ];
       
       case 'RECEPTIONIST':
@@ -96,6 +101,7 @@ const Layout = ({ children, title, subtitle }) => {
           { name: 'Pre-Registration', href: '/reception/pre-registration', icon: Phone },
           { name: 'Doctor Queue Management', href: '/reception/doctor-queue', icon: Stethoscope },
           { name: 'Patient Gallery', href: '/reception/gallery', icon: Image },
+          { name: 'Request Loan', href: '/loan-request', icon: DollarSign },
         ];
       
       case 'BILLING_OFFICER':
@@ -107,6 +113,8 @@ const Layout = ({ children, title, subtitle }) => {
           { name: 'Patient Registration', href: '/patient/register', icon: Users },
           { name: 'Doctor Queue Management', href: '/doctor-queue', icon: Stethoscope },
           { name: 'Cash Management', href: '/cash-management', icon: BarChart3 },
+          { name: 'Loan Disbursement', href: '/billing/loan-disbursement', icon: DollarSign },
+          { name: 'Request Loan', href: '/loan-request', icon: DollarSign },
         ];
       
       case 'PHARMACY_BILLING_OFFICER':
@@ -117,6 +125,7 @@ const Layout = ({ children, title, subtitle }) => {
           { name: 'Prescription Queue', href: '/pharmacy/queue', icon: Pill },
           { name: 'Inventory', href: '/pharmacy/inventory', icon: ShoppingCart },
           { name: 'Walk-in Sales', href: '/pharmacy/walk-in-sales', icon: ShoppingCart },
+          { name: 'Request Loan', href: '/loan-request', icon: DollarSign },
         ];
       
       
@@ -124,12 +133,14 @@ const Layout = ({ children, title, subtitle }) => {
         return [
           ...baseItems,
           { name: 'Radiology Orders', href: '/radiology/orders', icon: Scan },
+          { name: 'Request Loan', href: '/loan-request', icon: DollarSign },
         ];
       
       case 'LAB_TECHNICIAN':
         return [
           ...baseItems,
           { name: 'Lab Orders', href: '/lab/orders', icon: TestTube },
+          { name: 'Request Loan', href: '/loan-request', icon: DollarSign },
         ];
       
       default:

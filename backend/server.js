@@ -38,6 +38,7 @@ const cashManagementRoutes = require('./src/routes/cashManagement');
 const galleryRoutes = require('./src/routes/gallery');
 const appointmentsRoutes = require('./src/routes/appointments');
 const insuranceRoutes = require('./src/routes/insurance');
+const loansRoutes = require('./src/routes/loans');
 
 // Middleware
 const authMiddleware = require('./src/middleware/auth');
@@ -103,6 +104,7 @@ app.use('/api/cash-management', cashManagementRoutes);
 app.use('/api/gallery', galleryRoutes);
 app.use('/api/appointments', authMiddleware, appointmentsRoutes);
 app.use('/api/insurance', insuranceRoutes);
+app.use('/api/loans', loansRoutes);
 
 // Cron for inactivity (run daily)
 cron.schedule('0 0 * * *', async () => {

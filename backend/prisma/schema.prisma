@@ -50,6 +50,11 @@ model User {
   nurseAssignmentsBy NurseServiceAssignment[] @relation("NurseAssignmentsBy")
   cardActivations CardActivation[] @relation("CardActivations")
   galleryUploads  PatientGallery[]
+  
+  // Loan Relations
+  loansRequested Loan[] @relation("LoansRequested")
+  loansReviewed  Loan[] @relation("LoansReviewed")
+  loansGiven     Loan[] @relation("LoansGiven")
 
   @@index([role])
   @@index([availability])
@@ -1317,6 +1322,9 @@ model CashExpense {
   recordedById  String
   recordedBy    User     @relation(fields: [recordedById], references: [id])
   
+  // Loan relation
+  loan          Loan?
+  
   createdAt     DateTime @default(now())
   
   @@index([sessionId])
@@ -1331,7 +1339,62 @@ enum ExpenseCategory {
   UTILITIES
   FOOD_BEVERAGE
   TRANSPORTATION
+  STAFF_LOAN
   OTHER
+}
+
+// Staff Loan Management System
+model Loan {
+  id              String   @id @default(uuid())
+  
+  // Staff requesting the loan
+  staffId         String
+  staff           User     @relation("LoansRequested", fields: [staffId], references: [id])
+  
+  // Amount details
+  requestedAmount Float
+  approvedAmount  Float?   // Can be different from requested
+  
+  // Status tracking
+  status          LoanStatus @default(PENDING)
+  
+  // Reason/Notes
+  reason          String?
+  notes           String?
+  
+  // Date tracking
+  requestedAt     DateTime @default(now())
+  reviewedAt      DateTime?
+  approvedAt      DateTime?
+  deniedAt        DateTime?
+  givenAt         DateTime?
+  
+  // Approval/Denial tracking
+  reviewedById    String?
+  reviewedBy      User?    @relation("LoansReviewed", fields: [reviewedById], references: [id])
+  
+  // Disbursement tracking
+  givenById       String?
+  givenBy         User?    @relation("LoansGiven", fields: [givenById], references: [id])
+  
+  // Link to expense when disbursed
+  expenseId       String?  @unique
+  expense         CashExpense? @relation(fields: [expenseId], references: [id])
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@index([staffId])
+  @@index([status])
+  @@index([requestedAt])
+}
+
+enum LoanStatus {
+  PENDING       // Awaiting admin review
+  APPROVED      // Approved, awaiting disbursement
+  DENIED        // Denied by admin
+  GIVEN         // Money has been given to staff
+  REPAID        // Staff has repaid the loan (future feature)
 }
 
 model DiagnosisNotes {

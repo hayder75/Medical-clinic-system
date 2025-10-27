@@ -15,12 +15,12 @@ async function seedDatabase() {
       update: {},
       create: {
         email: 'admin@clinic.com',
+        username: 'admin',
         password: hashedPassword,
-        firstName: 'Admin',
-        lastName: 'User',
-        role: 'admin',
+        fullname: 'Admin User',
+        role: 'ADMIN',
         phone: '1234567890',
-        isActive: true
+        availability: true
       }
     });
 
@@ -34,13 +34,14 @@ async function seedDatabase() {
       update: {},
       create: {
         email: 'doctor@clinic.com',
+        username: 'doctor',
         password: doctorPassword,
-        firstName: 'Dr. John',
-        lastName: 'Smith',
-        role: 'doctor',
+        fullname: 'Dr. John Smith',
+        role: 'DOCTOR',
         phone: '1234567891',
-        isActive: true,
-        consultationFee: 50
+        availability: true,
+        consultationFee: 50,
+        specialties: ['General Medicine']
       }
     });
 
@@ -54,12 +55,12 @@ async function seedDatabase() {
       update: {},
       create: {
         email: 'nurse@clinic.com',
+        username: 'nurse',
         password: nursePassword,
-        firstName: 'Jane',
-        lastName: 'Doe',
-        role: 'nurse',
+        fullname: 'Jane Doe',
+        role: 'NURSE',
         phone: '1234567892',
-        isActive: true
+        availability: true
       }
     });
 
@@ -73,12 +74,12 @@ async function seedDatabase() {
       update: {},
       create: {
         email: 'reception@clinic.com',
+        username: 'reception',
         password: receptionPassword,
-        firstName: 'Sarah',
-        lastName: 'Johnson',
-        role: 'reception',
+        fullname: 'Sarah Johnson',
+        role: 'RECEPTIONIST',
         phone: '1234567893',
-        isActive: true
+        availability: true
       }
     });
 
@@ -86,16 +87,16 @@ async function seedDatabase() {
 
     // Create basic services
     const services = [
-      { name: 'General Consultation', price: 50, category: 'consultation' },
-      { name: 'Blood Test', price: 25, category: 'lab' },
-      { name: 'X-Ray', price: 75, category: 'radiology' },
-      { name: 'Dental Checkup', price: 60, category: 'dental' },
-      { name: 'Emergency Consultation', price: 100, category: 'emergency' }
+      { code: 'CONS001', name: 'General Consultation', price: 50, category: 'CONSULTATION' },
+      { code: 'LAB001', name: 'Blood Test', price: 25, category: 'LAB' },
+      { code: 'RAD001', name: 'X-Ray', price: 75, category: 'RADIOLOGY' },
+      { code: 'DENT001', name: 'Dental Checkup', price: 60, category: 'PROCEDURE' },
+      { code: 'EMER001', name: 'Emergency Consultation', price: 100, category: 'EMERGENCY' }
     ];
 
     for (const service of services) {
       await prisma.service.upsert({
-        where: { name: service.name },
+        where: { code: service.code },
         update: {},
         create: service
       });
@@ -105,17 +106,21 @@ async function seedDatabase() {
 
     // Create insurance providers
     const insuranceProviders = [
-      { name: 'Blue Cross', coveragePercentage: 80 },
-      { name: 'Aetna', coveragePercentage: 75 },
-      { name: 'Cigna', coveragePercentage: 85 },
-      { name: 'Medicare', coveragePercentage: 90 }
+      { name: 'Blue Cross', code: 'BC001', coveragePercentage: 80 },
+      { name: 'Aetna', code: 'AET001', coveragePercentage: 75 },
+      { name: 'Cigna', code: 'CIG001', coveragePercentage: 85 },
+      { name: 'Medicare', code: 'MED001', coveragePercentage: 90 }
     ];
 
     for (const provider of insuranceProviders) {
-      await prisma.insuranceProvider.upsert({
-        where: { name: provider.name },
+      await prisma.insurance.upsert({
+        where: { code: provider.code },
         update: {},
-        create: provider
+        create: {
+          name: provider.name,
+          code: provider.code,
+          contactInfo: `Contact: ${provider.name} Customer Service`
+        }
       });
     }
 

@@ -44,5 +44,11 @@ router.get('/audit-logs', adminController.getAuditLogs);
 router.get('/reports/daily', adminController.getDailyReport);
 router.get('/reports/weekly', adminController.getWeeklyReport);
 router.get('/reports/revenue', adminController.getRevenueReport);
+router.get('/reports/revenue-stats', adminController.getRevenueStats);
+router.get('/reports/daily-breakdown', adminController.getDailyBreakdown);
+
+// Doctor Performance
+router.get('/reports/doctor-performance', adminController.getDoctorPerformanceStats);
+router.get('/reports/doctor-daily-breakdown', adminController.getDoctorDailyBreakdown);
 
 module.exports = router;
