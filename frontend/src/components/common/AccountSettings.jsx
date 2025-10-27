@@ -143,6 +143,7 @@ const AccountSettings = ({ isOpen, onClose, user: currentUser }) => {
                     value={passwordForm.currentPassword}
                     onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg pr-10"
+                    autoComplete="current-password"
                     required
                   />
                   <button
@@ -164,6 +165,7 @@ const AccountSettings = ({ isOpen, onClose, user: currentUser }) => {
                   value={passwordForm.newPassword}
                   onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg"
+                  autoComplete="new-password"
                   required
                 />
               </div>
@@ -177,6 +179,7 @@ const AccountSettings = ({ isOpen, onClose, user: currentUser }) => {
                   value={passwordForm.confirmPassword}
                   onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg"
+                  autoComplete="new-password"
                   required
                 />
               </div>
