@@ -64,7 +64,25 @@ const authMiddleware = async (req, res, next) => {
     
     try {
       // Try database first
-      user = await prisma.user.findUnique({ where: { id: decoded.userId || decoded.id } });
+      user = await prisma.user.findUnique({ 
+        where: { id: decoded.userId || decoded.id },
+        select: {
+          id: true,
+          username: true,
+          fullname: true,
+          role: true,
+          email: true,
+          phone: true,
+          isActive: true,
+          passwordChangedAt: true,
+          createdAt: true
+        }
+      });
+      
+      // Check if user is active (only for database users)
+      if (user && !user.isActive) {
+        return res.status(403).json({ error: 'Your account has been deactivated. Please contact administrator.' });
+      }
     } catch (dbError) {
       console.log('Database not available, using test users for auth');
     }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2, Eye, Search, Filter } from 'lucide-react';
+import { Plus, Edit, Trash2, Eye, Search, Filter, UserCheck, UserX } from 'lucide-react';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
 
@@ -147,6 +147,23 @@ const StaffManagement = () => {
     }
   };
 
+  const handleToggleStatus = async (member) => {
+    const action = member.isActive ? 'deactivate' : 'activate';
+    if (!window.confirm(`Are you sure you want to ${action} ${member.fullname || member.username}?`)) {
+      return;
+    }
+
+    try {
+      await api.patch(`/auth/toggle-status/${member.id}`, {
+        isActive: !member.isActive
+      });
+      toast.success(`User ${action}d successfully`);
+      fetchStaff();
+    } catch (error) {
+      toast.error(error.response?.data?.error || `Failed to ${action} user`);
+    }
+  };
+
   const handleSpecialtyChange = (specialty) => {
     setFormData(prev => ({
       ...prev,
@@ -238,8 +255,15 @@ const StaffManagement = () => {
             </thead>
             <tbody>
               {filteredStaff.map((member) => (
-                <tr key={member.id}>
-                  <td className="font-medium">{member.fullname || 'N/A'}</td>
+                <tr key={member.id} className={!member.isActive ? 'opacity-60' : ''}>
+                  <td className="font-medium">
+                    <div className="flex items-center space-x-2">
+                      <span>{member.fullname || 'N/A'}</span>
+                      {!member.isActive && (
+                        <span className="badge badge-error text-xs">INACTIVE</span>
+                      )}
+                    </div>
+                  </td>
                   <td>{member.username}</td>
                   <td>
                     <span className="badge badge-info">
@@ -262,6 +286,13 @@ const StaffManagement = () => {
                   <td>{member.phone || 'N/A'}</td>
                   <td>
                     <div className="flex space-x-2">
+                      <button
+                        onClick={() => handleToggleStatus(member)}
+                        className={`${member.isActive ? 'text-red-600 hover:text-red-800' : 'text-green-600 hover:text-green-800'}`}
+                        title={member.isActive ? 'Deactivate' : 'Activate'}
+                      >
+                        {member.isActive ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
+                      </button>
                       <button
                         onClick={() => handleEdit(member)}
                         className="text-blue-600 hover:text-blue-800"

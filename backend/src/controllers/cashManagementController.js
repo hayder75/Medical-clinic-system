@@ -111,19 +111,44 @@ exports.getCurrentSession = async (req, res) => {
       .filter(t => t.type === 'PAYMENT_RECEIVED')
       .reduce((sum, t) => sum + t.amount, 0);
     
+    // Also get total from today's Billing payments
+    const todayForBilling = new Date();
+    todayForBilling.setHours(0, 0, 0, 0);
+    const tomorrowForBilling = new Date(todayForBilling);
+    tomorrowForBilling.setDate(tomorrowForBilling.getDate() + 1);
+    
+    const todayBillings = await prisma.billing.findMany({
+      where: {
+        status: 'PAID',
+        updatedAt: {
+          gte: todayForBilling,
+          lt: tomorrowForBilling
+        }
+      },
+      include: {
+        payments: true
+      }
+    });
+    
+    const totalFromBillings = todayBillings
+      .flatMap(b => b.payments)
+      .reduce((sum, p) => sum + p.amount, 0);
+    
+    const totalReceivedAll = totalReceived + totalFromBillings;
+    
     const totalExpenses = session.expenses
       .reduce((sum, e) => sum + e.amount, 0);
     
     const totalBankDeposit = session.bankDeposits
       .reduce((sum, d) => sum + d.amount, 0);
     
-    const currentCash = session.startingCash + totalReceived - totalExpenses - totalBankDeposit;
+    const currentCash = session.startingCash + totalReceivedAll - totalExpenses - totalBankDeposit;
     
     res.json({
       session: {
         ...session,
         calculatedTotals: {
-          totalReceived,
+          totalReceived: totalReceivedAll,
           totalExpenses,
           totalBankDeposit,
           currentCash

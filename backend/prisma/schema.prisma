@@ -18,7 +18,9 @@ model User {
   specialties   String[] // JSON array, e.g., ["General", "Dentist"]
   licenseNumber String?
   availability  Boolean  @default(true)
+  isActive      Boolean  @default(true)
   consultationFee Float? // Added for doctor's fee
+  passwordChangedAt DateTime?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

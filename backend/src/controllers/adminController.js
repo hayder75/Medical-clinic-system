@@ -129,6 +129,8 @@ exports.getUsers = async (req, res) => {
           licenseNumber: true,
           consultationFee: true,
           availability: true,
+          isActive: true,
+          passwordChangedAt: true,
           createdAt: true
         },
         orderBy: { createdAt: 'desc' }

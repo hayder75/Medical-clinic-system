@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
+import AccountSettings from './AccountSettings';
 import { 
   Menu, 
   X, 
@@ -30,6 +31,7 @@ import {
 
 const Layout = ({ children, title, subtitle }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showAccountSettings, setShowAccountSettings] = useState(false);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -78,7 +80,7 @@ const Layout = ({ children, title, subtitle }) => {
           { name: 'Patient History', href: '/doctor/history', icon: FileText },
           { name: 'Medical Certificate', href: '/doctor/medical-certificates', icon: FileCheck },
           { name: 'Appointments', href: '/appointments', icon: Calendar },
-          { name: 'Request Loan', href: '/loan-request', icon: DollarSign },
+          { name: 'Loans', href: '/loans', icon: DollarSign },
         ];
       
       case 'NURSE':
@@ -89,7 +91,7 @@ const Layout = ({ children, title, subtitle }) => {
           { name: 'Daily Tasks', href: '/nurse/tasks', icon: Calendar },
           { name: 'Continuous Vitals', href: '/nurse/continuous-vitals', icon: Activity },
           { name: 'Patient Gallery', href: '/nurse/gallery', icon: Image },
-          { name: 'Request Loan', href: '/loan-request', icon: DollarSign },
+          { name: 'Loans', href: '/loans', icon: DollarSign },
         ];
       
       case 'RECEPTIONIST':
@@ -101,7 +103,7 @@ const Layout = ({ children, title, subtitle }) => {
           { name: 'Pre-Registration', href: '/reception/pre-registration', icon: Phone },
           { name: 'Doctor Queue Management', href: '/reception/doctor-queue', icon: Stethoscope },
           { name: 'Patient Gallery', href: '/reception/gallery', icon: Image },
-          { name: 'Request Loan', href: '/loan-request', icon: DollarSign },
+          { name: 'Loans', href: '/loans', icon: DollarSign },
         ];
       
       case 'BILLING_OFFICER':
@@ -113,8 +115,7 @@ const Layout = ({ children, title, subtitle }) => {
           { name: 'Patient Registration', href: '/patient/register', icon: Users },
           { name: 'Doctor Queue Management', href: '/doctor-queue', icon: Stethoscope },
           { name: 'Cash Management', href: '/cash-management', icon: BarChart3 },
-          { name: 'Loan Disbursement', href: '/billing/loan-disbursement', icon: DollarSign },
-          { name: 'Request Loan', href: '/loan-request', icon: DollarSign },
+          { name: 'Loans', href: '/loans', icon: DollarSign },
         ];
       
       case 'PHARMACY_BILLING_OFFICER':
@@ -125,7 +126,7 @@ const Layout = ({ children, title, subtitle }) => {
           { name: 'Prescription Queue', href: '/pharmacy/queue', icon: Pill },
           { name: 'Inventory', href: '/pharmacy/inventory', icon: ShoppingCart },
           { name: 'Walk-in Sales', href: '/pharmacy/walk-in-sales', icon: ShoppingCart },
-          { name: 'Request Loan', href: '/loan-request', icon: DollarSign },
+          { name: 'Loans', href: '/loans', icon: DollarSign },
         ];
       
       
@@ -133,14 +134,14 @@ const Layout = ({ children, title, subtitle }) => {
         return [
           ...baseItems,
           { name: 'Radiology Orders', href: '/radiology/orders', icon: Scan },
-          { name: 'Request Loan', href: '/loan-request', icon: DollarSign },
+          { name: 'Loans', href: '/loans', icon: DollarSign },
         ];
       
       case 'LAB_TECHNICIAN':
         return [
           ...baseItems,
           { name: 'Lab Orders', href: '/lab/orders', icon: TestTube },
-          { name: 'Request Loan', href: '/loan-request', icon: DollarSign },
+          { name: 'Loans', href: '/loans', icon: DollarSign },
         ];
       
       default:
@@ -223,12 +224,17 @@ const Layout = ({ children, title, subtitle }) => {
               <div className="relative">
                 <div className="flex items-center space-x-3">
                   <div className="flex-shrink-0">
-                    <div className="h-8 w-8 rounded-full flex items-center justify-center" style={{ backgroundColor: 'var(--primary)' }}>
+                    <button
+                      onClick={() => setShowAccountSettings(true)}
+                      className="h-8 w-8 rounded-full flex items-center justify-center cursor-pointer transition hover:opacity-80"
+                      style={{ backgroundColor: 'var(--primary)' }}
+                      title="Account Settings"
+                    >
                       <User className="h-5 w-5 text-white" />
-                    </div>
+                    </button>
                   </div>
                   <div className="hidden md:block">
-                    <p className="text-sm font-medium" style={{ color: 'var(--dark)' }}>{user?.name || user?.username}</p>
+                    <p className="text-sm font-medium" style={{ color: 'var(--dark)' }}>{user?.fullname || user?.username}</p>
                     <p className="text-xs" style={{ color: 'var(--primary)' }}>{user?.role?.toLowerCase().replace('_', ' ')}</p>
                   </div>
                   <button
@@ -256,6 +262,13 @@ const Layout = ({ children, title, subtitle }) => {
           </div>
         </main>
       </div>
+
+      {/* Account Settings Modal */}
+      <AccountSettings
+        isOpen={showAccountSettings}
+        onClose={() => setShowAccountSettings(false)}
+        user={user}
+      />
 
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (

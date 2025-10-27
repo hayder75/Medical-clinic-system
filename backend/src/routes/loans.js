@@ -17,10 +17,10 @@ router.get('/pending', authMiddleware, roleGuard(['ADMIN']), loanController.getP
 router.post('/review/:loanId', authMiddleware, roleGuard(['ADMIN']), loanController.reviewLoan);
 
 // Billing: Get approved loans
-router.get('/approved', authMiddleware, roleGuard(['BILLING']), loanController.getApprovedLoans);
+router.get('/approved', authMiddleware, roleGuard(['BILLING_OFFICER']), loanController.getApprovedLoans);
 
 // Billing: Disburse loan
-router.post('/disburse/:loanId', authMiddleware, roleGuard(['BILLING']), loanController.disburseLoan);
+router.post('/disburse/:loanId', authMiddleware, roleGuard(['BILLING_OFFICER']), loanController.disburseLoan);
 
 // Admin: Get all loans with filters
 router.get('/all', authMiddleware, roleGuard(['ADMIN']), loanController.getAllLoans);

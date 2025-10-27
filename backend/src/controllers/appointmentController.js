@@ -110,7 +110,59 @@ const createAppointment = async (req, res) => {
       });
     }
 
-    // 4. Create appointment
+    // 4. Check for time conflicts
+    const appointmentDateTime = new Date(validatedData.appointmentDate);
+    const appointmentTimeStr = validatedData.appointmentTime;
+    
+    // Parse appointment time to minutes (e.g., "09:00 AM" -> 540)
+    const parseTimeToMinutes = (timeStr) => {
+      const [time, period] = timeStr.split(' ');
+      const [hours, minutes] = time.split(':');
+      let hour24 = parseInt(hours);
+      if (period === 'PM' && hour24 !== 12) hour24 += 12;
+      if (period === 'AM' && hour24 === 12) hour24 = 0;
+      return hour24 * 60 + parseInt(minutes || 0);
+    };
+
+    const appointmentMinutes = parseTimeToMinutes(appointmentTimeStr);
+    
+    // Check for existing appointments on the same date
+    const startOfDay = new Date(appointmentDateTime);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(appointmentDateTime);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const existingAppointments = await prisma.appointment.findMany({
+      where: {
+        doctorId: validatedData.doctorId,
+        appointmentDate: {
+          gte: startOfDay,
+          lte: endOfDay
+        },
+        status: {
+          not: 'CANCELLED'
+        }
+      }
+    });
+
+    // Check for time conflicts (25-minute minimum gap)
+    const GAP_MINUTES = 25;
+    const conflictingAppointment = existingAppointments.find(existing => {
+      const existingMinutes = parseTimeToMinutes(existing.appointmentTime);
+      const timeDiff = Math.abs(existingMinutes - appointmentMinutes);
+      return timeDiff < GAP_MINUTES;
+    });
+
+    if (conflictingAppointment) {
+      console.log('Time conflict detected');
+      return res.status(400).json({
+        success: false,
+        message: `Doctor already has an appointment at ${conflictingAppointment.appointmentTime}. Please schedule at least ${GAP_MINUTES} minutes apart.`,
+        conflictingTime: conflictingAppointment.appointmentTime
+      });
+    }
+
+    // 5. Create appointment
     console.log('Creating appointment...');
     const appointment = await prisma.appointment.create({
       data: {
@@ -629,32 +681,36 @@ const sendAppointmentToDoctor = async (req, res) => {
       }
     });
 
-    // 5. Create consultation billing (PENDING status)
-    const consultationService = await prisma.service.findFirst({
-      where: { code: 'CONS001' }
-    });
+    // 5. Create consultation billing ONLY for CONSULTATION type appointments
+    let billing = null;
+    
+    if (appointment.type === 'CONSULTATION') {
+      const consultationService = await prisma.service.findFirst({
+        where: { code: 'CONS001' }
+      });
 
-    if (!consultationService) {
-      throw new Error('Consultation service not found');
-    }
+      if (!consultationService) {
+        throw new Error('Consultation service not found');
+      }
 
-    const billing = await prisma.billing.create({
-      data: {
-        patientId: appointment.patientId,
-        visitId: visit.id,
-        totalAmount: appointment.doctor.consultationFee || consultationService.price,
-        status: 'PENDING',
-        billingType: 'REGULAR',
-        services: {
-          create: {
-            serviceId: consultationService.id,
-            quantity: 1,
-            unitPrice: appointment.doctor.consultationFee || consultationService.price,
-            totalPrice: appointment.doctor.consultationFee || consultationService.price,
+      billing = await prisma.billing.create({
+        data: {
+          patientId: appointment.patientId,
+          visitId: visit.id,
+          totalAmount: appointment.doctor.consultationFee || consultationService.price,
+          status: 'PENDING',
+          billingType: 'REGULAR',
+          services: {
+            create: {
+              serviceId: consultationService.id,
+              quantity: 1,
+              unitPrice: appointment.doctor.consultationFee || consultationService.price,
+              totalPrice: appointment.doctor.consultationFee || consultationService.price,
+            }
           }
         }
-      }
-    });
+      });
+    }
 
     // 6. Create or find assignment for the doctor
     let assignment = await prisma.assignment.findFirst({

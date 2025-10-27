@@ -232,20 +232,64 @@ const DailyCashManagement = () => {
             </div>
           </div>
           
-          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-yellow-50 rounded-lg p-4">
-              <div className="text-sm font-medium text-yellow-600">Bank Deposits</div>
-              <div className="text-xl font-bold text-yellow-900">
-                {formatCurrency(calculatedTotals.totalBankDeposit)}
+          {/* Comprehensive Cash Calculation */}
+          <div className="mt-4 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg p-6 border-2 border-indigo-200">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">📊 Cash Reconciliation</h2>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center pb-2 border-b">
+                <span className="text-gray-700 font-medium">Starting Cash</span>
+                <span className="text-lg font-semibold text-blue-900">+ {formatCurrency(session.startingCash)}</span>
+              </div>
+              
+              <div className="flex justify-between items-center pb-2 border-b">
+                <span className="text-gray-700 font-medium">Total Money Received Today</span>
+                <span className="text-lg font-semibold text-green-700">+ {formatCurrency(calculatedTotals.totalReceived)}</span>
+              </div>
+              
+              <div className="flex justify-between items-center pb-2 border-b">
+                <span className="text-gray-700 font-medium">Total Expenses</span>
+                <span className="text-lg font-semibold text-red-700">- {formatCurrency(calculatedTotals.totalExpenses)}</span>
+              </div>
+              
+              <div className="flex justify-between items-center pb-2 border-b-2 border-gray-300">
+                <span className="text-gray-700 font-medium">Bank Deposits</span>
+                <span className="text-lg font-semibold text-yellow-700">- {formatCurrency(calculatedTotals.totalBankDeposit)}</span>
+              </div>
+              
+              <div className="flex justify-between items-center pt-2 bg-white rounded-lg px-4 py-3 shadow-sm">
+                <span className="text-xl font-bold text-gray-900">Expected Cash in Drawer</span>
+                <span className="text-3xl font-bold text-purple-900">
+                  {formatCurrency(
+                    session.startingCash + 
+                    calculatedTotals.totalReceived - 
+                    calculatedTotals.totalExpenses - 
+                    calculatedTotals.totalBankDeposit
+                  )}
+                </span>
+              </div>
+              
+              <div className="mt-3 text-sm text-gray-600 bg-white p-3 rounded border-l-4 border-indigo-500">
+                <strong>Formula:</strong> Starting Cash + Money Received - Expenses - Bank Deposits = Expected Cash
               </div>
             </div>
-            
+          </div>
+          
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="bg-gray-50 rounded-lg p-4">
               <div className="text-sm font-medium text-gray-600">Session Created By</div>
               <div className="text-lg font-semibold text-gray-900">
                 {session.createdBy.fullname}
               </div>
             </div>
+            
+            {session.resetBy && (
+              <div className="bg-gray-50 rounded-lg p-4">
+                <div className="text-sm font-medium text-gray-600">Reset By</div>
+                <div className="text-lg font-semibold text-gray-900">
+                  {session.resetBy.fullname}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

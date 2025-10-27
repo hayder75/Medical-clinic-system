@@ -29,6 +29,7 @@ import ReceptionAppointments from './pages/reception/ReceptionAppointments';
 import PreRegistration from './pages/reception/PreRegistration';
 import ReceptionDoctorQueueManagement from './pages/reception/DoctorQueueManagement';
 import PatientGallery from './pages/shared/PatientGallery';
+import Loans from './components/shared/Loans';
 
 // Protected Route Component
 const ProtectedRoute = ({ children, allowedRoles }) => {
@@ -135,6 +136,18 @@ const AppRoutes = () => {
             <ProtectedRoute allowedRoles={['NURSE', 'ADMIN']}>
               <Layout title="Patient Gallery" subtitle="Upload and manage patient before/after images">
                 <PatientGallery />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        
+        {/* Loans - All staff */}
+        <Route
+          path="/loans"
+          element={
+            <ProtectedRoute allowedRoles={['DOCTOR', 'NURSE', 'RECEPTIONIST', 'BILLING_OFFICER', 'PHARMACY_BILLING_OFFICER', 'PHARMACIST', 'RADIOLOGIST', 'LAB_TECHNICIAN']}>
+              <Layout title="Loans Management" subtitle="Request and manage loans">
+                <Loans />
               </Layout>
             </ProtectedRoute>
           }
