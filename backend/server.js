@@ -133,20 +133,40 @@ const HOST = process.env.HOST || '0.0.0.0';
 
 // Health check endpoint for Render
 app.get('/api/health', async (req, res) => {
+  let dbStatus = 'unknown';
+  let dbError = null;
+  
+  // Try to connect to database with retry
   try {
-    // Test database connection
-    await prisma.$queryRaw`SELECT 1`;
+    await prisma.$connect();
+    await prisma.$executeRaw`SELECT 1`;
+    dbStatus = 'connected';
+  } catch (error) {
+    dbStatus = 'disconnected';
+    dbError = error.message;
+    // Try to reconnect
+    try {
+      await prisma.$disconnect();
+      await prisma.$connect();
+      dbStatus = 'reconnected';
+      dbError = null;
+    } catch (reconnectError) {
+      dbError = reconnectError.message;
+    }
+  }
+  
+  if (dbStatus === 'connected' || dbStatus === 'reconnected') {
     res.status(200).json({ 
       status: 'OK', 
-      database: 'connected',
+      database: dbStatus,
       timestamp: new Date().toISOString(),
       environment: process.env.NODE_ENV || 'development'
     });
-  } catch (error) {
+  } else {
     res.status(503).json({ 
       status: 'ERROR', 
-      database: 'disconnected',
-      error: error.message,
+      database: dbStatus,
+      error: dbError,
       timestamp: new Date().toISOString(),
       environment: process.env.NODE_ENV || 'development'
     });
