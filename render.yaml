@@ -35,4 +35,5 @@ services:
 
 databases:
   - name: medical-clinic-db
+    databaseName: clinicdb_ff3w
     plan: free

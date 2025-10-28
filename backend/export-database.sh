@@ -6,14 +6,22 @@ echo "📊 Exporting local PostgreSQL database..."
 echo ""
 
 # Get database connection details from .env
-source .env 2>/dev/null || echo "⚠️  Warning: .env not found, using defaults"
+if [ -f .env ]; then
+    source .env
+else
+    echo "⚠️  Warning: .env not found"
+    exit 1
+fi
 
-DB_NAME=${DATABASE_URL##*/} || DB_NAME="clinicdb"
-DB_NAME=${DB_NAME%%\?*}
+# Simple approach: use connection string directly but fix schema parameter
+# Remove schema parameter for pg_dump
+CLEAN_DB_URL=$(echo "$DATABASE_URL" | sed 's/?schema=public//')
 
-# Export the database
-echo "Exporting database: $DB_NAME"
-pg_dump "$DATABASE_URL" > database-export.sql
+echo "Exporting database..."
+echo "Connection string cleaned"
+
+# Export the database using the connection string
+pg_dump "$CLEAN_DB_URL" > database-export.sql
 
 if [ $? -eq 0 ]; then
     echo "✅ Database exported successfully: database-export.sql"
