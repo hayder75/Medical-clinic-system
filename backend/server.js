@@ -49,7 +49,21 @@ const fileUpload = require('./src/middleware/fileUpload');
 const logger = require('./src/middleware/logger');
 
 const app = express();
-const prisma = new PrismaClient();
+
+// Singleton Prisma client with connection handling for Render free tier
+const prisma = new PrismaClient({
+  log: process.env.NODE_ENV === 'production' ? ['error'] : ['query', 'error', 'info'],
+  datasources: {
+    db: {
+      url: process.env.DATABASE_URL
+    }
+  }
+});
+
+// Handle connection cleanup on shutdown
+process.on('beforeExit', async () => {
+  await prisma.$disconnect();
+});
 
 app.use(cors({
   origin: true, // Allow all origins
@@ -118,12 +132,25 @@ const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 
 // Health check endpoint for Render
-app.get('/api/health', (req, res) => {
-  res.status(200).json({ 
-    status: 'OK', 
-    timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development'
-  });
+app.get('/api/health', async (req, res) => {
+  try {
+    // Test database connection
+    await prisma.$queryRaw`SELECT 1`;
+    res.status(200).json({ 
+      status: 'OK', 
+      database: 'connected',
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV || 'development'
+    });
+  } catch (error) {
+    res.status(503).json({ 
+      status: 'ERROR', 
+      database: 'disconnected',
+      error: error.message,
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV || 'development'
+    });
+  }
 });
 
 app.listen(PORT, HOST, () => {
