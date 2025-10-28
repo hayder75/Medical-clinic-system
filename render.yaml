@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: medical-clinic-backend
+    name: medical-clinic-system
     env: node
     plan: free
     buildCommand: cd backend && npm install
@@ -24,14 +24,14 @@ services:
         value: Ao9fnxTLDliaZoUYxSufOBIHVdQ
 
   - type: web
-    name: medical-clinic-frontend
+    name: medical-clinic-frontend1
     env: static
     plan: free
     buildCommand: cd frontend && npm install && npm run build
     staticPublishPath: ./frontend/dist
     envVars:
       - key: VITE_API_URL
-        value: https://medical-clinic-backend.onrender.com/api
+        value: https://medical-clinic-system.onrender.com/api
 
 databases:
   - name: medical-clinic-db
