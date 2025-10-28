@@ -1,17 +1,8 @@
 const { PrismaClient } = require('@prisma/client');
 
+// Singleton Prisma client - connections are lazy and handled automatically
 const prisma = new PrismaClient({
-  log: ['error', 'warn'],
-  datasources: {
-    db: {
-      url: process.env.DATABASE_URL
-    }
-  }
-});
-
-// Handle database connection in serverless environment
-prisma.$connect().catch(err => {
-  console.error('❌ Database connection error:', err);
+  log: process.env.NODE_ENV === 'production' ? ['error'] : ['error', 'warn']
 });
 
 module.exports = prisma;

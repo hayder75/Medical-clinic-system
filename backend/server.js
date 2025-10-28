@@ -50,14 +50,9 @@ const logger = require('./src/middleware/logger');
 
 const app = express();
 
-// Singleton Prisma client with connection handling for Render free tier
+// Singleton Prisma client - connections are lazy
 const prisma = new PrismaClient({
-  log: process.env.NODE_ENV === 'production' ? ['error'] : ['query', 'error', 'info'],
-  datasources: {
-    db: {
-      url: process.env.DATABASE_URL
-    }
-  }
+  log: process.env.NODE_ENV === 'production' ? ['error'] : ['error', 'warn']
 });
 
 // Handle connection cleanup on shutdown
@@ -145,22 +140,14 @@ app.get('/api/health', async (req, res) => {
     dbError = error.message;
   }
   
-  if (dbStatus === 'connected') {
-    res.status(200).json({ 
-      status: 'OK', 
-      database: dbStatus,
-      timestamp: new Date().toISOString(),
-      environment: process.env.NODE_ENV || 'development'
-    });
-  } else {
-    res.status(503).json({ 
-      status: 'ERROR', 
-      database: dbStatus,
-      error: dbError,
-      timestamp: new Date().toISOString(),
-      environment: process.env.NODE_ENV || 'development'
-    });
-  }
+  // Always return 200 OK - service is live, database may be sleeping
+  res.status(200).json({ 
+    status: dbStatus === 'connected' ? 'OK' : 'STARTING',
+    database: dbStatus,
+    error: dbError,
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development'
+  });
 });
 
 app.listen(PORT, HOST, () => {
