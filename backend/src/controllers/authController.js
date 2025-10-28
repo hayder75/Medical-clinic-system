@@ -1,12 +1,27 @@
-const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcrypt');
-const prisma = new PrismaClient();
+const prisma = require('../config/database');
 const { generateToken } = require('../utils/jwt');
 
 // Refresh token placeholder
 exports.refresh = async (req, res) => {
   res.json({ message: 'Token refresh not implemented' });
 };
+
+// Helper to retry database operations for sleeping Render database
+async function retryQuery(queryFn, retries = 3) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await queryFn();
+    } catch (error) {
+      if (error.message?.includes('Server has closed the connection') && i < retries - 1) {
+        // Wait and retry
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        continue;
+      }
+      throw error;
+    }
+  }
+}
 
 // Login with isActive check
 exports.login = async (req, res) => {
@@ -17,9 +32,9 @@ exports.login = async (req, res) => {
       return res.status(400).json({ error: 'Username and password are required' });
     }
 
-    const user = await prisma.user.findUnique({
+    const user = await retryQuery(() => prisma.user.findUnique({
       where: { username }
-    });
+    }));
 
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
