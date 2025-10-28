@@ -136,26 +136,16 @@ app.get('/api/health', async (req, res) => {
   let dbStatus = 'unknown';
   let dbError = null;
   
-  // Try to connect to database with retry
+  // Try to ping database without disconnecting
   try {
-    await prisma.$connect();
     await prisma.$executeRaw`SELECT 1`;
     dbStatus = 'connected';
   } catch (error) {
     dbStatus = 'disconnected';
     dbError = error.message;
-    // Try to reconnect
-    try {
-      await prisma.$disconnect();
-      await prisma.$connect();
-      dbStatus = 'reconnected';
-      dbError = null;
-    } catch (reconnectError) {
-      dbError = reconnectError.message;
-    }
   }
   
-  if (dbStatus === 'connected' || dbStatus === 'reconnected') {
+  if (dbStatus === 'connected') {
     res.status(200).json({ 
       status: 'OK', 
       database: dbStatus,
