@@ -12,45 +12,45 @@ const {
   debugAppointmentStatus
 } = require('../controllers/appointmentController');
 
-// Create appointment (Doctors, Receptionists, Admins)
+// Create appointment (Doctors and Receptionists only - no nurses/admins)
 router.post(
   '/',
-  roleGuard(['DOCTOR', 'RECEPTIONIST', 'ADMIN']),
+  roleGuard(['DOCTOR', 'RECEPTIONIST']),
   createAppointment
 );
 
-// Get appointments by doctor (Doctor can view their own, Receptionist/Admin can view any)
+// Get appointments by doctor (Doctor can view their own, Receptionist/Admin/Nurse can view any)
 router.get(
   '/doctor',
-  roleGuard(['DOCTOR', 'RECEPTIONIST', 'ADMIN']),
+  roleGuard(['DOCTOR', 'RECEPTIONIST', 'ADMIN', 'NURSE']),
   getAppointmentsByDoctor
 );
 
-// Get all appointments (Reception and Admin)
+// Get all appointments (Reception, Admin, and Nurse)
 router.get(
   '/',
-  roleGuard(['RECEPTIONIST', 'ADMIN']),
+  roleGuard(['RECEPTIONIST', 'ADMIN', 'NURSE']),
   getAllAppointments
 );
 
-// Get appointment by ID
+// Get appointment by ID (Everyone can view)
 router.get(
   '/:id',
-  roleGuard(['DOCTOR', 'RECEPTIONIST', 'ADMIN']),
+  roleGuard(['DOCTOR', 'RECEPTIONIST', 'ADMIN', 'NURSE']),
   getAppointmentById
 );
 
-// Update appointment
+// Update appointment (Doctors and Receptionists only)
 router.patch(
   '/:id',
-  roleGuard(['DOCTOR', 'RECEPTIONIST', 'ADMIN']),
+  roleGuard(['DOCTOR', 'RECEPTIONIST']),
   updateAppointment
 );
 
-// Delete appointment
+// Delete appointment (Doctors and Receptionists only)
 router.delete(
   '/:id',
-  roleGuard(['DOCTOR', 'RECEPTIONIST', 'ADMIN']),
+  roleGuard(['DOCTOR', 'RECEPTIONIST']),
   deleteAppointment
 );
 

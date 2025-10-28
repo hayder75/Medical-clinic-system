@@ -3,6 +3,7 @@ import { Routes, Route, useNavigate } from 'react-router-dom';
 import BillingQueue from '../../components/billing/BillingQueue';
 import PreRegistration from './PreRegistration';
 import LoanDisbursement from '../../components/billing/LoanDisbursement';
+import PatientAccounts from '../../components/admin/PatientAccounts';
 import { 
   CreditCard, 
   Users, 
@@ -397,6 +398,7 @@ const BillingDashboard = () => {
       <Route path="/queue" element={<BillingQueue />} />
       <Route path="/pre-registration" element={<PreRegistration />} />
       <Route path="/loan-disbursement" element={<LoanDisbursement />} />
+      <Route path="/patient-accounts" element={<PatientAccounts />} />
     </Routes>
   );
 };

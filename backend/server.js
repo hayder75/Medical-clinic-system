@@ -39,6 +39,8 @@ const galleryRoutes = require('./src/routes/gallery');
 const appointmentsRoutes = require('./src/routes/appointments');
 const insuranceRoutes = require('./src/routes/insurance');
 const loansRoutes = require('./src/routes/loans');
+const accountsRoutes = require('./src/routes/accounts');
+const walkInOrdersRoutes = require('./src/routes/walkInOrders');
 
 // Middleware
 const authMiddleware = require('./src/middleware/auth');
@@ -80,9 +82,9 @@ app.use('/api/auth', authRoutes);
 app.use('/api/patients', authMiddleware, patientsRoutes);
 app.use('/api/visits', authMiddleware, visitsRoutes);
 app.use('/api/billing', authMiddleware, roleGuard(['BILLING_OFFICER', 'PHARMACY_BILLING_OFFICER', 'PHARMACIST', 'ADMIN']), billingRoutes);
-app.use('/api/doctors', authMiddleware, roleGuard(['DOCTOR', 'ADMIN', 'BILLING_OFFICER', 'NURSE', 'RECEPTIONIST']), doctorsRoutes);
+app.use('/api/doctors', authMiddleware, roleGuard(['DOCTOR', 'ADMIN', 'BILLING_OFFICER', 'NURSE', 'RECEPTIONIST', 'LAB_TECHNICIAN', 'RADIOLOGIST']), doctorsRoutes);
 app.use('/api/nurses', authMiddleware, roleGuard(['NURSE', 'ADMIN', 'DOCTOR']), nursesRoutes);
-app.use('/api/radiologies', authMiddleware, roleGuard(['RADIOLOGIST', 'RADIOLOGY_TECHNICIAN', 'DOCTOR', 'ADMIN']), radiologiesRoutes);
+app.use('/api/radiologies', authMiddleware, roleGuard(['RADIOLOGIST', 'RADIOLOGY_TECHNICIAN', 'DOCTOR', 'ADMIN', 'LAB_TECHNICIAN']), radiologiesRoutes);
 app.use('/api/labs', authMiddleware, roleGuard(['LAB_TECHNICIAN', 'DOCTOR', 'ADMIN']), labsRoutes);
 app.use('/api/pharmacies', authMiddleware, roleGuard(['PHARMACY_OFFICER', 'PHARMACIST', 'PHARMACY_BILLING_OFFICER', 'ADMIN']), pharmaciesRoutes);
 app.use('/api/batch-orders', batchOrdersRoutes);
@@ -105,6 +107,8 @@ app.use('/api/gallery', galleryRoutes);
 app.use('/api/appointments', authMiddleware, appointmentsRoutes);
 app.use('/api/insurance', insuranceRoutes);
 app.use('/api/loans', loansRoutes);
+app.use('/api/accounts', authMiddleware, accountsRoutes);
+app.use('/api/walk-in-orders', authMiddleware, walkInOrdersRoutes);
 
 // Cron for inactivity (run daily)
 cron.schedule('0 0 * * *', async () => {

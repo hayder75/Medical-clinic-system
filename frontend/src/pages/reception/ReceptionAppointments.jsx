@@ -52,6 +52,8 @@ const ReceptionAppointments = () => {
   const [dateFilter, setDateFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('ALL');
   const [doctorFilter, setDoctorFilter] = useState('ALL');
+  const [showTodayOnly, setShowTodayOnly] = useState(true); // Default to today only
+  const [searchFilter, setSearchFilter] = useState(''); // Search by name, phone, or ID
 
   useEffect(() => {
     fetchAppointments();
@@ -60,7 +62,7 @@ const ReceptionAppointments = () => {
 
   useEffect(() => {
     filterAppointments();
-  }, [appointments, statusFilter, dateFilter, typeFilter, doctorFilter]);
+  }, [appointments, statusFilter, dateFilter, typeFilter, doctorFilter, showTodayOnly, searchFilter]);
 
   const fetchAppointments = async () => {
     try {
@@ -196,6 +198,15 @@ const ReceptionAppointments = () => {
   const filterAppointments = () => {
     let filtered = [...appointments];
 
+    // Today only filter (default)
+    if (showTodayOnly) {
+      const today = new Date().toDateString();
+      filtered = filtered.filter(apt => {
+        const aptDate = new Date(apt.appointmentDate).toDateString();
+        return aptDate === today;
+      });
+    }
+
     // Status filter
     if (statusFilter !== 'ALL') {
       filtered = filtered.filter(apt => apt.status === statusFilter);
@@ -218,6 +229,19 @@ const ReceptionAppointments = () => {
     // Doctor filter
     if (doctorFilter !== 'ALL') {
       filtered = filtered.filter(apt => apt.doctorId === doctorFilter);
+    }
+
+    // Search filter (by patient name, ID, or phone)
+    if (searchFilter && searchFilter.trim()) {
+      const searchLower = searchFilter.toLowerCase();
+      filtered = filtered.filter(apt => {
+        const patientName = apt.patient?.name?.toLowerCase() || '';
+        const patientId = apt.patient?.id?.toLowerCase() || '';
+        const patientPhone = apt.patient?.mobile?.toLowerCase() || '';
+        return patientName.includes(searchLower) || 
+               patientId.includes(searchLower) || 
+               patientPhone.includes(searchLower);
+      });
     }
 
     setFilteredAppointments(filtered);
@@ -340,6 +364,37 @@ const ReceptionAppointments = () => {
                 </span>
               )}
             </button>
+          </div>
+        </div>
+
+        {/* Today Filter & Search Bar */}
+        <div className="mb-6 flex flex-col md:flex-row gap-4">
+          {/* Today Only Toggle */}
+          <div className="flex items-center space-x-2 bg-white rounded-lg border p-3" style={{ borderColor: '#E5E7EB' }}>
+            <input
+              type="checkbox"
+              id="todayOnly"
+              checked={showTodayOnly}
+              onChange={(e) => setShowTodayOnly(e.target.checked)}
+              className="h-4 w-4"
+              style={{ accentColor: '#2e13d1' }}
+            />
+            <label htmlFor="todayOnly" className="text-sm font-medium" style={{ color: '#0C0E0B' }}>
+              Show Today Only
+            </label>
+          </div>
+
+          {/* Search Bar */}
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5" style={{ color: '#6B7280' }} />
+            <input
+              type="text"
+              placeholder="Search by patient name, ID, or phone number..."
+              value={searchFilter}
+              onChange={(e) => setSearchFilter(e.target.value)}
+              className="w-full pl-10 pr-4 py-3 border rounded-lg"
+              style={{ borderColor: '#E5E7EB' }}
+            />
           </div>
         </div>
 

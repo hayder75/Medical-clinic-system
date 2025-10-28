@@ -9,7 +9,7 @@ const LabOrders = () => {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [showTemplateForm, setShowTemplateForm] = useState(false);
   const [testResults, setTestResults] = useState({});
-  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [statusFilter, setStatusFilter] = useState('PENDING');
   const [searchTerm, setSearchTerm] = useState('');
   const [templates, setTemplates] = useState([]);
   const [selectedService, setSelectedService] = useState(null);
@@ -25,7 +25,12 @@ const LabOrders = () => {
     try {
       setLoading(true);
       const response = await api.get('/labs/orders');
-      setOrders(response.data.batchOrders || []);
+      // Combine batch orders with walk-in orders
+      const allOrders = [
+        ...(response.data.batchOrders || []),
+        ...(response.data.walkInOrders || [])
+      ];
+      setOrders(allOrders);
     } catch (error) {
       toast.error('Failed to fetch lab orders');
       console.error('Error fetching orders:', error);
@@ -58,8 +63,18 @@ const LabOrders = () => {
       filtered = filtered.filter(order => 
         order.patient?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         order.doctor?.fullname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        order.id?.toString().toLowerCase().includes(searchTerm.toLowerCase())
+        order.id?.toString().toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (order.type?.name?.toLowerCase().includes(searchTerm.toLowerCase()))
       );
+    }
+    
+    // Sort completed orders by date (recent first)
+    if (statusFilter === 'COMPLETED') {
+      filtered.sort((a, b) => {
+        const dateA = new Date(a.updatedAt || a.createdAt);
+        const dateB = new Date(b.updatedAt || b.createdAt);
+        return dateB - dateA; // Descending order
+      });
     }
     
     return filtered;
@@ -92,51 +107,216 @@ const LabOrders = () => {
     setSelectedOrder(order);
     setShowTemplateForm(true);
     
+    // Check if this is a completed order
+    const isCompleted = order.status === 'COMPLETED';
+    
     // Initialize test results for each lab service
     const initialResults = {};
-    order.services.forEach(service => {
-      if (service.service) {
-        // Find matching template
-        const matchingTemplate = templates.find(template => {
-          const serviceName = service.service.name.toLowerCase();
-          const templateName = template.name.toLowerCase();
+    
+    // Handle walk-in orders (has services array with individual orders) vs batch orders
+    const services = order.services || (order.type ? [{ service: order.type, id: order.id }] : []);
+    
+    // If completed, load existing results
+    if (isCompleted) {
+      for (const service of services) {
+        if (service.service) {
+          const orderId = service.id || order.id;
           
-          if (serviceName === templateName) return true;
-          if (serviceName.includes(templateName) || templateName.includes(serviceName)) return true;
-          
-          const serviceWords = serviceName.split(' ');
-          const templateWords = templateName.split(' ');
-          
-          return serviceWords.some(word => 
-            templateWords.some(tWord => 
-              word.includes(tWord) || tWord.includes(word)
-            )
-          );
-        });
-
-        if (matchingTemplate) {
-          initialResults[service.id] = {
-            serviceId: service.id,
-            templateId: matchingTemplate.id,
-            template: matchingTemplate,
-            serviceName: service.service.name,
-            results: {},
-            additionalNotes: '',
-            completed: false,
-            resultId: null
-          };
-        } else {
-          console.log('No template found for service:', service.service.name);
+          // Fetch existing results from database
+          try {
+            // For walk-in orders, get results from labResults
+            if (order.isWalkIn && service.labResults && service.labResults.length > 0) {
+              service.labResults.forEach(labResult => {
+                if (labResult.testType && labResult.resultText) {
+                  const matchingTemplate = templates.find(t => 
+                    labResult.testType.id === service.service.id
+                  );
+                  
+                  if (matchingTemplate) {
+                    initialResults[orderId] = {
+                      serviceId: service.id,
+                      labOrderId: orderId,
+                      templateId: matchingTemplate.id,
+                      template: matchingTemplate,
+                      serviceName: service.service.name,
+                      results: JSON.parse(labResult.resultText || '{}'),
+                      additionalNotes: labResult.additionalNotes || '',
+                      completed: true,
+                      resultId: labResult.id
+                    };
+                  }
+                }
+              });
+            }
+          } catch (err) {
+            console.error('Error loading existing results:', err);
+          }
         }
       }
-    });
+    } else {
+      // Not completed - prepare empty forms
+      services.forEach(service => {
+        if (service.service) {
+          // Find matching template
+          const matchingTemplate = templates.find(template => {
+            const serviceName = service.service.name.toLowerCase();
+            const templateName = template.name.toLowerCase();
+            
+            if (serviceName === templateName) return true;
+            if (serviceName.includes(templateName) || templateName.includes(serviceName)) return true;
+            
+            const serviceWords = serviceName.split(' ');
+            const templateWords = templateName.split(' ');
+            
+            return serviceWords.some(word => 
+              templateWords.some(tWord => 
+                word.includes(tWord) || tWord.includes(word)
+              )
+            );
+          });
+
+          if (matchingTemplate) {
+            // For walk-in orders, use the actual order ID from the service object
+            const orderId = service.id || order.id;
+            
+            initialResults[orderId] = {
+              serviceId: service.id,
+              labOrderId: orderId,
+              templateId: matchingTemplate.id,
+              template: matchingTemplate,
+              serviceName: service.service.name,
+              results: {},
+              additionalNotes: '',
+              completed: false,
+              resultId: null
+            };
+          } else {
+            console.log('No template found for service:', service.service.name);
+          }
+        }
+      });
+    }
     
     setTestResults(initialResults);
   };
 
   const handleServiceClick = (serviceId) => {
+    // Allow viewing completed orders, but will be read-only
     setSelectedService(serviceId);
     setShowServiceTemplate(true);
+  };
+  
+  const handlePrintResults = () => {
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Lab Results - ${selectedOrder.patient.name}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; }
+            .header { border-bottom: 2px solid #333; padding-bottom: 20px; margin-bottom: 20px; }
+            .patient-info { margin: 20px 0; }
+            .test-section { page-break-inside: avoid; margin: 30px 0; border: 1px solid #ddd; padding: 15px; }
+            .test-title { font-size: 18px; font-weight: bold; background: #f0f0f0; padding: 10px; margin: -15px -15px 15px -15px; }
+            table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+            td { padding: 8px; border: 1px solid #ddd; }
+            .field-name { font-weight: bold; background: #f9f9f9; }
+            .notes { margin-top: 15px; padding: 10px; background: #f9f9f9; }
+            @media print { button { display: none; } }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>Lab Test Results</h1>
+            <div class="patient-info">
+              <p><strong>Patient:</strong> ${selectedOrder.patient.name}</p>
+              <p><strong>Order ID:</strong> ${selectedOrder.id}</p>
+              <p><strong>Date:</strong> ${new Date(selectedOrder.updatedAt || selectedOrder.createdAt).toLocaleDateString()}</p>
+            </div>
+          </div>
+          
+          ${Object.entries(testResults).map(([serviceId, result]) => `
+            <div class="test-section">
+              <div class="test-title">${result.serviceName}</div>
+              <table>
+                ${Object.entries(result.results).map(([field, value]) => `
+                  <tr>
+                    <td class="field-name">${field}</td>
+                    <td>${value || '-'}</td>
+                  </tr>
+                `).join('')}
+              </table>
+              ${result.additionalNotes ? `<div class="notes"><strong>Notes:</strong> ${result.additionalNotes}</div>` : ''}
+            </div>
+          `).join('')}
+          
+          <p style="margin-top: 40px; text-align: center; color: #666;">
+            Generated on ${new Date().toLocaleString()}
+          </p>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.print();
+  };
+  
+  const handleDownloadPDF = async () => {
+    // TODO: Implement PDF generation using a library like jsPDF
+    // For now, use the same print functionality
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Lab Results - ${selectedOrder.patient.name}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; }
+            .header { border-bottom: 2px solid #333; padding-bottom: 20px; margin-bottom: 20px; }
+            .patient-info { margin: 20px 0; }
+            .test-section { page-break-inside: avoid; margin: 30px 0; border: 1px solid #ddd; padding: 15px; }
+            .test-title { font-size: 18px; font-weight: bold; background: #f0f0f0; padding: 10px; margin: -15px -15px 15px -15px; }
+            table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+            td { padding: 8px; border: 1px solid #ddd; }
+            .field-name { font-weight: bold; background: #f9f9f9; }
+            .notes { margin-top: 15px; padding: 10px; background: #f9f9f9; }
+            @media print { button { display: none; } }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>Lab Test Results</h1>
+            <div class="patient-info">
+              <p><strong>Patient:</strong> ${selectedOrder.patient.name}</p>
+              <p><strong>Order ID:</strong> ${selectedOrder.id}</p>
+              <p><strong>Date:</strong> ${new Date(selectedOrder.updatedAt || selectedOrder.createdAt).toLocaleDateString()}</p>
+            </div>
+          </div>
+          
+          ${Object.entries(testResults).map(([serviceId, result]) => `
+            <div class="test-section">
+              <div class="test-title">${result.serviceName}</div>
+              <table>
+                ${Object.entries(result.results).map(([field, value]) => `
+                  <tr>
+                    <td class="field-name">${field}</td>
+                    <td>${value || '-'}</td>
+                  </tr>
+                `).join('')}
+              </table>
+              ${result.additionalNotes ? `<div class="notes"><strong>Notes:</strong> ${result.additionalNotes}</div>` : ''}
+            </div>
+          `).join('')}
+          
+          <p style="margin-top: 40px; text-align: center; color: #666;">
+            Generated on ${new Date().toLocaleString()}
+          </p>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.print();
+    toast.success('PDF prepared for printing/download');
   };
 
   const handleCloseServiceTemplate = () => {
@@ -166,6 +346,8 @@ const LabOrders = () => {
 
   const renderFormField = (fieldName, fieldConfig, serviceId) => {
     const value = testResults[serviceId]?.results?.[fieldName] || '';
+    const isCompleted = selectedOrder && selectedOrder.status === 'COMPLETED';
+    const baseClassName = `w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${isCompleted ? 'bg-gray-100 cursor-not-allowed' : ''}`;
     
     switch (fieldConfig.type) {
       case 'number':
@@ -173,12 +355,14 @@ const LabOrders = () => {
           <input
             type="number"
             value={value}
+            readOnly={isCompleted}
             onChange={(e) => {
+              if (isCompleted) return;
               const newResults = { ...testResults[serviceId].results };
               newResults[fieldName] = e.target.value;
               updateTestResult(serviceId, 'results', newResults);
             }}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className={baseClassName}
             placeholder={fieldConfig.unit ? `Enter value (${fieldConfig.unit})` : 'Enter value'}
             required={fieldConfig.required}
           />
@@ -188,12 +372,14 @@ const LabOrders = () => {
         return (
           <select
             value={value}
+            disabled={isCompleted}
             onChange={(e) => {
+              if (isCompleted) return;
               const newResults = { ...testResults[serviceId].results };
               newResults[fieldName] = e.target.value;
               updateTestResult(serviceId, 'results', newResults);
             }}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className={baseClassName}
             required={fieldConfig.required}
           >
             <option value="">Select an option</option>
@@ -207,12 +393,14 @@ const LabOrders = () => {
         return (
           <textarea
             value={value}
+            readOnly={isCompleted}
             onChange={(e) => {
+              if (isCompleted) return;
               const newResults = { ...testResults[serviceId].results };
               newResults[fieldName] = e.target.value;
               updateTestResult(serviceId, 'results', newResults);
             }}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className={baseClassName}
             rows={3}
             placeholder="Enter details..."
             required={fieldConfig.required}
@@ -224,12 +412,14 @@ const LabOrders = () => {
           <input
             type="text"
             value={value}
+            readOnly={isCompleted}
             onChange={(e) => {
+              if (isCompleted) return;
               const newResults = { ...testResults[serviceId].results };
               newResults[fieldName] = e.target.value;
               updateTestResult(serviceId, 'results', newResults);
             }}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className={baseClassName}
             placeholder="Enter value..."
             required={fieldConfig.required}
           />
@@ -254,24 +444,35 @@ const LabOrders = () => {
         return;
       }
 
-      // Submit all test results at once
-      const testResultsArray = Object.entries(testResults).map(([serviceId, result]) => ({
-        labOrderId: parseInt(selectedOrder.id), // Convert to number
-        serviceId: parseInt(serviceId), // Convert to number
+      // Check if this is a walk-in order
+      const isWalkIn = selectedOrder.isWalkIn;
+
+      // Submit all test results
+      const testResultsArray = Object.entries(testResults).map(([labOrderId, result]) => ({
+        labOrderId: parseInt(result.labOrderId || labOrderId), // Use the actual order ID
+        serviceId: parseInt(result.serviceId || labOrderId), // The service ID (same as order ID for walk-ins)
         templateId: result.templateId,
         results: result.results,
         additionalNotes: result.additionalNotes || ''
       }));
 
-      // Send each result individually (since backend expects individual results)
+      // Send each result individually
       for (const testResult of testResultsArray) {
         await api.post('/labs/results/individual', testResult);
       }
 
-      // Send the order to doctor
-      await api.post(`/labs/orders/${selectedOrder.id}/send-to-doctor`);
-
-      toast.success('All lab tests completed and sent to doctor successfully');
+      // For walk-in orders, complete each individual order
+      // For regular orders, send to doctor
+      if (!isWalkIn) {
+        await api.post(`/labs/orders/${selectedOrder.id}/send-to-doctor`);
+        toast.success('All lab tests completed and sent to doctor successfully');
+      } else {
+        // Update each walk-in order status to completed
+        for (const labOrderId of Object.keys(testResults)) {
+          await api.patch(`/labs/orders/${labOrderId}`, { status: 'COMPLETED' });
+        }
+        toast.success('Walk-in lab tests completed successfully! Results ready for printing.');
+      }
       
       // Close the form and refresh orders
       setShowTemplateForm(false);
@@ -395,10 +596,10 @@ const LabOrders = () => {
                       </h3>
                     </div>
                     <p className="text-sm text-gray-600">
-                      {order.services
-                        .map(service => service.service?.name)
-                        .filter(name => name) // Remove null/undefined names
-                        .join(', ')}
+                      {order.services 
+                        ? order.services.map(service => service.service?.name).filter(name => name).join(', ')
+                        : order.type?.name || 'Lab Test'}
+                      {order.isWalkIn && <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded">WALK-IN</span>}
                     </p>
                   </div>
                 </div>
@@ -414,10 +615,12 @@ const LabOrders = () => {
                   <User className="h-4 w-4 mr-2" />
                   <span>{order.patient.name}</span>
                 </div>
-                <div className="flex items-center">
-                  <Stethoscope className="h-4 w-4 mr-2" />
-                  <span>{order.doctor.fullname}</span>
-                </div>
+                {order.doctor && (
+                  <div className="flex items-center">
+                    <Stethoscope className="h-4 w-4 mr-2" />
+                    <span>{order.doctor.fullname}</span>
+                  </div>
+                )}
                 <div className="flex items-center">
                   <Calendar className="h-4 w-4 mr-2" />
                   <span>{new Date(order.createdAt).toLocaleDateString()}</span>
@@ -493,14 +696,24 @@ const LabOrders = () => {
                         <span className={`px-2 py-1 rounded text-xs ${
                           hasResults ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
                         }`}>
-                          {hasResults ? 'Filled' : 'Empty'}
+                          {selectedOrder.status === 'COMPLETED' ? 'Completed' : hasResults ? 'Filled' : 'Empty'}
                         </span>
-                        <button
-                          onClick={() => handleServiceClick(serviceId)}
-                          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-                        >
-                          {hasResults ? 'Edit Results' : 'Fill Results'}
-                        </button>
+                        {selectedOrder.status !== 'COMPLETED' && (
+                          <button
+                            onClick={() => handleServiceClick(serviceId)}
+                            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                          >
+                            {hasResults ? 'Edit Results' : 'Fill Results'}
+                          </button>
+                        )}
+                        {selectedOrder.status === 'COMPLETED' && (
+                          <button
+                            onClick={() => handleServiceClick(serviceId)}
+                            className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
+                          >
+                            View Results
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -508,13 +721,32 @@ const LabOrders = () => {
               })}
             </div>
 
-            <div className="flex justify-end mt-6 pt-4 border-t">
-              <button
-                onClick={handleCompleteBatchOrder}
-                className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
-              >
-                Complete All Tests
-              </button>
+            <div className="flex justify-end mt-6 pt-4 border-t gap-2">
+              {selectedOrder.status === 'COMPLETED' ? (
+                <>
+                  <button
+                    onClick={() => handlePrintResults()}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
+                  >
+                    <FileText className="h-4 w-4" />
+                    Print Results
+                  </button>
+                  <button
+                    onClick={() => handleDownloadPDF()}
+                    className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors flex items-center gap-2"
+                  >
+                    <FileText className="h-4 w-4" />
+                    Download PDF
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={handleCompleteBatchOrder}
+                  className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                >
+                  Complete All Tests
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -561,8 +793,14 @@ const LabOrders = () => {
                 </label>
                 <textarea
                   value={testResults[selectedService].additionalNotes || ''}
-                  onChange={(e) => updateTestResult(selectedService, 'additionalNotes', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  readOnly={selectedOrder && selectedOrder.status === 'COMPLETED'}
+                  onChange={(e) => {
+                    if (selectedOrder && selectedOrder.status === 'COMPLETED') return;
+                    updateTestResult(selectedService, 'additionalNotes', e.target.value);
+                  }}
+                  className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    selectedOrder && selectedOrder.status === 'COMPLETED' ? 'bg-gray-100 cursor-not-allowed' : ''
+                  }`}
                   rows={3}
                   placeholder="Enter any additional notes..."
                 />

@@ -110,7 +110,21 @@ exports.getOrders = async (req, res) => {
       return !hasDentalServices;
     });
 
-    res.json({ batchOrders: filteredOrders });
+    // Get walk-in radiology orders
+    const walkInOrders = await prisma.radiologyOrder.findMany({
+      where: {
+        isWalkIn: true,
+        status: { in: ['PAID', 'QUEUED', 'IN_PROGRESS', 'COMPLETED'] }
+      },
+      include: {
+        patient: { select: { id: true, name: true, mobile: true } },
+        type: true,
+        radiologyResults: { include: { testType: true, attachments: true } }
+      },
+      orderBy: { createdAt: 'asc' }
+    });
+
+    res.json({ batchOrders: filteredOrders, walkInOrders });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

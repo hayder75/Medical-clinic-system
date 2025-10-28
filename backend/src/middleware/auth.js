@@ -57,6 +57,18 @@ const authMiddleware = async (req, res, next) => {
         username: 'reception',
         fullname: 'Reception Staff',
         role: 'RECEPTIONIST'
+      },
+      {
+        id: '6a1b2c3d-4e5f-6a7b-8c9d-0e1f2a3b4c5d', // Nurse test user ID
+        username: 'nurse1',
+        fullname: 'Nurse Mary Wilson',
+        role: 'NURSE'
+      },
+      {
+        id: '6', // Fallback nurse ID
+        username: 'nurse',
+        fullname: 'Nurse Staff',
+        role: 'NURSE'
       }
     ];
 

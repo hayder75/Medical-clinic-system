@@ -335,7 +335,7 @@ const getAppointmentsByDoctor = async (req, res) => {
  */
 const getAllAppointments = async (req, res) => {
   try {
-    const { status, doctorId, date, type } = req.query;
+    const { status, doctorId, date, type, search } = req.query;
 
     const where = {};
 
@@ -397,9 +397,23 @@ const getAllAppointments = async (req, res) => {
       ]
     });
 
+    // Client-side search filtering for patient name, ID, or phone
+    let filteredAppointments = appointments;
+    if (search && search.trim()) {
+      const searchLower = search.toLowerCase();
+      filteredAppointments = appointments.filter(apt => {
+        const patientName = apt.patient?.name?.toLowerCase() || '';
+        const patientId = apt.patient?.id?.toLowerCase() || '';
+        const patientPhone = apt.patient?.mobile?.toLowerCase() || '';
+        return patientName.includes(searchLower) || 
+               patientId.includes(searchLower) || 
+               patientPhone.includes(searchLower);
+      });
+    }
+
     // Add lastDiagnosedByName for display
     const appointmentsWithLastDoc = await Promise.all(
-      appointments.map(async (appt) => {
+      filteredAppointments.map(async (appt) => {
         let lastDiagnosedByName = null;
         if (appt.lastDiagnosedBy) {
           const lastDoc = await prisma.user.findUnique({
@@ -417,7 +431,8 @@ const getAllAppointments = async (req, res) => {
 
     res.json({
       success: true,
-      appointments: appointmentsWithLastDoc
+      appointments: appointmentsWithLastDoc,
+      total: appointmentsWithLastDoc.length
     });
 
   } catch (error) {

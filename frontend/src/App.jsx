@@ -9,6 +9,8 @@ import LoginPage from './pages/LoginPage';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import PatientRegistration from './pages/patient/PatientRegistration';
 import NurseDashboard from './pages/nurse/NurseDashboard';
+import NurseAppointments from './pages/nurse/NurseAppointments';
+import AdminAppointments from './pages/admin/AdminAppointments';
 import DoctorDashboard from './pages/doctor/DoctorDashboard';
 import PatientConsultationPage from './pages/doctor/PatientConsultationPage';
 import BillingDashboard from './pages/billing/BillingDashboard';
@@ -19,6 +21,7 @@ import DoctorQueueManagement from './pages/billing/DoctorQueueManagement';
 import RadiologyDashboard from './pages/radiology/RadiologyDashboard';
 import LabDashboard from './pages/lab/LabDashboard';
 import LabOrders from './pages/lab/LabOrders';
+import WalkInOrders from './pages/lab/WalkInOrders';
 import PharmacyDashboard from './pages/pharmacy/PharmacyDashboard';
 import AppointmentsPage from './pages/appointments/AppointmentsPage';
 import DoctorAppointments from './pages/doctor/DoctorAppointments';
@@ -100,6 +103,17 @@ const AppRoutes = () => {
         
         {/* Protected Routes */}
         <Route 
+          path="/admin/appointments" 
+          element={
+            <ProtectedRoute allowedRoles={['ADMIN']}>
+              <Layout title="Appointments" subtitle="View all appointments (Read-only)">
+                <AdminAppointments />
+              </Layout>
+            </ProtectedRoute>
+          } 
+        />
+        
+        <Route 
           path="/admin/*" 
           element={
             <ProtectedRoute allowedRoles={['ADMIN']}>
@@ -136,6 +150,17 @@ const AppRoutes = () => {
             <ProtectedRoute allowedRoles={['NURSE', 'ADMIN']}>
               <Layout title="Patient Gallery" subtitle="Upload and manage patient before/after images">
                 <PatientGallery />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        
+        <Route 
+          path="/nurse/appointments" 
+          element={
+            <ProtectedRoute allowedRoles={['NURSE', 'ADMIN']}>
+              <Layout title="Appointments" subtitle="View all appointments (Read-only)">
+                <NurseAppointments />
               </Layout>
             </ProtectedRoute>
           }
@@ -345,6 +370,17 @@ const AppRoutes = () => {
             <ProtectedRoute allowedRoles={['LAB_TECHNICIAN']}>
               <Layout title="Lab Orders" subtitle="View and manage laboratory test orders">
                 <LabOrders />
+              </Layout>
+            </ProtectedRoute>
+          } 
+        />
+        
+        <Route 
+          path="/lab/walk-in" 
+          element={
+            <ProtectedRoute allowedRoles={['LAB_TECHNICIAN']}>
+              <Layout title="Walk-In Lab Orders" subtitle="Create lab orders for non-registered patients">
+                <WalkInOrders />
               </Layout>
             </ProtectedRoute>
           } 

@@ -724,14 +724,39 @@ exports.processPayment = async (req, res) => {
       return res.status(400).json({ error: 'Payment already processed' });
     }
 
-    // For entry fees, we only allow one payment of the full amount
-    if (billing.payments.length > 0) {
-      return res.status(400).json({ error: 'Billing already has a payment' });
+    // Check if patient has an account (null for walk-in patients)
+    let patientAccount = null;
+    try {
+      patientAccount = await prisma.patientAccount.findUnique({
+        where: { patientId: billing.patientId }
+      });
+    } catch (error) {
+      // Patient account might not exist for walk-in patients
+      console.log('No patient account found for patient:', billing.patientId);
+      patientAccount = null;
     }
-
-    // For entry fees, payment amount should match the total amount
-    if (numericAmount !== billing.totalAmount) {
-      return res.status(400).json({ error: `Payment amount must be exactly ${billing.totalAmount} ETB` });
+    
+    // Calculate remaining balance
+    const totalPaid = billing.payments.reduce((sum, p) => sum + p.amount, 0);
+    let remainingBalance = billing.totalAmount - totalPaid;
+    
+    // Validate payment amount
+    if (numericAmount > remainingBalance) {
+      return res.status(400).json({ error: `Payment exceeds remaining balance of ${remainingBalance} ETB` });
+    }
+    
+    if (numericAmount <= 0) {
+      return res.status(400).json({ error: 'Payment amount must be greater than 0' });
+    }
+    
+    // Handle advance account payment
+    const useAccount = req.body.useAccount || false;
+    let amountFromAccount = 0;
+    let amountFromCash = numericAmount;
+    
+    if (useAccount && patientAccount && patientAccount.balance > 0) {
+      amountFromAccount = Math.min(numericAmount, patientAccount.balance);
+      amountFromCash = numericAmount - amountFromAccount;
     }
 
     // Create payment
@@ -771,18 +796,95 @@ exports.processPayment = async (req, res) => {
       }
     }
 
+    // Handle account deduction if applicable
+    if (amountFromAccount > 0 && patientAccount) {
+      if (patientAccount.accountType === 'CREDIT') {
+        // For CREDIT: Decrease balance and INCREASE debt
+        const newBalance = patientAccount.balance - amountFromAccount;
+        const newDebt = patientAccount.debtOwed + amountFromAccount;
+        
+        await prisma.patientAccount.update({
+          where: { id: patientAccount.id },
+          data: {
+            balance: newBalance,
+            debtOwed: newDebt,
+            totalUsed: {
+              increment: amountFromAccount
+            }
+          }
+        });
+        
+        // Create service description
+        const serviceDescriptions = billing.services.map(s => `${s.service.name} (${s.quantity}x)`).join(', ');
+        const description = `${serviceDescriptions || 'Services'}`;
+        
+        // Create transaction log for balance
+        await prisma.accountTransaction.create({
+          data: {
+            accountId: patientAccount.id,
+            patientId: billing.patientId,
+            type: 'DEDUCTION',
+            amount: amountFromAccount,
+            balanceBefore: patientAccount.balance,
+            balanceAfter: newBalance,
+            billingId: billing.id,
+            visitId: billing.visitId,
+            notes: `Credit used for billing ${billing.id}`,
+            description: description,
+            processedById: req.user.id
+          }
+        });
+      } else {
+        // For ADVANCE: Just decrease balance
+        const balanceBefore = patientAccount.balance;
+        const balanceAfter = balanceBefore - amountFromAccount;
+        
+        await prisma.patientAccount.update({
+          where: { id: patientAccount.id },
+          data: {
+            balance: balanceAfter,
+            totalUsed: {
+              increment: amountFromAccount
+            }
+          }
+        });
+        
+        // Create service description
+        const serviceDescriptions = billing.services.map(s => `${s.service.name} (${s.quantity}x)`).join(', ');
+        const description = `${serviceDescriptions || 'Services'}`;
+        
+        await prisma.accountTransaction.create({
+          data: {
+            accountId: patientAccount.id,
+            patientId: billing.patientId,
+            type: 'DEDUCTION',
+            amount: amountFromAccount,
+            balanceBefore,
+            balanceAfter,
+            billingId: billing.id,
+            visitId: billing.visitId,
+            notes: `Payment for billing ${billing.id}`,
+            description: description,
+            processedById: req.user.id
+          }
+        });
+      }
+    }
+    
     // Create audit log
     await prisma.auditLog.create({
       data: {
         userId: req.user.id,
         action: 'PROCESS_PAYMENT',
         entity: 'BillPayment',
-        entityId: 0, // Using 0 as placeholder since entityId expects int
+        entityId: 0,
         details: JSON.stringify({
           billingId,
           patientId: billing.patientId,
           paymentId: payment.id,
           amount: numericAmount,
+          amountFromAccount,
+          amountFromCash,
           type,
           bankName,
           transNumber,
@@ -861,15 +963,34 @@ exports.processPayment = async (req, res) => {
     }
 
     // Check if billing is fully paid
-    const newTotalPaid = numericAmount; // For entry fees, this is the only payment
+    const allPayments = await prisma.billPayment.findMany({
+      where: { billingId: billing.id }
+    });
+    const newTotalPaid = allPayments.reduce((sum, p) => sum + p.amount, 0);
     const isFullyPaid = newTotalPaid >= billing.totalAmount;
-
+    
+    // Update billing status based on payment amount
     if (isFullyPaid) {
-      // Update billing status to PAID
+      // Fully paid
       await prisma.billing.update({ 
         where: { id: billingId }, 
         data: { status: 'PAID' } 
       });
+    } else if (newTotalPaid > 0) {
+      // Partially paid
+      await prisma.billing.update({ 
+        where: { id: billingId }, 
+        data: { status: 'PARTIALLY_PAID' } 
+      });
+    } else {
+      // Still pending
+      await prisma.billing.update({ 
+        where: { id: billingId }, 
+        data: { status: 'PENDING' } 
+      });
+    }
+    
+    if (isFullyPaid) {
 
       // Check if this is card activation billing (for automatic card activation)
       const isCardActivation = billing.services.some(service => 
@@ -918,18 +1039,39 @@ exports.processPayment = async (req, res) => {
         });
       }
 
-      // Update related orders based on billing type
+      // Check if this is diagnostics billing (lab/radiology)
+      const hasLabServices = billing.services.some(service => 
+        service.service.category === 'LAB'
+      );
+      const hasRadiologyServices = billing.services.some(service => 
+        service.service.category === 'RADIOLOGY'
+      );
+      const isDiagnosticsBilling = hasLabServices || hasRadiologyServices;
+
+      // Update walk-in lab orders (no visitId, use billingId) - for walk-ins
+      if (isDiagnosticsBilling && !billing.visit) {
+        await prisma.labOrder.updateMany({
+          where: {
+            billingId: billing.id,
+            isWalkIn: true,
+            status: 'UNPAID'
+          },
+          data: { status: 'QUEUED' }
+        });
+
+        await prisma.radiologyOrder.updateMany({
+          where: {
+            billingId: billing.id,
+            isWalkIn: true,
+            status: 'UNPAID'
+          },
+          data: { status: 'QUEUED' }
+        });
+      }
+
+      // Update related orders based on billing type (for regular visits)
       if (billing.visit) {
         await prisma.$transaction(async (tx) => {
-          // Check if this is diagnostics billing (lab/radiology)
-          // Look for lab/radiology services in the billing
-          const hasLabServices = billing.services.some(service => 
-            service.service.category === 'LAB'
-          );
-          const hasRadiologyServices = billing.services.some(service => 
-            service.service.category === 'RADIOLOGY'
-          );
-          const isDiagnosticsBilling = hasLabServices || hasRadiologyServices;
           
           // Check if this is a triage/visit creation billing (automatic send to nurse triage)
           const isTriageService = billing.services.some(service => 

@@ -255,18 +255,18 @@ const StaffManagement = () => {
             </thead>
             <tbody>
               {filteredStaff.map((member) => (
-                <tr key={member.id} className={!member.isActive ? 'opacity-60' : ''}>
+                <tr key={member.id} className={!member.isActive ? 'bg-red-50' : ''}>
                   <td className="font-medium">
                     <div className="flex items-center space-x-2">
-                      <span>{member.fullname || 'N/A'}</span>
+                      <span className={!member.isActive ? 'text-red-700' : ''}>{member.fullname || 'N/A'}</span>
                       {!member.isActive && (
-                        <span className="badge badge-error text-xs">INACTIVE</span>
+                        <span className="badge badge-error text-xs font-bold">INACTIVE</span>
                       )}
                     </div>
                   </td>
-                  <td>{member.username}</td>
+                  <td className={!member.isActive ? 'text-red-600' : ''}>{member.username}</td>
                   <td>
-                    <span className="badge badge-info">
+                    <span className={`badge ${!member.isActive ? 'badge-error' : 'badge-info'}`}>
                       {roles.find(r => r.value === member.role)?.label || member.role}
                     </span>
                   </td>
@@ -279,33 +279,46 @@ const StaffManagement = () => {
                       )) || 'N/A'}
                     </div>
                   </td>
-                  <td>
+                  <td className={!member.isActive ? 'text-red-600' : ''}>
                     {member.consultationFee ? `$${member.consultationFee}` : 'N/A'}
                   </td>
-                  <td>{member.email || 'N/A'}</td>
-                  <td>{member.phone || 'N/A'}</td>
+                  <td className={!member.isActive ? 'text-red-600' : ''}>{member.email || 'N/A'}</td>
+                  <td className={!member.isActive ? 'text-red-600' : ''}>{member.phone || 'N/A'}</td>
                   <td>
-                    <div className="flex space-x-2">
+                    <div className="flex flex-wrap gap-2">
                       <button
                         onClick={() => handleToggleStatus(member)}
-                        className={`${member.isActive ? 'text-red-600 hover:text-red-800' : 'text-green-600 hover:text-green-800'}`}
-                        title={member.isActive ? 'Deactivate' : 'Activate'}
+                        className={`px-3 py-1 rounded-md text-sm font-medium flex items-center gap-1 ${
+                          member.isActive 
+                            ? 'bg-red-100 text-red-700 hover:bg-red-200' 
+                            : 'bg-green-100 text-green-700 hover:bg-green-200'
+                        }`}
                       >
-                        {member.isActive ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
+                        {member.isActive ? (
+                          <>
+                            <UserX className="h-4 w-4" />
+                            <span>Deactivate</span>
+                          </>
+                        ) : (
+                          <>
+                            <UserCheck className="h-4 w-4" />
+                            <span>Activate</span>
+                          </>
+                        )}
                       </button>
                       <button
                         onClick={() => handleEdit(member)}
-                        className="text-blue-600 hover:text-blue-800"
-                        title="Edit"
+                        className="px-3 py-1 rounded-md text-sm font-medium bg-blue-100 text-blue-700 hover:bg-blue-200 flex items-center gap-1"
                       >
                         <Edit className="h-4 w-4" />
+                        <span>Edit</span>
                       </button>
                       <button
                         onClick={() => handleDelete(member.id)}
-                        className="text-red-600 hover:text-red-800"
-                        title="Delete"
+                        className="px-3 py-1 rounded-md text-sm font-medium bg-red-100 text-red-700 hover:bg-red-200 flex items-center gap-1"
                       >
                         <Trash2 className="h-4 w-4" />
+                        <span>Delete</span>
                       </button>
                     </div>
                   </td>

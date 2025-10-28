@@ -134,7 +134,26 @@ exports.getCurrentSession = async (req, res) => {
       .flatMap(b => b.payments)
       .reduce((sum, p) => sum + p.amount, 0);
     
-    const totalReceivedAll = totalReceived + totalFromBillings;
+    // Also get total from today's Account Deposits (advance payments, credit clearances)
+    const todayAccountDeposits = await prisma.accountDeposit.findMany({
+      where: {
+        createdAt: {
+          gte: todayForBilling,
+          lt: tomorrowForBilling
+        }
+      },
+      include: {
+        account: true
+      }
+    });
+    
+    // Only count ADVANCE account deposits in daily cash (money received)
+    // CREDIT deposits are debt payments, already counted in billing payments above
+    const totalFromAccounts = todayAccountDeposits
+      .filter(d => d.account.accountType === 'ADVANCE')
+      .reduce((sum, d) => sum + d.amount, 0);
+    
+    const totalReceivedAll = totalReceived + totalFromBillings + totalFromAccounts;
     
     const totalExpenses = session.expenses
       .reduce((sum, e) => sum + e.amount, 0);

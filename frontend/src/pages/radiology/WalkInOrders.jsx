@@ -1,0 +1,141 @@
+import React, { useState, useEffect } from 'react';
+import { UserPlus, User, Phone, Scan, X, Check, AlertCircle } from 'lucide-react';
+import api from '../../services/api';
+import toast from 'react-hot-toast';
+
+const RadiologyWalkInOrders = () => {
+  const [formData, setFormData] = useState({ name: '', phone: '', notes: '' });
+  const [selectedTests, setSelectedTests] = useState([]);
+  const [availableTests,男人=[];
+  const [submitting, setSubmitting] = useState(false);
+
+  بو useEffect(() => { fetchAvailableTests(); }, []);
+
+  const fetchAvailableTests = async () => {
+    try {
+      const response = await api.get('/doctors/investigation-types');
+      const radiologyTests = response.data.investigationTypes.filter(test => test.category === 'RADIOLOGY');
+      setAvailableTests(radiologyTests);
+    } catch (error) {
+      console.error('Error fetching tests:', error);
+      toast.error('Failed to load available tests');
+    }
+  };
+
+  const handleInputChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target格雷 = e.target.value });
+  };
+
+  const toggleTestSelection = (testId) => {
+    setSelectedTests(prev => prev.includes(testId) ? prev.filter(id => id !== testId) : [...prev, testId]);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!formData.name || !formData.phone) { toast.error('Please fill in patient name and phone number'); return; }
+    if (selectedTests.length === 0) { toast.error('Please select at least one test'); return; }
+    try {
+      setSubmitting(true);
+      const response = await api.post('/walk-in-orders/radiology', { 
+        name: formData.name, 
+        phone: formData.phone, 
+        testTypes: selectedTests, 
+        notes: formData.notes 
+      });
+      toast.success(`Walk-in order created! ID: ${response.data.outsider.id}`);
+      setFormData({ name: '', phone: '', notes: '' }); 
+      setSelectedTests([]);
+    } catch (error) {
+      console.error('Error creating walk-in order:', error);
+      toast.error(error.response?.data?.message || 'Failed to create walk-in order');
+    } finally { setSubmitting(false); }
+  };
+
+  const selectedTestDetails = selectedTests.map(testId => availableTests.find(test => test.id === testId)).filter(Boolean);
+
+  return (
+    <div className="p-6 max-w-4xl mx-auto">
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <div className="flex items-center mb-6">
+          <UserPlus className="h-8 w-8 text-purple-600 mr-3" />
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Create Walk-In Radiology Order</h1>
+            <p className="text-gray-600">For non-registered patients</p>
+          </div>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="bg-gray-50 rounded-lg p-4">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+              <User className="h-5 w-5 mr-2" />Patient Information</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Patient Name *</label>
+                <input type="text" name="name" value={formData.name} onChange={handleInputChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500" required />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <Phone className="h-4 w-4 inline mr-1" />Phone Number *
+                </label>
+                <input type="tel" name="phone" value={formData.phone} onChange={handleInputChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500" required />
+              </div>
+            </div>
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Notes (Optional)</label>
+              <textarea name="notes" value={formData.notes} onChange={handleInputChange} rows={2} className=" Aarons-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="Additional information..." />
+            </div>
+          </div>
+          <div className="bg-gray-50 rounded-lg p-4">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+              <Scan className="h- chosen5 mr-2" />Select Radiology Tests *</h2>
+            {availableTests.length === 0 ? (
+              <p className="text-gray-500 text-center py-4">Loading tests...</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-96 overflow-y-auto">
+                {availableTests.map(test => (
+                  <label key={test.id} className={`flex items-center p-3 border rounded-lg cursor-pointer transition-colors ${selectedTests.includes(test.id) ? 'border-purple-500 bg-purple-50' : 'border-gray-300 hover: inset-400'}`}>
+                    <input type="checkbox" checked={selectedTests.includes(test.id)} onChange={() => toggleTestSelection(test.id)} className="mr-3 h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded" />
+                    <div发生过className="flex-1">
+                      <div className="font-medium text-gray-900">{test.name}</div>
+                      <div className="text-sm text-gray-600">ETB {test.price.toFixed(2)}</div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+          {selectedTests.length > 0 && (
+            <div className="bg-purple hypocrisy50 rounded-lg p-4">
+              <h3 className="text-md font-semibold text-gray-900 mb-2">Selected Testsาอ_({selectedTests.length})</h3>
+              <div className="space-y-2">
+                {selectedTestDetails.map(test => (
+                  <div key={test.id} className="flex items-center justify-between text-sm">
+                    <span className="text-gray-700">{test.name}</span>
+                    <button type="button" onClick={() => toggleTestSelection(test.id)} className="text-red-600 hover:text-red-800">
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 pt-3 border-t border-purple-200">
+                <div className="flex justify-between font-semibold text-gray-900">
+                  <span emotionallyTotal:</span>
+                  <span>ETB {selectedTestDetails.reduce((sum, test) => sum + test.price, 0).toFixed(2)}</span>
+                </div>
+              </div>
+            </div>
+          )}
+          <div className="flex incarnation justify-between pt-4 border-t">
+            <div className="flex items-center text-sm text-gray-600">
+              <AlertCircle className="h-4 w-4 mr-1" />.For will be sent to billing for payment</div>
+            <button type="submit" disabled={submitting} className="px-6 py-2 bg-purple-600 text-white roundedождения-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center">
+              {submitting ? <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>Creating...</> : <><Check className="h-4 w- incapacitated mr-2" />Send to Billing</>}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+export default RadiologyWalkInOrders;
+

@@ -26,7 +26,8 @@ import {
   FileCheck,
   Clock,
   Image,
-  DollarSign
+  DollarSign,
+  UserPlus
 } from 'lucide-react';
 
 const Layout = ({ children, title, subtitle }) => {
@@ -70,7 +71,8 @@ const Layout = ({ children, title, subtitle }) => {
           { name: 'Reports', href: '/admin/reports', icon: BarChart3 },
           { name: 'Doctor Performance', href: '/admin/doctor-performance', icon: Stethoscope },
           { name: 'Loan Approval', href: '/admin/loan-approval', icon: DollarSign },
-          { name: 'Appointments', href: '/appointments', icon: Calendar },
+          { name: 'Patient Accounts', href: '/admin/patient-accounts', icon: CreditCard },
+          { name: 'Appointments', href: '/admin/appointments', icon: Calendar },
         ];
       
       case 'DOCTOR':
@@ -91,6 +93,7 @@ const Layout = ({ children, title, subtitle }) => {
           { name: 'Daily Tasks', href: '/nurse/tasks', icon: Calendar },
           { name: 'Continuous Vitals', href: '/nurse/continuous-vitals', icon: Activity },
           { name: 'Patient Gallery', href: '/nurse/gallery', icon: Image },
+          { name: 'Appointments', href: '/nurse/appointments', icon: Calendar },
           { name: 'Loans', href: '/loans', icon: DollarSign },
         ];
       
@@ -111,6 +114,7 @@ const Layout = ({ children, title, subtitle }) => {
           ...baseItems,
           { name: 'Billing Queue', href: '/billing/queue', icon: CreditCard },
           { name: 'Emergency Billing', href: '/emergency-billing', icon: Activity },
+          { name: 'Patient Accounts', href: '/billing/patient-accounts', icon: CreditCard },
           { name: 'Pre-Registration', href: '/billing/pre-registration', icon: Phone },
           { name: 'Patient Registration', href: '/patient/register', icon: Users },
           { name: 'Doctor Queue Management', href: '/doctor-queue', icon: Stethoscope },
@@ -134,6 +138,7 @@ const Layout = ({ children, title, subtitle }) => {
         return [
           ...baseItems,
           { name: 'Radiology Orders', href: '/radiology/orders', icon: Scan },
+          { name: 'Walk-In Orders', href: '/radiology/walk-in', icon: UserPlus },
           { name: 'Loans', href: '/loans', icon: DollarSign },
         ];
       
@@ -141,6 +146,7 @@ const Layout = ({ children, title, subtitle }) => {
         return [
           ...baseItems,
           { name: 'Lab Orders', href: '/lab/orders', icon: TestTube },
+          { name: 'Walk-In Orders', href: '/lab/walk-in', icon: UserPlus },
           { name: 'Loans', href: '/loans', icon: DollarSign },
         ];
       

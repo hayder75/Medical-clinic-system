@@ -57,6 +57,13 @@ model User {
   loansRequested Loan[] @relation("LoansRequested")
   loansReviewed  Loan[] @relation("LoansReviewed")
   loansGiven     Loan[] @relation("LoansGiven")
+  
+  // Patient Account Relations
+  verifiedAccounts PatientAccount[] @relation("VerifiedAccounts")
+  accountDeposits AccountDeposit[]
+  accountTransactions AccountTransaction[]
+  accountRequestsCreated AccountRequest[] @relation("AccountRequestsCreated")
+  accountRequestsVerified AccountRequest[] @relation("AccountRequestsVerified")
 
   @@index([role])
   @@index([availability])
@@ -159,6 +166,10 @@ model Patient {
   cashTransactions CashTransaction[]
   galleryImages   PatientGallery[]
   insuranceTransactions InsuranceTransaction[]
+  patientAccount PatientAccount?
+  accountDeposits AccountDeposit[]
+  accountTransactions AccountTransaction[]
+  accountRequests AccountRequest[] @relation("AccountRequestPatient")
 
   @@index([status])
   @@index([type])
@@ -200,6 +211,7 @@ model Visit {
   nurseServiceAssignments NurseServiceAssignment[]
   galleryImages   PatientGallery[]
   insuranceTransactions InsuranceTransaction[]
+  accountTransactions AccountTransaction[] @relation("AccountTransactionVisit")
   completedAt    DateTime?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
@@ -331,6 +343,7 @@ model Billing {
   payments      BillPayment[]
   cardActivations CardActivation[] @relation("CardActivationBilling")
   cashTransactions CashTransaction[]
+  accountTransactions AccountTransaction[] @relation("AccountTransactionBilling")
   totalAmount   Float
   status        BillingStatus @default(PENDING)
   billingType   BillingType   @default(REGULAR)
@@ -464,12 +477,12 @@ model DispenseLog {
 
 model LabOrder {
   id            Int      @id @default(autoincrement())
-  visitId       Int
-  visit         Visit    @relation(fields: [visitId], references: [id])
+  visitId       Int?
+  visit         Visit?   @relation(fields: [visitId], references: [id])  // Optional for walk-ins
   patientId     String
   patient       Patient  @relation(fields: [patientId], references: [id])
-  doctorId      String
-  doctor        User     @relation(fields: [doctorId], references: [id])
+  doctorId      String?  // Optional for walk-ins
+  doctor        User?    @relation(fields: [doctorId], references: [id])
   typeId        Int
   type          InvestigationType @relation(fields: [typeId], references: [id])
   instructions  String?
@@ -477,6 +490,8 @@ model LabOrder {
   additionalNotes String?
   attachments   File[]   @relation("LabOrderFiles")
   status        OrderStatus @default(UNPAID)
+  isWalkIn      Boolean  @default(false)  // Flag for walk-in orders
+  billingId     String?  // Link to billing for walk-ins
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -486,18 +501,20 @@ model LabOrder {
 
 model RadiologyOrder {
   id            Int      @id @default(autoincrement())
-  visitId       Int
-  visit         Visit    @relation(fields: [visitId], references: [id])
+  visitId       Int?
+  visit         Visit?   @relation(fields: [visitId], references: [id])  // Optional for walk-ins
   patientId     String
   patient       Patient  @relation(fields: [patientId], references: [id])
-  doctorId      String
-  doctor        User     @relation(fields: [doctorId], references: [id])
+  doctorId      String?  // Optional for walk-ins
+  doctor        User?    @relation(fields: [doctorId], references: [id])
   typeId        Int
   type          InvestigationType @relation(fields: [typeId], references: [id])
   instructions  String?
   result        String?
   attachments   File[]   @relation("RadiologyOrderFiles")
   status        OrderStatus @default(UNPAID)
+  isWalkIn      Boolean  @default(false)  // Flag for walk-in orders
+  billingId     String?  // Link to billing for walk-ins
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -1541,4 +1558,171 @@ enum InsuranceTransactionStatus {
   APPROVED     // Claim approved by insurance
   COLLECTED    // Money received from insurance
   REJECTED     // Claim rejected by insurance
+}
+
+// Patient Account Management System
+model PatientAccount {
+  id            String      @id @default(uuid())
+  patientId     String      @unique
+  patient       Patient     @relation(fields: [patientId], references: [id])
+  
+  // Account Details
+  accountType   AccountType
+  status        AccountStatus @default(PENDING)
+  
+  // Balance Tracking
+  balance       Float       @default(0)  // Current balance (positive for advance, can be negative for credit)
+  totalDeposited Float      @default(0)  // Total money deposited
+  totalUsed     Float       @default(0)  // Total amount used
+  
+  // Credit Account Specific
+  debtOwed      Float       @default(0)  // Debt owed for credit accounts
+  totalDebtPaid Float       @default(0)  // Total debt paid back
+  
+  // Verification
+  verifiedById  String?
+  verifiedBy    User?       @relation("VerifiedAccounts", fields: [verifiedById], references: [id])
+  verifiedAt    DateTime?
+  rejectionReason String?
+  
+  // Relations
+  deposits      AccountDeposit[]
+  transactions  AccountTransaction[]
+  accountRequests AccountRequest[]
+  
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  
+  @@index([patientId])
+  @@index([status])
+  @@index([accountType])
+}
+
+model AccountDeposit {
+  id            String      @id @default(uuid())
+  accountId     String
+  account       PatientAccount @relation(fields: [accountId], references: [id])
+  patientId     String
+  patient       Patient     @relation(fields: [patientId], references: [id])
+  
+  // Deposit Details
+  amount        Float
+  paymentMethod PaymentType
+  bankName      String?
+  transNumber   String?
+  notes         String?
+  
+  // Audit
+  depositedById String
+  depositedBy   User        @relation(fields: [depositedById], references: [id])
+  
+  createdAt     DateTime    @default(now())
+  
+  @@index([accountId])
+  @@index([patientId])
+  @@index([depositedById])
+}
+
+model AccountTransaction {
+  id            String      @id @default(uuid())
+  accountId     String
+  account       PatientAccount @relation(fields: [accountId], references: [id])
+  patientId     String
+  patient       Patient     @relation(fields: [patientId], references: [id])
+  
+  // Transaction Details
+  type          AccountTransactionType
+  amount        Float
+  balanceBefore Float
+  balanceAfter  Float
+  notes         String?
+  description   String?     // Service description or transaction details
+  
+  // Optional References
+  billingId     String?
+  billing       Billing?    @relation("AccountTransactionBilling", fields: [billingId], references: [id])
+  visitId       Int?
+  visit         Visit?      @relation("AccountTransactionVisit", fields: [visitId], references: [id])
+  
+  // Audit
+  processedById String
+  processedBy   User        @relation(fields: [processedById], references: [id])
+  
+  createdAt     DateTime    @default(now())
+  
+  @@index([accountId])
+  @@index([patientId])
+  @@index([processedById])
+  @@index([type])
+  @@index([createdAt])
+}
+
+model AccountRequest {
+  id            String      @id @default(uuid())
+  accountId     String?
+  account       PatientAccount? @relation(fields: [accountId], references: [id])
+  patientId     String
+  patient       Patient     @relation("AccountRequestPatient", fields: [patientId], references: [id])
+  
+  // Request Details
+  requestType   AccountRequestType
+  accountType   AccountType?
+  amount        Float?
+  paymentMethod PaymentType?
+  bankName      String?
+  transNumber   String?
+  notes         String?
+  
+  // Status
+  status        AccountRequestStatus @default(PENDING)
+  
+  // Audit
+  requestedById String
+  requestedBy   User        @relation("AccountRequestsCreated", fields: [requestedById], references: [id])
+  verifiedById  String?
+  verifiedBy    User?       @relation("AccountRequestsVerified", fields: [verifiedById], references: [id])
+  verifiedAt    DateTime?
+  rejectionReason String?
+  
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  
+  @@index([patientId])
+  @@index([accountId])
+  @@index([status])
+  @@index([requestType])
+  @@index([createdAt])
+}
+
+enum AccountType {
+  ADVANCE
+  CREDIT
+  NONE
+}
+
+enum AccountStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum AccountTransactionType {
+  DEPOSIT
+  PAYMENT
+  USAGE
+  DEDUCTION
+  ADJUSTMENT
+}
+
+enum AccountRequestType {
+  CREATE_ACCOUNT
+  ADD_CREDIT
+  ADD_DEPOSIT
+  RETURN_MONEY
+}
+
+enum AccountRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }

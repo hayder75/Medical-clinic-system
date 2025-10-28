@@ -25,9 +25,10 @@ exports.getTemplates = async (req, res) => {
   }
 };
 
-// Get lab orders (batch orders)
+// Get lab orders (batch orders + walk-in orders)
 exports.getOrders = async (req, res) => {
   try {
+    // Get batch orders
     const batchOrders = await prisma.batchOrder.findMany({
       where: {
         AND: [
@@ -97,7 +98,77 @@ exports.getOrders = async (req, res) => {
       orderBy: { createdAt: 'asc' }
     });
 
-    res.json({ batchOrders });
+    // Get walk-in lab orders
+    const walkInOrders = await prisma.labOrder.findMany({
+      where: {
+        isWalkIn: true,
+        status: {
+          in: ['PAID', 'QUEUED', 'IN_PROGRESS', 'COMPLETED']
+        }
+      },
+      include: {
+        patient: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            mobile: true,
+            email: true
+          }
+        },
+        type: true,
+        labResults: {
+          include: {
+            testType: true,
+            attachments: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'asc' }
+    });
+
+    // Group walk-in orders by patient and billing
+    const groupedOrders = {};
+    walkInOrders.forEach(order => {
+      const key = `${order.patientId}-${order.billingId || 'no-billing'}`;
+      if (!groupedOrders[key]) {
+        groupedOrders[key] = {
+          id: order.id, // Use first order ID as the group ID
+          patientId: order.patientId,
+          patient: order.patient,
+          billingId: order.billingId,
+          status: order.status,
+          instructions: order.instructions,
+          createdAt: order.createdAt,
+          isWalkIn: true,
+          services: [] // Array of individual orders as services
+        };
+      }
+      
+      // Add this order as a service
+      groupedOrders[key].services.push({
+        id: order.id,
+        service: order.type, // The investigation type
+        investigationType: order.type,
+        labResults: order.labResults
+      });
+      
+      // Update group status if this order has a different status
+      if (order.status !== groupedOrders[key].status) {
+        // If any order is completed, group is completed
+        if (order.status === 'COMPLETED') {
+          groupedOrders[key].status = 'COMPLETED';
+        }
+        // If any order is IN_PROGRESS but not all COMPLETED, group is IN_PROGRESS
+        else if (order.status === 'IN_PROGRESS' && groupedOrders[key].status !== 'COMPLETED') {
+          groupedOrders[key].status = 'IN_PROGRESS';
+        }
+      }
+    });
+
+    const groupedWalkInOrders = Object.values(groupedOrders);
+
+    res.json({ batchOrders, walkInOrders: groupedWalkInOrders });
   } catch (error) {
     console.error('Error fetching lab orders:', error);
     res.status(500).json({ error: error.message });
@@ -115,8 +186,8 @@ exports.saveIndividualLabResult = async (req, res) => {
     const data = individualLabResultSchema.parse(req.body);
     const labTechnicianId = req.user.id;
 
-    // Check if batch order exists
-    const batchOrder = await prisma.batchOrder.findUnique({
+    // Check if it's a batch order or regular lab order (walk-in)
+    let batchOrder = await prisma.batchOrder.findUnique({
       where: { id: data.labOrderId },
       include: {
         services: {
@@ -130,8 +201,79 @@ exports.saveIndividualLabResult = async (req, res) => {
       }
     });
 
+    let isWalkIn = false;
+    let labOrder = null;
+
     if (!batchOrder) {
-      return res.status(404).json({ error: 'Lab order not found' });
+      // Check if it's a regular lab order (walk-in)
+      labOrder = await prisma.labOrder.findUnique({
+        where: { id: data.labOrderId },
+        include: {
+          patient: true,
+          type: true
+        }
+      });
+
+      if (!labOrder) {
+        return res.status(404).json({ error: 'Lab order not found' });
+      }
+
+      isWalkIn = labOrder.isWalkIn;
+
+      // For walk-in orders, save to LabResult model
+      if (isWalkIn) {
+        const template = await prisma.labTestTemplate.findUnique({
+          where: { id: data.templateId }
+        });
+
+        if (!template) {
+          return res.status(404).json({ error: 'Lab template not found' });
+        }
+
+        // Check if result already exists
+        const existingResult = await prisma.labResult.findFirst({
+          where: {
+            orderId: data.labOrderId,
+            testTypeId: labOrder.typeId
+          }
+        });
+
+        if (existingResult) {
+          // Update existing result
+          const updatedResult = await prisma.labResult.update({
+            where: { id: existingResult.id },
+            data: {
+              resultText: JSON.stringify(data.results),
+              additionalNotes: data.additionalNotes,
+              status: 'COMPLETED'
+            }
+          });
+
+          return res.json({
+            message: 'Lab result updated successfully',
+            result: updatedResult
+          });
+        } else {
+          // Create new result
+          const newResult = await prisma.labResult.create({
+            data: {
+              orderId: data.labOrderId,
+              testTypeId: labOrder.typeId,
+              resultText: JSON.stringify(data.results),
+              additionalNotes: data.additionalNotes,
+              status: 'COMPLETED'
+            },
+            include: {
+              testType: true
+            }
+          });
+
+          return res.json({
+            message: 'Lab result saved successfully',
+            result: newResult
+          });
+        }
+      }
     }
 
     // Check if service exists in this batch order
@@ -316,6 +458,18 @@ exports.sendToDoctor = async (req, res) => {
 
   } catch (error) {
     console.error('Error sending lab results to doctor:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+exports.updateLabOrderStatus = async (req, res) => {
+  try {
+    const { labOrderId } = req.params;
+    const { status } = req.body;
+    const updatedOrder = await prisma.labOrder.update({ where: { id: parseInt(labOrderId) }, data: { status } });
+    res.json({ success: true, order: updatedOrder });
+  } catch (error) {
+    console.error('Error updating lab order status:', error);
     res.status(500).json({ error: error.message });
   }
 };

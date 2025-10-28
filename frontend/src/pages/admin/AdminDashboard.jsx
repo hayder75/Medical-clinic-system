@@ -9,6 +9,7 @@ import InsuranceDetail from '../../components/admin/InsuranceDetail';
 import ContinuousInfusionDashboard from '../../components/admin/ContinuousInfusionDashboard';
 import DoctorPerformance from '../../components/admin/DoctorPerformance';
 import LoanApproval from '../../components/admin/LoanApproval';
+import AccountRequests from '../../components/admin/AccountRequests';
 import { 
   Users, 
   Stethoscope, 
@@ -254,6 +255,7 @@ const AdminDashboard = () => {
       <Route path="/reports" element={<Reports />} />
       <Route path="/doctor-performance" element={<DoctorPerformance />} />
       <Route path="/loan-approval" element={<LoanApproval />} />
+      <Route path="/patient-accounts" element={<AccountRequests />} />
       <Route path="/continuous-infusions" element={<ContinuousInfusionDashboard />} />
     </Routes>
   );

@@ -19,6 +19,9 @@ router.post('/results/individual', authMiddleware, roleGuard(['LAB_TECHNICIAN', 
 // Send lab results to doctor
 router.post('/orders/:labOrderId/send-to-doctor', authMiddleware, roleGuard(['LAB_TECHNICIAN', 'ADMIN']), labController.sendToDoctor);
 
+// Update lab order status (for walk-in orders)
+router.patch('/orders/:labOrderId', authMiddleware, roleGuard(['LAB_TECHNICIAN', 'ADMIN']), labController.updateLabOrderStatus);
+
 module.exports = router;
 
 

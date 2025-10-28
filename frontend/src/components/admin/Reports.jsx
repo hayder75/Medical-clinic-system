@@ -107,12 +107,12 @@ const Reports = () => {
       if (dayData) {
         revenue = dayData[revenueType].revenue || dayData.combined.revenue || 0;
       }
-      
-      days.push({
+        
+        days.push({
         key: `day-${day}`,
         day,
-        date: dateStr,
-        revenue,
+          date: dateStr,
+          revenue,
         isEmpty: false
       });
     }
@@ -190,9 +190,9 @@ const Reports = () => {
 
   if (!revenueStats) {
     return (
-      <div className="text-center py-12">
-        <BarChart3 className="h-16 w-16 mx-auto mb-4 text-gray-300" />
-        <h3 className="text-xl font-semibold text-gray-700 mb-2">No Data Available</h3>
+        <div className="text-center py-12">
+            <BarChart3 className="h-16 w-16 mx-auto mb-4 text-gray-300" />
+            <h3 className="text-xl font-semibold text-gray-700 mb-2">No Data Available</h3>
         <p className="text-gray-500">Unable to load revenue statistics.</p>
       </div>
     );
@@ -221,14 +221,14 @@ const Reports = () => {
               Calendar
             </button>
             <button
-          onClick={() => setViewMode('table')}
-          className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-            viewMode === 'table' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
-          }`}
-        >
-          <BarChart3 className="h-4 w-4 inline mr-1" />
-          Table
-        </button>
+              onClick={() => setViewMode('table')}
+              className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                viewMode === 'table' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <BarChart3 className="h-4 w-4 inline mr-1" />
+              Table
+            </button>
           </div>
           <button onClick={() => window.print()} className="btn btn-secondary flex items-center">
             <Download className="h-5 w-5 mr-2" />
@@ -266,25 +266,25 @@ const Reports = () => {
       </div>
 
       {/* Financial Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="card">
-          <div className="flex items-center">
-            <div className="p-3 rounded-lg bg-green-100">
-              <CreditCard className="h-6 w-6 text-green-600" />
-            </div>
-            <div className="ml-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="card">
+            <div className="flex items-center">
+              <div className="p-3 rounded-lg bg-green-100">
+                <CreditCard className="h-6 w-6 text-green-600" />
+              </div>
+              <div className="ml-4">
               <p className="text-sm font-medium text-gray-600">{revenueType === 'combined' ? 'Total' : revenueType === 'medical' ? 'Medical' : 'Pharmacy'} Revenue</p>
               <p className="text-2xl font-semibold text-gray-900">{formatCurrency(revenueData.revenue)}</p>
               <p className="text-xs text-gray-500 mt-1">{revenueData.transactions} transactions</p>
             </div>
+            </div>
           </div>
-        </div>
 
         {revenueType === 'medical' && (
           <>
-            <div className="card">
-              <div className="flex items-center">
-                <div className="p-3 rounded-lg bg-blue-100">
+          <div className="card">
+            <div className="flex items-center">
+              <div className="p-3 rounded-lg bg-blue-100">
                   <Users className="h-6 w-6 text-blue-600" />
                 </div>
                 <div className="ml-4">
@@ -298,16 +298,16 @@ const Reports = () => {
               <div className="flex items-center">
                 <div className="p-3 rounded-lg bg-purple-100">
                   <Activity className="h-6 w-6 text-purple-600" />
-                </div>
-                <div className="ml-4">
+              </div>
+              <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">Lab Tests</p>
                   <p className="text-2xl font-semibold text-gray-900">{revenueData.labTests || 0}</p>
                 </div>
-              </div>
             </div>
+          </div>
 
-            <div className="card">
-              <div className="flex items-center">
+          <div className="card">
+            <div className="flex items-center">
                 <div className="p-3 rounded-lg bg-orange-100">
                   <BarChart3 className="h-6 w-6 text-orange-600" />
                 </div>
@@ -326,17 +326,17 @@ const Reports = () => {
               <div className="flex items-center">
                 <div className="p-3 rounded-lg bg-blue-100">
                   <Users className="h-6 w-6 text-blue-600" />
-                </div>
-                <div className="ml-4">
+              </div>
+              <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">Prescriptions</p>
                   <p className="text-2xl font-semibold text-gray-900">{revenueData.prescriptions || 0}</p>
                 </div>
-              </div>
             </div>
+          </div>
 
-            <div className="card">
-              <div className="flex items-center">
-                <div className="p-3 rounded-lg bg-purple-100">
+          <div className="card">
+            <div className="flex items-center">
+              <div className="p-3 rounded-lg bg-purple-100">
                   <Activity className="h-6 w-6 text-purple-600" />
                 </div>
                 <div className="ml-4">
@@ -366,8 +366,8 @@ const Reports = () => {
               <div className="flex items-center">
                 <div className="p-3 rounded-lg bg-green-100">
                   <DollarSign className="h-6 w-6 text-green-600" />
-                </div>
-                <div className="ml-4">
+              </div>
+              <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">Pharmacy</p>
                   <p className="text-2xl font-semibold text-gray-900">{formatCurrency(revenueStats.completed.pharmacy.revenue)}</p>
                 </div>
@@ -375,7 +375,7 @@ const Reports = () => {
             </div>
           </>
         )}
-      </div>
+          </div>
 
       {/* Pending Payments Toggle */}
       <div className="card">
@@ -413,8 +413,8 @@ const Reports = () => {
                 </div>
               </>
             )}
-          </div>
-        )}
+        </div>
+      )}
       </div>
 
       {/* Calendar View */}
@@ -482,14 +482,14 @@ const Reports = () => {
                 
                 return (
                   <div key={day.key} className="relative group">
-                    <div
+                  <div
                       onClick={() => handleDayClick(day)}
                       className={`relative p-3 rounded-lg cursor-pointer transition-all duration-200 border-2 ${
-                        isSelected 
+                      isSelected 
                           ? 'bg-blue-50 border-blue-400 shadow-md ring-2 ring-blue-100' 
-                          : isToday 
+                        : isToday 
                             ? 'bg-blue-50 border-blue-300 shadow-sm' 
-                            : isWeekend
+                          : isWeekend 
                               ? 'bg-gray-50 border-gray-200' 
                               : day.revenue > 0
                                 ? `bg-white border-green-200 hover:border-green-300 hover:shadow-sm ${revenueStyle.border}`
@@ -516,7 +516,7 @@ const Reports = () => {
                         ) : (
                           <span className="text-gray-300">-</span>
                         )}
-                      </div>
+                    </div>
                       
                       {/* Subtle bottom border for revenue days */}
                       {day.revenue > 0 && !isSelected && (
@@ -532,7 +532,7 @@ const Reports = () => {
       )}
 
       {/* Period Selection and Summary */}
-      <div className="card">
+            <div className="card">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Period Summary</h3>
         <div className="flex gap-2 mb-4">
           {['daily', 'weekly', 'monthly', 'yearly'].map(period => (
@@ -576,15 +576,15 @@ const Reports = () => {
                 ×
               </button>
             </div>
-            
+
             {popupDayData.dayData ? (
               <div className="space-y-3">
                 <div className="p-3 bg-green-50 rounded-lg">
                   <p className="text-sm text-gray-600 mb-1">Total Revenue</p>
                   <p className="text-2xl font-bold text-green-600">
                     {formatCurrency(popupDayData.dayData.combined.revenue)}
-                  </p>
-                </div>
+                        </p>
+                      </div>
                 
                 <div className="grid grid-cols-2 gap-3">
                   <div className="p-3 bg-blue-50 rounded-lg">
@@ -601,13 +601,13 @@ const Reports = () => {
                       {formatCurrency(popupDayData.dayData.pharmacy.revenue)}
                     </p>
                     <p className="text-xs text-gray-500">{popupDayData.dayData.pharmacy.transactions} transactions</p>
-                  </div>
-                </div>
+                      </div>
+                    </div>
               </div>
             ) : (
               <div className="text-center py-6">
                 <p className="text-gray-500">No transactions recorded for this day</p>
-              </div>
+            </div>
             )}
           </div>
         </div>

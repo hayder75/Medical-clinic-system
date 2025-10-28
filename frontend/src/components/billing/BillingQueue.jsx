@@ -21,8 +21,12 @@ const BillingQueue = () => {
     transNumber: '',
     insuranceId: '',
     notes: '',
-    isEmergency: false
+    isEmergency: false,
+    useAccount: false
   });
+  
+  // Patient account balance
+  const [patientAccount, setPatientAccount] = useState(null);
   
   // Form validation errors
   const [formErrors, setFormErrors] = useState({});
@@ -124,7 +128,8 @@ const BillingQueue = () => {
         transNumber: paymentForm.transNumber || null,
         insuranceId: paymentForm.insuranceId || null,
         notes: paymentForm.notes || null,
-        isEmergency: paymentForm.isEmergency
+        isEmergency: paymentForm.isEmergency,
+        useAccount: paymentForm.useAccount
       };
       
       await api.post('/billing/payments', paymentData);
@@ -153,8 +158,21 @@ const BillingQueue = () => {
     setFormErrors({});
   };
 
-  const openPaymentForm = (billing) => {
+  const openPaymentForm = async (billing) => {
     setSelectedBilling(billing);
+    
+    // Fetch patient account if exists
+    try {
+      const response = await api.get(`/accounts/patient/${billing.patientId}`);
+      if (response.data && response.data.account) {
+        setPatientAccount(response.data.account);
+      } else {
+        setPatientAccount(null);
+      }
+    } catch (error) {
+      setPatientAccount(null);
+    }
+    
     setPaymentForm({
       type: 'CASH',
       amount: billing.totalAmount.toString(),
@@ -162,7 +180,8 @@ const BillingQueue = () => {
       transNumber: '',
       insuranceId: '',
       notes: '',
-      isEmergency: false
+      isEmergency: false,
+      useAccount: false
     });
     setFormErrors({});
     setShowPaymentForm(true);
@@ -387,6 +406,15 @@ const BillingQueue = () => {
                 <p className="text-sm text-gray-600">
                   <strong>Amount:</strong> ETB {selectedBilling.totalAmount.toLocaleString()}
                 </p>
+                {patientAccount && patientAccount.balance > 0 && (
+                  <div className={`mt-3 p-2 rounded ${patientAccount.accountType === 'CREDIT' ? 'bg-blue-50 border border-blue-200' : 'bg-green-50 border border-green-200'}`}>
+                    <p className="text-sm">
+                      <strong>Account Balance:</strong> ETB {patientAccount.balance.toLocaleString()}
+                      {patientAccount.accountType === 'CREDIT' && <span className="text-blue-700 font-semibold"> (Credit Available)</span>}
+                      {patientAccount.accountType === 'ADVANCE' && <span className="text-green-700 font-semibold"> (Advance)</span>}
+                    </p>
+                  </div>
+                )}
               </div>
 
               <form onSubmit={handlePayment} className="space-y-4">
@@ -406,6 +434,23 @@ const BillingQueue = () => {
                   </select>
                 </div>
 
+                {/* Use Account Balance Checkbox */}
+                {patientAccount && patientAccount.balance > 0 && (
+                  <div>
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={paymentForm.useAccount}
+                        onChange={(e) => setPaymentForm({...paymentForm, useAccount: e.target.checked})}
+                        className="w-4 h-4 text-primary-600 rounded"
+                      />
+                      <span className="text-sm">
+                        Use patient account balance (ETB {patientAccount.balance.toLocaleString()} available)
+                      </span>
+                    </label>
+                  </div>
+                )}
+                
                 {/* Amount */}
                 <div>
                   <label className="label">Amount (ETB) *</label>
