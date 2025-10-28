@@ -3,7 +3,7 @@ services:
     name: medical-clinic-system
     env: node
     plan: free
-    buildCommand: cd backend && npm install
+    buildCommand: cd backend && npm install && npx prisma generate && npx prisma db push --skip-generate
     startCommand: cd backend && npm start
     envVars:
       - key: NODE_ENV
