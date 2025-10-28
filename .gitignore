@@ -11,10 +11,7 @@ yarn-error.log*
 # .env.test.local
 # .env.production.local
 
-# Database
-*.db
-*.sqlite
-*.sqlite3
+
 
 # Logs
 logs
@@ -109,11 +106,16 @@ jspm_packages/
 ehthumbs.db
 Thumbs.db
 
-# Prisma
-prisma/migrations/
+# Prisma - DO NOT IGNORE MIGRATIONS (Render needs them!)
+# prisma/migrations/
 
 # Uploads directory (if you want to exclude uploaded files)
 uploads/
+
+# Database exports/dumps (sensitive data - DO NOT commit)
+*.sql
+*.dump
+complete-database-export-*.json
 
 # Build directories
 dist/
