@@ -183,6 +183,38 @@ app.get('/api/health', async (req, res) => {
   });
 });
 
+// Auto-seed admin user if it doesn't exist (only on startup)
+(async () => {
+  try {
+    const adminExists = await prisma.user.findUnique({
+      where: { username: 'admin' }
+    });
+    
+    if (!adminExists) {
+      console.log('🔧 Admin user not found, creating default admin...');
+      const bcrypt = require('bcryptjs');
+      await prisma.user.create({
+        data: {
+          username: 'admin',
+          fullname: 'System Administrator',
+          email: 'admin@clinic.com',
+          role: 'ADMIN',
+          password: await bcrypt.hash('admin123', 10),
+          availability: true,
+          isActive: true,
+          specialties: []
+        }
+      });
+      console.log('✅ Default admin user created:');
+      console.log('   Username: admin');
+      console.log('   Password: admin123');
+    }
+  } catch (error) {
+    console.error('⚠️  Warning: Could not check/create admin user:', error.message);
+    // Don't exit - server should still start even if seeding fails
+  }
+})();
+
 app.listen(PORT, HOST, () => {
   console.log(`🚀 Server running on http://${HOST}:${PORT}`);
   console.log(`📊 Health check: http://${HOST}:${PORT}/api/health`);
