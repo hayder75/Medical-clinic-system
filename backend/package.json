@@ -7,7 +7,10 @@
   "scripts": {
     "migrate": "prisma migrate dev",
     "generate": "prisma generate",
-    "start": "node server.js"
+    "start": "node server.js",
+    "validate": "node scripts/validate-production.js",
+    "cleanup:demo": "node scripts/cleanup-demo-data.js",
+    "seed:demo": "node scripts/seed-demo-data.js"
   },
   "dependencies": {
     "@prisma/client": "^5.20.0",

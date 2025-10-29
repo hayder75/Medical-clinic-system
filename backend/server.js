@@ -48,7 +48,40 @@ const roleGuard = require('./src/middleware/roleGuard');
 const fileUpload = require('./src/middleware/fileUpload');
 const logger = require('./src/middleware/logger');
 
+const fs = require('fs');
+const path = require('path');
+
 const app = express();
+
+// Ensure uploads directory structure exists on startup
+const uploadsDir = process.env.UPLOADS_DIR || 'uploads';
+const uploadsPath = path.resolve(__dirname, uploadsDir);
+const uploadSubdirs = [
+  'patient-attached-images',
+  'dental-photos',
+  'receipts',
+  'patient-gallery'
+];
+
+try {
+  // Create main uploads directory
+  if (!fs.existsSync(uploadsPath)) {
+    fs.mkdirSync(uploadsPath, { recursive: true });
+    console.log(`Created uploads directory: ${uploadsPath}`);
+  }
+  
+  // Create all required subdirectories
+  uploadSubdirs.forEach(subdir => {
+    const subdirPath = path.resolve(uploadsPath, subdir);
+    if (!fs.existsSync(subdirPath)) {
+      fs.mkdirSync(subdirPath, { recursive: true });
+      console.log(`Created ${subdir} directory: ${subdirPath}`);
+    }
+  });
+} catch (error) {
+  console.error('Failed to create uploads directories:', error);
+  process.exit(1);
+}
 
 // Singleton Prisma client - connections are lazy
 const prisma = new PrismaClient({

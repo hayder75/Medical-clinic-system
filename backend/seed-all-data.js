@@ -7,7 +7,7 @@ async function main() {
 
   try {
     // Read the exported data
-    const jsonData = JSON.parse(fs.readFileSync('complete-data.json', 'utf8'));
+    const jsonData = JSON.parse(fs.readFileSync('complete-database-export-2025-10-28.json', 'utf8'));
     const { services, investigations, teeth } = jsonData;
 
     // 1. Create Services

@@ -109,13 +109,15 @@ Thumbs.db
 # Prisma - DO NOT IGNORE MIGRATIONS (Render needs them!)
 # prisma/migrations/
 
-# Uploads directory (if you want to exclude uploaded files)
-uploads/
+# Uploads directory (exclude files but keep folder structure)
+uploads/*
+!uploads/.gitkeep
+!uploads/**/.gitkeep
 
-# Database exports/dumps (sensitive data - DO NOT commit)
-*.sql
-*.dump
-complete-database-export-*.json
+# Database exports/dumps - ALLOWED TO COMMIT (for migration to VPS)
+# *.sql
+# *.dump
+# complete-database-export-*.json
 
 # Build directories
 dist/
