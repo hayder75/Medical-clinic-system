@@ -10,7 +10,8 @@
     "start": "node server.js",
     "validate": "node scripts/validate-production.js",
     "cleanup:demo": "node scripts/cleanup-demo-data.js",
-    "seed:demo": "node scripts/seed-demo-data.js"
+    "seed:demo": "node scripts/seed-demo-data.js",
+    "seed:all": "node seed-everything.js"
   },
   "dependencies": {
     "@prisma/client": "^5.20.0",

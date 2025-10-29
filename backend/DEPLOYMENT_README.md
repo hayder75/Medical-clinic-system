@@ -27,10 +27,15 @@ npx prisma validate
 npx prisma generate
 npx prisma migrate deploy
 
+# Seed complete database (staff users + services + investigations)
+npm run seed:all
+# OR manually:
+# node seed-everything.js
+
 # optional: cleanup demo data
 npm run cleanup:demo
 
-# optional: seed demo patients
+# optional: seed demo patients (clean patients only)
 npm run seed:demo
 
 # validate build
