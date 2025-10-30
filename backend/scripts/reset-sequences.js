@@ -18,7 +18,7 @@ async function main() {
     { table: 'VitalSign', column: 'id' }
   ];
 
-  for (const { table, column } of principales) {
+  for (const { table, column } of sequences) {
     try {
       await prisma.$executeRawUnsafe(
         `SELECT setval(pg_get_serial_sequence('"${table}"', '${column}'), COALESCE((SELECT MAX("${column}") FROM "${table}"), 1), true);`
