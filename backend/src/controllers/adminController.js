@@ -378,7 +378,19 @@ exports.getServices = async (req, res) => {
     try {
       const services = await prisma.service.findMany({
         where: whereClause,
-        orderBy: { name: 'asc' }
+        orderBy: { name: 'asc' },
+        // Select only needed fields for faster queries
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          category: true,
+          price: true,
+          description: true,
+          isActive: true,
+          createdAt: true,
+          updatedAt: true
+        }
       });
 
       res.json({ services });
