@@ -277,7 +277,14 @@ exports.saveIndividualLabResult = async (req, res) => {
     }
 
     // Check if service exists in this batch order
-    const service = batchOrder.services.find(s => s.id === data.serviceId);
+    // Frontend may send either the batchOrderService.id or the underlying serviceId/investigationTypeId
+    let service = batchOrder.services.find(s => s.id === data.serviceId);
+    if (!service) {
+      service = batchOrder.services.find(s => s.serviceId === data.serviceId);
+    }
+    if (!service && data.investigationTypeId) {
+      service = batchOrder.services.find(s => s.investigationTypeId === data.investigationTypeId);
+    }
     if (!service) {
       return res.status(404).json({ error: 'Service not found in this order' });
     }
@@ -320,7 +327,7 @@ exports.saveIndividualLabResult = async (req, res) => {
       const newResult = await prisma.detailedLabResult.create({
         data: {
           labOrderId: data.labOrderId,
-          serviceId: data.serviceId,
+          serviceId: service.id,
           templateId: data.templateId,
           results: data.results,
           additionalNotes: data.additionalNotes
@@ -335,7 +342,7 @@ exports.saveIndividualLabResult = async (req, res) => {
 
     // Update service status to COMPLETED when result is saved
     await prisma.batchOrderService.update({
-      where: { id: data.serviceId },
+      where: { id: service.id },
       data: { status: 'COMPLETED' }
     });
 
