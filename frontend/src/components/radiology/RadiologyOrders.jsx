@@ -21,7 +21,19 @@ const RadiologyOrders = () => {
     try {
       setLoading(true);
       const response = await api.get('/radiologies/orders');
-      setOrders(response.data.batchOrders || []);
+      // Combine batch orders with walk-in orders; tag each with a kind to avoid key collisions
+      const batchOrders = (response.data.batchOrders || []).map(o => ({ ...o, __kind: 'batch' }));
+      const walkInOrders = (response.data.walkInOrders || []).map(o => ({ 
+        ...o, 
+        __kind: 'walkin',
+        services: [{ 
+          service: o.type, 
+          investigationType: o.type,
+          id: o.id 
+        }]
+      }));
+      const allOrders = [...batchOrders, ...walkInOrders];
+      setOrders(allOrders);
     } catch (error) {
       toast.error('Failed to fetch radiology orders');
       console.error('Error fetching orders:', error);
@@ -69,9 +81,14 @@ const RadiologyOrders = () => {
     
     // Initialize test results for each radiology test
     const initialResults = {};
-    order.services.forEach(service => {
-      if (service.investigationType && service.investigationType.category === 'RADIOLOGY') {
-        initialResults[service.investigationType.id] = {
+    
+    // Handle both batch orders and walk-in orders
+    const services = order.services || (order.type ? [{ investigationType: order.type, id: order.id }] : []);
+    
+    services.forEach(service => {
+      const testType = service.investigationType || order.type;
+      if (testType && testType.category === 'RADIOLOGY') {
+        initialResults[testType.id] = {
           resultText: '',
           additionalNotes: '',
           files: [],
@@ -81,11 +98,28 @@ const RadiologyOrders = () => {
       }
     });
     
-    // Fetch existing results and merge with initial results
-    const existingResults = await fetchExistingResults(order.id);
-    const mergedResults = { ...initialResults, ...existingResults };
-    
-    setTestResults(mergedResults);
+    // Fetch existing results and merge with initial results (only for batch orders)
+    if (!order.isWalkIn) {
+      const existingResults = await fetchExistingResults(order.id);
+      const mergedResults = { ...initialResults, ...existingResults };
+      setTestResults(mergedResults);
+    } else {
+      // For walk-in orders, check if they have results in radiologyResults
+      if (order.radiologyResults && order.radiologyResults.length > 0) {
+        order.radiologyResults.forEach(result => {
+          if (result.testType) {
+            initialResults[result.testType.id] = {
+              resultText: result.resultText || '',
+              additionalNotes: result.additionalNotes || '',
+              files: result.attachments || [],
+              completed: true,
+              resultId: result.id
+            };
+          }
+        });
+      }
+      setTestResults(initialResults);
+    }
   };
 
   const updateTestResult = (testId, field, value) => {
@@ -301,7 +335,7 @@ const RadiologyOrders = () => {
         <div className="grid gap-4">
           {getFilteredOrders().map((order) => (
             <div
-              key={order.id}
+              key={`${order.__kind || (order.isWalkIn ? 'walkin' : 'batch')}-${order.id}`}
               className={`bg-white rounded-lg shadow-md border p-6 cursor-pointer hover:shadow-lg transition-shadow duration-200 ${
                 order.status === 'QUEUED' ? 'border-yellow-200' : 
                 order.status === 'COMPLETED' ? 'border-green-200' : 'border-gray-200'
@@ -324,9 +358,10 @@ const RadiologyOrders = () => {
                     </div>
                     <p className="text-sm text-gray-600">
                       {order.services
-                        .filter(service => service.investigationType?.category === 'RADIOLOGY')
+                        ?.filter(service => service.investigationType?.category === 'RADIOLOGY')
                         .map(service => service.investigationType?.name)
-                        .join(', ')}
+                        .join(', ') || order.type?.name || 'Radiology Test'}
+                      {order.isWalkIn && <span className="ml-2 px-2 py-0.5 bg-purple-100 text-purple-800 text-xs rounded">WALK-IN</span>}
                     </p>
                   </div>
                 </div>
@@ -342,10 +377,12 @@ const RadiologyOrders = () => {
                   <User className="h-4 w-4 mr-2" />
                   <span>{order.patient.name}</span>
                 </div>
-                <div className="flex items-center">
-                  <Stethoscope className="h-4 w-4 mr-2" />
-                  <span>{order.doctor.fullname}</span>
-                </div>
+                {order.doctor && (
+                  <div className="flex items-center">
+                    <Stethoscope className="h-4 w-4 mr-2" />
+                    <span>{order.doctor.fullname}</span>
+                  </div>
+                )}
                 <div className="flex items-center">
                   <Calendar className="h-4 w-4 mr-2" />
                   <span>{new Date(order.createdAt).toLocaleDateString()}</span>
@@ -410,10 +447,14 @@ const RadiologyOrders = () => {
 
               <div className="space-y-4">
                 <h3 className="font-medium text-gray-900">Radiology Tests</h3>
-                {selectedOrder.services
-                  .filter(service => service.investigationType?.category === 'RADIOLOGY')
+                {(selectedOrder.services || (selectedOrder.type ? [{ investigationType: selectedOrder.type, id: selectedOrder.id }] : []))
+                  .filter(service => {
+                    const testType = service.investigationType || selectedOrder.type;
+                    return testType?.category === 'RADIOLOGY';
+                  })
                   .map((service, index) => {
-                    const testId = service.investigationType.id;
+                    const testType = service.investigationType || selectedOrder.type;
+                    const testId = testType?.id;
                     const testResult = testResults[testId] || {};
                     const isExpanded = expandedTests[testId];
                     const isCompleted = testResult.completed;
@@ -427,10 +468,10 @@ const RadiologyOrders = () => {
                           <div className="flex items-center space-x-3">
                             <div>
                               <h4 className="font-medium text-gray-900">
-                                {service.investigationType.name}
+                                {testType?.name || 'Radiology Test'}
                               </h4>
                               <p className="text-sm text-gray-600">
-                                {service.investigationType.price} ETB
+                                {testType?.price?.toFixed(2) || '0.00'} ETB
                               </p>
                             </div>
                           </div>
