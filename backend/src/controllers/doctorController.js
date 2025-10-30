@@ -136,18 +136,13 @@ exports.getQueue = async (req, res) => {
         bills: {
           some: {
             status: 'PAID',
-            OR: [
-              {
-                services: {
-                  some: {
-                    service: {
-                      category: 'CONSULTATION'
-                    }
-                  }
+            services: {
+              some: {
+                service: {
+                  category: 'CONSULTATION'
                 }
-              },
-              { billingType: 'CONSULTATION' }
-            ]
+              }
+            }
           }
         }
       },
@@ -724,18 +719,13 @@ exports.getUnifiedQueue = async (req, res) => {
                 bills: {
                   some: {
                     status: 'PAID',
-                    OR: [
-                      {
-                        services: {
-                          some: {
-                            service: {
-                              category: 'CONSULTATION'
-                            }
-                          }
-                        }
-                      },
-                      { billingType: 'CONSULTATION' }
-                    ]
+            services: {
+              some: {
+                service: {
+                  category: 'CONSULTATION'
+                }
+              }
+            }
                   }
                 }
               }
