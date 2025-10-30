@@ -25,11 +25,10 @@ const LabOrders = () => {
     try {
       setLoading(true);
       const response = await api.get('/labs/orders');
-      // Combine batch orders with walk-in orders
-      const allOrders = [
-        ...(response.data.batchOrders || []),
-        ...(response.data.walkInOrders || [])
-      ];
+      // Combine batch orders with walk-in orders; tag each with a kind to avoid key collisions
+      const batchOrders = (response.data.batchOrders || []).map(o => ({ ...o, __kind: 'batch' }));
+      const walkInOrders = (response.data.walkInOrders || []).map(o => ({ ...o, __kind: 'walkin' }));
+      const allOrders = [...batchOrders, ...walkInOrders];
       setOrders(allOrders);
     } catch (error) {
       toast.error('Failed to fetch lab orders');
@@ -579,7 +578,7 @@ const LabOrders = () => {
         <div className="grid gap-4">
           {getFilteredOrders().map((order) => (
             <div
-              key={order.id}
+              key={`${order.__kind || (order.isWalkIn ? 'walkin' : 'batch')}-${order.id}`}
               className={`bg-white rounded-lg shadow-md border p-6 cursor-pointer hover:shadow-lg transition-shadow duration-200 ${
                 order.status === 'QUEUED' ? 'border-yellow-200' : 
                 order.status === 'COMPLETED' ? 'border-green-200' : 'border-gray-200'
