@@ -87,6 +87,10 @@ model Service {
   inventoryItems      Inventory[]
   batchOrderServices  BatchOrderService[]
   nurseServiceAssignments NurseServiceAssignment[]
+
+  @@index([category])
+  @@index([isActive])
+  @@index([category, isActive])
 }
 
 model Insurance {
