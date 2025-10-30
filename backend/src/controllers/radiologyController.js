@@ -111,20 +111,61 @@ exports.getOrders = async (req, res) => {
     });
 
     // Get walk-in radiology orders
-    const walkInOrders = await prisma.radiologyOrder.findMany({
+    const walkInOrdersRaw = await prisma.radiologyOrder.findMany({
       where: {
         isWalkIn: true,
         status: { in: ['PAID', 'QUEUED', 'IN_PROGRESS', 'COMPLETED'] }
       },
       include: {
-        patient: { select: { id: true, name: true, mobile: true } },
+        patient: { select: { id: true, name: true, mobile: true, type: true, email: true } },
         type: true,
         radiologyResults: { include: { testType: true, attachments: true } }
       },
       orderBy: { createdAt: 'asc' }
     });
 
-    res.json({ batchOrders: filteredOrders, walkInOrders });
+    // Group walk-in orders by patient and billing (similar to lab orders)
+    const groupedOrders = {};
+    walkInOrdersRaw.forEach(order => {
+      const key = `${order.patientId}-${order.billingId || 'no-billing'}`;
+      if (!groupedOrders[key]) {
+        groupedOrders[key] = {
+          id: order.id, // Use first order ID as the group ID
+          patientId: order.patientId,
+          patient: order.patient,
+          billingId: order.billingId,
+          status: order.status,
+          instructions: order.instructions,
+          createdAt: order.createdAt,
+          isWalkIn: true,
+          services: [] // Array of individual orders as services
+        };
+      }
+      
+      // Add this order as a service
+      groupedOrders[key].services.push({
+        id: order.id,
+        service: order.type, // The investigation type
+        investigationType: order.type,
+        radiologyResults: order.radiologyResults
+      });
+      
+      // Update group status if this order has a different status
+      if (order.status !== groupedOrders[key].status) {
+        // If any order is completed, group is completed
+        if (order.status === 'COMPLETED') {
+          groupedOrders[key].status = 'COMPLETED';
+        }
+        // If any order is IN_PROGRESS but not all COMPLETED, group is IN_PROGRESS
+        else if (order.status === 'IN_PROGRESS' && groupedOrders[key].status !== 'COMPLETED') {
+          groupedOrders[key].status = 'IN_PROGRESS';
+        }
+      }
+    });
+
+    const groupedWalkInOrders = Object.values(groupedOrders);
+
+    res.json({ batchOrders: filteredOrders, walkInOrders: groupedWalkInOrders });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
