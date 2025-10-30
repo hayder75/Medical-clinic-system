@@ -126,38 +126,19 @@ exports.getCurrentSession = async (req, res) => {
       .filter(t => t.type === 'PAYMENT_RECEIVED')
       .reduce((sum, t) => sum + t.amount, 0);
     
-    // Also get total from today's Billing payments
-    const todayForBilling = new Date();
-    todayForBilling.setHours(0, 0, 0, 0);
-    const tomorrowForBilling = new Date(todayForBilling);
-    tomorrowForBilling.setDate(tomorrowForBilling.getDate() + 1);
+    // Get total from today's Account Deposits (advance payments only)
+    // Note: INSURANCE and CHARITY payments are NOT counted - they have their own tracking pages
+    // Note: CREDIT deposits are NOT counted - they're debt clearance, not new money received
+    const todayForAccounts = new Date();
+    todayForAccounts.setHours(0, 0, 0, 0);
+    const tomorrowForAccounts = new Date(todayForAccounts);
+    tomorrowForAccounts.setDate(tomorrowForAccounts.getDate() + 1);
     
-    const todayBillings = await prisma.billing.findMany({
-      where: {
-        status: 'PAID',
-        updatedAt: {
-          gte: todayForBilling,
-          lt: tomorrowForBilling
-        }
-      },
-      include: {
-        payments: true
-      }
-    });
-    
-    // Only count INSURANCE and CHARITY payments from billing
-    // CASH and BANK payments are already tracked via CashTransaction records above
-    const totalFromBillings = todayBillings
-      .flatMap(b => b.payments)
-      .filter(p => p.type === 'INSURANCE' || p.type === 'CHARITY')
-      .reduce((sum, p) => sum + p.amount, 0);
-    
-    // Also get total from today's Account Deposits (advance payments, credit clearances)
     const todayAccountDeposits = await prisma.accountDeposit.findMany({
       where: {
         createdAt: {
-          gte: todayForBilling,
-          lt: tomorrowForBilling
+          gte: todayForAccounts,
+          lt: tomorrowForAccounts
         }
       },
       include: {
@@ -166,12 +147,14 @@ exports.getCurrentSession = async (req, res) => {
     });
     
     // Only count ADVANCE account deposits in daily cash (money received)
-    // CREDIT deposits are debt payments, already counted in billing payments above
+    // CREDIT deposits are debt payments, not new money received, so not counted
     const totalFromAccounts = todayAccountDeposits
       .filter(d => d.account.accountType === 'ADVANCE')
       .reduce((sum, d) => sum + d.amount, 0);
     
-    const totalReceivedAll = totalReceived + totalFromBillings + totalFromAccounts;
+    // Total received = CashTransaction records (CASH/BANK payments) + ADVANCE account deposits
+    // INSURANCE and CHARITY payments are excluded (tracked separately)
+    const totalReceivedAll = totalReceived + totalFromAccounts;
     
     const totalExpenses = session.expenses
       .reduce((sum, e) => sum + e.amount, 0);
