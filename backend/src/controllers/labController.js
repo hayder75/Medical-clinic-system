@@ -186,42 +186,19 @@ exports.saveIndividualLabResult = async (req, res) => {
     const data = individualLabResultSchema.parse(req.body);
     const labTechnicianId = req.user.id;
 
-    // Check if it's a batch order or regular lab order (walk-in)
-    let batchOrder = await prisma.batchOrder.findUnique({
+    // Prefer walk-in orders if present to avoid ID collisions with batch orders
+    let labOrder = await prisma.labOrder.findUnique({
       where: { id: data.labOrderId },
       include: {
-        services: {
-          include: {
-            service: true,
-            investigationType: true
-          }
-        },
         patient: true,
-        visit: true
+        type: true
       }
     });
 
-    let isWalkIn = false;
-    let labOrder = null;
+    let isWalkIn = !!labOrder?.isWalkIn;
 
-    if (!batchOrder) {
-      // Check if it's a regular lab order (walk-in)
-      labOrder = await prisma.labOrder.findUnique({
-        where: { id: data.labOrderId },
-        include: {
-          patient: true,
-          type: true
-        }
-      });
-
-      if (!labOrder) {
-        return res.status(404).json({ error: 'Lab order not found' });
-      }
-
-      isWalkIn = labOrder.isWalkIn;
-
-      // For walk-in orders, save to LabResult model
-      if (isWalkIn) {
+    if (labOrder && isWalkIn) {
+      // For walk-in orders, save to LabResult model immediately
         const template = await prisma.labTestTemplate.findUnique({
           where: { id: data.templateId }
         });
@@ -273,18 +250,34 @@ exports.saveIndividualLabResult = async (req, res) => {
             result: newResult
           });
         }
+      return; // walk-in handled
+    }
+
+    // Otherwise, handle batch order flow
+    const batchOrder = await prisma.batchOrder.findUnique({
+      where: { id: data.labOrderId },
+      include: {
+        services: {
+          include: {
+            service: true,
+            investigationType: true
+          }
+        },
+        patient: true,
+        visit: true
       }
+    });
+
+    if (!batchOrder) {
+      return res.status(404).json({ error: 'Lab order not found' });
     }
 
     // Check if service exists in this batch order
     // Frontend may send either the batchOrderService.id or the underlying serviceId/investigationTypeId
-    let service = batchOrder.services.find(s => s.id === data.serviceId);
-    if (!service) {
-      service = batchOrder.services.find(s => s.serviceId === data.serviceId);
-    }
-    if (!service && data.investigationTypeId) {
-      service = batchOrder.services.find(s => s.investigationTypeId === data.investigationTypeId);
-    }
+    const numericServiceId = typeof data.serviceId === 'string' ? parseInt(data.serviceId, 10) : data.serviceId;
+    let service = batchOrder.services.find(s => s.id === numericServiceId);
+    if (!service) service = batchOrder.services.find(s => s.serviceId === data.serviceId);
+    if (!service && data.investigationTypeId) service = batchOrder.services.find(s => s.investigationTypeId === data.investigationTypeId);
     if (!service) {
       return res.status(404).json({ error: 'Service not found in this order' });
     }
@@ -302,7 +295,7 @@ exports.saveIndividualLabResult = async (req, res) => {
     const existingResult = await prisma.detailedLabResult.findFirst({
       where: {
         labOrderId: data.labOrderId,
-        serviceId: data.serviceId,
+        serviceId: service.id,
         templateId: data.templateId
       }
     });
