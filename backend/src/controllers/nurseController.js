@@ -1529,12 +1529,13 @@ exports.assignCombined = async (req, res) => {
         throw new Error('No services or doctor assigned');
       }
 
-      // Update visit status and suggestedDoctorId if doctor was assigned
+      // Update visit status and link assignment if doctor was assigned
       await tx.visit.update({
         where: { id: visitId },
         data: {
           status: newStatus,
-          ...(doctorId && { suggestedDoctorId: doctorId }) // Set suggestedDoctorId for admin tracking
+          ...(doctorId && { suggestedDoctorId: doctorId }),
+          ...(doctorId && { assignmentId: assignments.find(a => a.doctor)?.id || null })
         }
       });
 
