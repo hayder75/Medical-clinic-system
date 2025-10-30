@@ -107,7 +107,22 @@ exports.getCurrentSession = async (req, res) => {
     }
     
     // Calculate current totals
-    const totalReceived = session.transactions
+    // Get ALL cash transactions from today (all users) for clinic-wide totals
+    const allTodayTransactions = await prisma.cashTransaction.findMany({
+      where: {
+        type: 'PAYMENT_RECEIVED',
+        createdAt: {
+          gte: today,
+          lt: tomorrow
+        }
+      }
+    });
+    
+    const totalReceived = allTodayTransactions
+      .reduce((sum, t) => sum + t.amount, 0);
+    
+    // Also calculate total from current user's session (for user-specific view)
+    const sessionTotalReceived = session.transactions
       .filter(t => t.type === 'PAYMENT_RECEIVED')
       .reduce((sum, t) => sum + t.amount, 0);
     
@@ -130,8 +145,11 @@ exports.getCurrentSession = async (req, res) => {
       }
     });
     
+    // Only count INSURANCE and CHARITY payments from billing
+    // CASH and BANK payments are already tracked via CashTransaction records above
     const totalFromBillings = todayBillings
       .flatMap(b => b.payments)
+      .filter(p => p.type === 'INSURANCE' || p.type === 'CHARITY')
       .reduce((sum, p) => sum + p.amount, 0);
     
     // Also get total from today's Account Deposits (advance payments, credit clearances)
