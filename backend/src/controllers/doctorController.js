@@ -139,7 +139,7 @@ exports.getQueue = async (req, res) => {
             services: {
               some: {
                 service: {
-                  code: 'CONS001' // Consultation service code
+                  category: 'CONSULTATION'
                 }
               }
             }
@@ -713,16 +713,15 @@ exports.getUnifiedQueue = async (req, res) => {
           },
           {
             OR: [
-              { isEmergency: true }, // Emergency patients bypass payment check
-              { 
-                // Regular patients must have paid consultation fee
+              { isEmergency: true },
+              {
                 bills: {
                   some: {
                     status: 'PAID',
                     services: {
                       some: {
                         service: {
-                          code: 'CONS001' // Consultation service code
+                          category: 'CONSULTATION'
                         }
                       }
                     }
