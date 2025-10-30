@@ -22,6 +22,7 @@ import RadiologyDashboard from './pages/radiology/RadiologyDashboard';
 import LabDashboard from './pages/lab/LabDashboard';
 import LabOrders from './pages/lab/LabOrders';
 import WalkInOrders from './pages/lab/WalkInOrders';
+import RadiologyWalkInOrders from './pages/radiology/WalkInOrders';
 import PharmacyDashboard from './pages/pharmacy/PharmacyDashboard';
 import AppointmentsPage from './pages/appointments/AppointmentsPage';
 import DoctorAppointments from './pages/doctor/DoctorAppointments';
@@ -341,6 +342,17 @@ const AppRoutes = () => {
           } 
         />
         
+        
+        <Route 
+          path="/radiology/walk-in" 
+          element={
+            <ProtectedRoute allowedRoles={['RADIOLOGIST']}>
+              <Layout title="Walk-In Radiology Orders" subtitle="Create radiology orders for non-registered patients">
+                <RadiologyWalkInOrders />
+              </Layout>
+            </ProtectedRoute>
+          } 
+        />
         
         <Route 
           path="/radiology/*" 
