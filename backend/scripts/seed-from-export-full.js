@@ -34,7 +34,7 @@ async function main() {
   }
 
   const data = JSON.parse(fs.readFileSync(inputPath, 'utf8'));
-  const { catalogs = {}, users = [], patients = [], visits = [], vitals = [], assignments = [], appointments = [], billing = {}, orders = {}, medications = {} } = data;
+  const { catalogs = {}, users = [], patients = [], visits = [], vitals = [], assignments = [], appointments = [], billing = {}, orders = {}, medications = {}, insurances = [], insuranceTransactions = [] } = data;
 
   // Catalogs
   await createMany('service', catalogs.services || []);
@@ -43,6 +43,9 @@ async function main() {
   await createMany('department', catalogs.departments || []);
   await createMany('medicationCatalog', catalogs.medicationCatalog || []);
   await createMany('inventory', catalogs.inventoryItems || []);
+
+  // Insurances (before payments referencing them)
+  await createMany('insurance', insurances || []);
 
   // Users and patients
   await createMany('user', users);
@@ -57,7 +60,11 @@ async function main() {
   // Billing
   await createMany('billing', billing.billings || []);
   await createMany('billingService', billing.billingServices || []);
-  await createMany('billPayment', billing.billPayments || []);
+  const insuranceIdSet = new Set((insurances || []).map(i => i.id));
+  await createMany('billPayment', billing.billPayments || [], (row) => ({
+    ...row,
+    insuranceId: row.insuranceId && insuranceIdSet.has(row.insuranceId) ? row.insuranceId : null
+  }));
 
   // Orders
   await createMany('batchOrder', orders.batchOrders || []);
@@ -73,6 +80,9 @@ async function main() {
   await createMany('pharmacyInvoice', medications.pharmacyInvoices || []);
   await createMany('pharmacyInvoiceItem', medications.pharmacyInvoiceItems || []);
   await createMany('dispensedMedicine', medications.dispensed || []);
+
+  // Insurance transactions (after billing/patients/visits/services exist)
+  await createMany('insuranceTransaction', insuranceTransactions || []);
 
   console.log('✅ Full seed completed successfully.');
 }

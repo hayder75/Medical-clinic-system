@@ -20,6 +20,7 @@ async function main() {
   const labTestTemplates = await prisma.labTestTemplate.findMany();
   const users = await prisma.user.findMany();
   const departments = await prisma.department.findMany().catch(() => []);
+  const insurances = await prisma.insurance.findMany().catch(() => []);
 
   // Core entities
   const patients = await prisma.patient.findMany();
@@ -49,6 +50,7 @@ async function main() {
   const dispensed = await prisma.dispensedMedicine.findMany();
   const inventoryItems = await prisma.inventory.findMany();
   const medicationCatalog = await prisma.medicationCatalog.findMany();
+  const insuranceTransactions = await prisma.insuranceTransaction.findMany().catch(() => []);
 
   const payload = {
     meta: {
@@ -63,6 +65,7 @@ async function main() {
       medicationCatalog,
       inventoryItems
     },
+    insurances,
     users,
     patients,
     visits,
@@ -79,7 +82,8 @@ async function main() {
       batchOrderServices,
       detailedLabResults
     },
-    medications: { medicationOrders, pharmacyInvoices, pharmacyInvoiceItems, dispensed }
+    medications: { medicationOrders, pharmacyInvoices, pharmacyInvoiceItems, dispensed },
+    insuranceTransactions
   };
 
   fs.writeFileSync(outFile, JSON.stringify(payload, null, 2));
