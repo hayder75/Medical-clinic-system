@@ -84,7 +84,29 @@ async function main() {
   // Insurance transactions (after billing/patients/visits/services exist)
   await createMany('insuranceTransaction', insuranceTransactions || []);
 
-  console.log('✅ Full seed completed successfully.');
+  // Reset PostgreSQL sequences to prevent ID conflicts for new records
+  const sequences = [
+    { table: 'LabOrder', column: 'id' },
+    { table: 'RadiologyOrder', column: 'id' },
+    { table: 'Visit', column: 'id' },
+    { table: 'BatchOrder', column: 'id' },
+    { table: 'MedicationOrder', column: 'id' },
+    { table: 'Assignment', column: 'id' },
+    { table: 'Appointment', column: 'id' },
+    { table: 'VitalSign', column: 'id' }
+  ];
+
+  for (const { table, column } of sequences) {
+    try {
+      await prisma.$executeRawUnsafe(
+        `SELECT setval(pg_get_serial_sequence('"${table}"', '${column}'), COALESCE((SELECT MAX("${column}") FROM "${table}"), 1), true);`
+      );
+    } catch (err) {
+      console.warn(`⚠️  Could not reset sequence for ${table}.${column}:`, err.message);
+    }
+  }
+
+  console.log('✅ Full seed completed successfully. Sequences reset.');
 }
 
 main().catch((e) => { console.error(e); process.exit(1); })
