@@ -1162,6 +1162,58 @@ exports.processPayment = async (req, res) => {
       }
     }
 
+    // Add to daily cash management for CASH and BANK payments
+    // Only count the cash portion (not account balance used)
+    // Note: INSURANCE and CHARITY payments don't count as cash received here
+    if ((type === 'CASH' || type === 'BANK') && amountFromCash > 0) {
+      try {
+        // Find active cash session for today
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+
+        let activeSession = await prisma.dailyCashSession.findFirst({
+          where: {
+            createdById: req.user.id,
+            sessionDate: {
+              gte: today,
+              lt: tomorrow
+            },
+            status: 'ACTIVE'
+          }
+        });
+
+        // If no active session, create one
+        if (!activeSession) {
+          activeSession = await prisma.dailyCashSession.create({
+            data: {
+              createdById: req.user.id,
+              startingCash: 0,
+              sessionDate: new Date()
+            }
+          });
+        }
+
+        // Create cash transaction
+        await prisma.cashTransaction.create({
+          data: {
+            sessionId: activeSession.id,
+            type: 'PAYMENT_RECEIVED',
+            amount: amountFromCash,
+            description: `Payment from ${billing.patient.name} (${billing.patient.id}) - ${billing.services.map(s => s.service.name).join(', ')}`,
+            paymentMethod: type === 'BANK' ? 'BANK' : 'CASH',
+            patientId: billing.patientId,
+            billingId: billing.id,
+            processedById: req.user.id
+          }
+        });
+      } catch (cashError) {
+        // Log error but don't fail the payment
+        console.error('Error adding payment to cash session:', cashError);
+      }
+    }
+
     // Generate PDF receipt
     const docDefinition = {
       content: [
