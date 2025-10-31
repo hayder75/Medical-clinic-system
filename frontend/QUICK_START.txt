@@ -1,0 +1,33 @@
+===========================================
+  MEDICAL CLINIC SYSTEM - QUICK START
+===========================================
+
+REQUIRED SOFTWARE:
+- Node.js (Download from https://nodejs.org/)
+  Choose LTS version, install it, restart computer
+
+===========================================
+  STEP-BY-STEP COMMANDS
+===========================================
+
+1. Open Command Prompt in the frontend folder
+   (Right-click in folder, "Open in Terminal" or type "cmd" in address bar)
+
+2. Install dependencies (first time only):
+   npm install
+
+3. Start the application:
+   npm run dev
+
+4. Open browser and go to:
+   http://localhost:3001
+
+===========================================
+  THAT'S IT!
+===========================================
+
+The frontend will connect to the server automatically.
+No backend setup needed - everything is on the VPS server.
+
+For detailed instructions, see: WINDOWS_SETUP.md
+
