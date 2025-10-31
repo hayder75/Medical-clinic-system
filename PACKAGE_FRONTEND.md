@@ -34,17 +34,22 @@
    - Exclude: `node_modules`, `.git`, `dist`
    - Click OK
 
-4. **Verify the zip includes:**
+4. **Verify the zip includes (FRONTEND ONLY):**
    - ✅ All .jsx files (src folder)
    - ✅ All .js files (src folder)
    - ✅ package.json
-   - ✅ .env file (MUST BE INCLUDED)
+   - ✅ .env file (MUST BE INCLUDED - points to VPS)
    - ✅ vite.config.js
    - ✅ WINDOWS_SETUP.md
    - ✅ QUICK_START.txt
-   - ❌ node_modules (exclude this - it's ~200MB+)
-   - ❌ dist (exclude this)
-   - ❌ .git (exclude this)
+   - ❌ node_modules (exclude - will be installed by employer)
+   - ❌ dist (exclude - build folder)
+   - ❌ .git (exclude - git files)
+   - ❌ backend folder (NOT INCLUDED - stays secure on VPS)
+   - ❌ Database files (NOT INCLUDED - backend only)
+   - ❌ Server code (NOT INCLUDED - backend only)
+
+**IMPORTANT**: The zip contains ONLY frontend code. Backend code, database, and server files remain on your VPS and cannot be copied.
 
 ## What to Send Your Employer
 
