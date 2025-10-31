@@ -33,9 +33,10 @@ exports.createBatchOrder = async (req, res) => {
     }
 
     // Allow emergency patients or visits in correct status
-    const allowedStatuses = ['WAITING_FOR_DOCTOR', 'IN_DOCTOR_QUEUE', 'UNDER_DOCTOR_REVIEW', 'SENT_TO_LAB', 'SENT_TO_RADIOLOGY', 'SENT_TO_BOTH', 'NURSE_SERVICES_COMPLETED'];
+    // AWAITING_RESULTS_REVIEW is allowed so doctor can order additional tests after reviewing initial results
+    const allowedStatuses = ['WAITING_FOR_DOCTOR', 'IN_DOCTOR_QUEUE', 'UNDER_DOCTOR_REVIEW', 'SENT_TO_LAB', 'SENT_TO_RADIOLOGY', 'SENT_TO_BOTH', 'NURSE_SERVICES_COMPLETED', 'AWAITING_RESULTS_REVIEW'];
     if (!visit.isEmergency && !allowedStatuses.includes(visit.status)) {
-      return res.status(400).json({ error: 'Visit must be waiting for doctor, in doctor queue, under doctor review, or sent to lab/radiology to create orders' });
+      return res.status(400).json({ error: 'Visit must be waiting for doctor, in doctor queue, under doctor review, awaiting results review, or sent to lab/radiology to create orders' });
     }
 
     // For emergency patients, use the assigned doctor's ID instead of requesting user's ID
@@ -417,7 +418,6 @@ exports.createBatchOrder = async (req, res) => {
       newStatus = 'UNDER_DOCTOR_REVIEW';
     } else {
       // For regular patients, use existing logic
-      // Only update status if we're not already in a mixed state
       if (visit.status === 'UNDER_DOCTOR_REVIEW' || visit.status === 'WAITING_FOR_DOCTOR') {
         if (type === 'LAB') {
           newStatus = 'SENT_TO_LAB';
@@ -434,8 +434,46 @@ exports.createBatchOrder = async (req, res) => {
       } else if (visit.status === 'SENT_TO_RADIOLOGY' && type === 'LAB') {
         // If already sent to radiology and now ordering lab, change to mixed
         newStatus = 'SENT_TO_BOTH';
+      } else if (visit.status === 'AWAITING_RESULTS_REVIEW') {
+        // Doctor is reviewing results and ordering additional tests
+        // Check if there are existing pending lab or radiology orders
+        const existingLabOrders = await prisma.batchOrder.findFirst({
+          where: {
+            visitId: visitId,
+            type: { in: ['LAB', 'MIXED'] },
+            status: { in: ['UNPAID', 'PAID', 'QUEUED', 'IN_PROGRESS'] }
+          }
+        });
+        
+        const existingRadiologyOrders = await prisma.batchOrder.findFirst({
+          where: {
+            visitId: visitId,
+            type: { in: ['RADIOLOGY', 'MIXED'] },
+            status: { in: ['UNPAID', 'PAID', 'QUEUED', 'IN_PROGRESS'] }
+          }
+        });
+        
+        if (type === 'LAB') {
+          // Ordering lab - check if radiology is pending
+          if (existingRadiologyOrders) {
+            newStatus = 'SENT_TO_BOTH';
+          } else {
+            newStatus = 'SENT_TO_LAB';
+          }
+        } else if (type === 'RADIOLOGY') {
+          // Ordering radiology - check if lab is pending
+          if (existingLabOrders) {
+            newStatus = 'SENT_TO_BOTH';
+          } else {
+            newStatus = 'SENT_TO_RADIOLOGY';
+          }
+        } else if (type === 'MIXED') {
+          newStatus = 'SENT_TO_BOTH';
+        } else if (type === 'NURSE') {
+          newStatus = 'NURSE_SERVICES_ORDERED';
+        }
       }
-      // For other cases, keep the current status
+      // For other cases (like IN_DOCTOR_QUEUE, NURSE_SERVICES_COMPLETED), keep the current status
     }
 
     await prisma.visit.update({

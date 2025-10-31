@@ -427,11 +427,20 @@ exports.sendToDoctor = async (req, res) => {
       data: { status: 'COMPLETED' }
     });
 
-    // Update visit status to AWAITING_RESULTS_REVIEW
-    await prisma.visit.update({
-      where: { id: batchOrder.visitId },
-      data: { status: 'AWAITING_RESULTS_REVIEW' }
-    });
+    // Check if all investigations (lab + radiology) are completed before setting AWAITING_RESULTS_REVIEW
+    // This allows multiple rounds of tests - only set AWAITING_RESULTS_REVIEW when ALL are done
+    const { checkVisitInvestigationCompletion } = require('../utils/investigationUtils');
+    try {
+      await checkVisitInvestigationCompletion(batchOrder.visitId);
+    } catch (completionError) {
+      console.error('Error checking investigation completion:', completionError);
+      // If check fails, still update status to AWAITING_RESULTS_REVIEW as fallback
+      // (in case this is the only order)
+      await prisma.visit.update({
+        where: { id: batchOrder.visitId },
+        data: { status: 'AWAITING_RESULTS_REVIEW' }
+      });
+    }
 
     // Create audit log
     await prisma.auditLog.create({
