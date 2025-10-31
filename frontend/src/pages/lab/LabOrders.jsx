@@ -155,10 +155,12 @@ const LabOrders = () => {
     } else {
       // Not completed - prepare empty forms
       services.forEach(service => {
-        if (service.service) {
+        // Handle both service.service (old) and service.investigationType (new)
+        const serviceData = service.service || service.investigationType;
+        if (serviceData) {
           // Find matching template
           const matchingTemplate = templates.find(template => {
-            const serviceName = service.service.name.toLowerCase();
+            const serviceName = serviceData.name.toLowerCase();
             const templateName = template.name.toLowerCase();
             
             if (serviceName === templateName) return true;
@@ -175,22 +177,24 @@ const LabOrders = () => {
           });
 
           if (matchingTemplate) {
-            // For walk-in orders, use the actual order ID from the service object
-            const orderId = service.id || order.id;
+            // For batch orders: use service.id as key, but labOrderId should be order.id (batchOrder.id)
+            // For walk-in orders: use service.id for both key and labOrderId
+            const serviceKey = service.id || order.id;
+            const labOrderId = order.isWalkIn ? (service.id || order.id) : order.id;
             
-            initialResults[orderId] = {
+            initialResults[serviceKey] = {
               serviceId: service.id,
-              labOrderId: orderId,
+              labOrderId: labOrderId,
               templateId: matchingTemplate.id,
               template: matchingTemplate,
-              serviceName: service.service.name,
+              serviceName: serviceData.name,
               results: {},
               additionalNotes: '',
               completed: false,
               resultId: null
             };
           } else {
-            console.log('No template found for service:', service.service.name);
+            console.log('No template found for service:', serviceData.name);
           }
         }
       });
