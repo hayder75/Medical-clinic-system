@@ -2273,8 +2273,14 @@ exports.createMedicationOrder = async (req, res) => {
     }
 
     // Allow orders to be created if visit is waiting for doctor, under doctor review, sent to lab, or awaiting results review
-    if (!['WAITING_FOR_DOCTOR', 'UNDER_DOCTOR_REVIEW', 'SENT_TO_LAB', 'SENT_TO_RADIOLOGY', 'SENT_TO_BOTH', 'AWAITING_RESULTS_REVIEW'].includes(visit.status)) {
-      return res.status(400).json({ error: 'Visit must be waiting for doctor, under doctor review, sent to lab/radiology, or awaiting results review to create orders' });
+    // Also allow IN_DOCTOR_QUEUE and NURSE_SERVICES_COMPLETED for workflow continuity
+    const allowedStatuses = ['WAITING_FOR_DOCTOR', 'IN_DOCTOR_QUEUE', 'UNDER_DOCTOR_REVIEW', 'SENT_TO_LAB', 'SENT_TO_RADIOLOGY', 'SENT_TO_BOTH', 'AWAITING_RESULTS_REVIEW', 'NURSE_SERVICES_COMPLETED'];
+    if (!allowedStatuses.includes(visit.status)) {
+      return res.status(400).json({ 
+        error: 'Visit must be waiting for doctor, in doctor queue, under doctor review, sent to lab/radiology, awaiting results review, or nurse services completed to create medication orders',
+        currentStatus: visit.status,
+        allowedStatuses: allowedStatuses
+      });
     }
 
     // Check if medication ordering is allowed based on investigation completion
