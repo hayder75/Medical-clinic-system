@@ -10,8 +10,12 @@
 2. **Set Environment Variable**
    - In Vercel project settings → Environment Variables
    - Add: `VITE_API_URL`
-   - Value: `https://api.yourdomain.com/api` (replace with your actual API domain)
+   - Value: `http://15.204.227.47:3001/api` (VPS backend URL)
    - Apply to: Production, Preview, Development
+   
+   **Note**: Vercel serves HTTPS but backend is HTTP. For production, you'll need:
+   - Either: Set up HTTPS on VPS (SSL certificate)
+   - Or: Temporarily allow mixed content for testing (not recommended for production)
 
 3. **Build Settings**
    - Framework Preset: Vite
@@ -28,8 +32,10 @@
 **Important**: The API URL must include `/api` at the end because all backend routes are prefixed with `/api/`.
 
 ```
-VITE_API_URL=https://api.yourdomain.com/api
+VITE_API_URL=http://15.204.227.47:3001/api
 ```
+
+**Current VPS Backend URL**: `http://15.204.227.47:3001/api`
 
 ## Custom Domain (Optional)
 
