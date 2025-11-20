@@ -1,0 +1,92 @@
+═══════════════════════════════════════════════════════
+  VENDOR LICENSE WORKFLOW GUIDE
+═══════════════════════════════════════════════════════
+
+STEP 1: Generate Trial License (Before Sending Package)
+─────────────────────────────────────────────────────────
+cd backend
+npm run license:trial
+
+Enter:
+- Customer Name: [Client Name]
+- Hardware ID: (leave empty for any PC, or get from client)
+
+This creates: backend/license.enc (30-day trial)
+
+OPTION A: Include in Package
+- Copy license.enc to clean-source/backend/license.enc
+- Re-zip package
+- Send package with license included
+
+OPTION B: Send Separately
+- Send package without license
+- Send license.enc file via email/WhatsApp
+- Client places in backend/license.enc
+
+─────────────────────────────────────────────────────────
+
+STEP 2: Client Installation
+─────────────────────────────────────────────────────────
+Client receives package and license.enc
+Client installs system
+Client places license.enc in backend/license.enc
+Client starts system
+System works for 30 days
+
+─────────────────────────────────────────────────────────
+
+STEP 3: After 30 Days (Trial Ends)
+─────────────────────────────────────────────────────────
+
+IF CLIENT PAID:
+───────────────
+1. Generate lifetime license:
+   cd backend
+   npm run license:lifetime
+   → Customer Name: [Same Client Name]
+   → Creates: license.enc (never expires)
+
+2. Send NEW license.enc to client
+   → Via email/WhatsApp
+   → Tell client to replace old file
+
+3. Client replaces license.enc
+   → Stops server
+   → Replaces backend/license.enc
+   → Restarts server
+
+4. System works forever (lifetime access)
+
+IF CLIENT DID NOT PAY:
+──────────────────────
+- Do NOT send new license
+- System remains stopped
+- Client cannot use system
+- They must pay to get lifetime license
+
+─────────────────────────────────────────────────────────
+
+LICENSE VALIDATION:
+───────────────────
+- System validates license on startup
+- System validates license on every API request
+- If expired: Server won't start OR returns 403 Forbidden
+- Client sees: "License expired" error
+
+─────────────────────────────────────────────────────────
+
+COMMANDS REFERENCE:
+───────────────────
+Generate Trial (30 days):
+  npm run license:trial
+
+Generate Lifetime:
+  npm run license:lifetime
+
+Check License:
+  npm run license:check
+
+Generate Custom:
+  npm run license:generate
+
+═══════════════════════════════════════════════════════

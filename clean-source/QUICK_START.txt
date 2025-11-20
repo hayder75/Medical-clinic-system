@@ -1,0 +1,47 @@
+═══════════════════════════════════════════════════════
+  Medical Clinic System - Quick Start Guide
+═══════════════════════════════════════════════════════
+
+STEP 1: Install Prerequisites
+──────────────────────────────
+Run these scripts (as Administrator):
+
+1. install-nodejs.bat
+   → Installs Node.js automatically
+
+2. install-postgresql.bat
+   → Opens download page and instructions
+   → Install PostgreSQL manually
+   → Create database: clinicdb
+
+STEP 2: Install System
+──────────────────────
+Run: install-everything.bat (as Administrator)
+   → Installs all dependencies
+   → Sets up database
+   → Creates admin user
+
+STEP 3: Configure
+─────────────────
+1. Edit: backend/.env
+   Set: DATABASE_URL="postgresql://postgres:YOUR_PASSWORD@localhost:5432/clinicdb"
+
+2. Add: backend/license.enc
+   Get license file from vendor
+
+STEP 4: Setup Network (Optional)
+─────────────────────────────────
+Run: setup-network.bat (as Administrator)
+   → Configures firewall
+
+Run: setup-auto-start.bat (as Administrator)
+   → Enables auto-start on boot
+
+STEP 5: Start System
+────────────────────
+Run: start-server.bat
+
+Access: http://localhost:5173
+Login: admin / admin123
+
+═══════════════════════════════════════════════════════

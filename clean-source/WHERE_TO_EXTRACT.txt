@@ -1,0 +1,51 @@
+═══════════════════════════════════════════════════════
+  WHERE TO EXTRACT THE ZIP FILE
+═══════════════════════════════════════════════════════
+
+EXTRACTION LOCATION:
+────────────────────
+Extract to: D:\MedicalClinic-Source-Code\
+
+After extraction, you should see:
+D:\MedicalClinic-Source-Code\
+├── backend\
+├── frontend\
+├── install-everything.bat
+├── start-server.bat
+└── ... (other files)
+
+IF YOU SEE "clean-source" FOLDER:
+─────────────────────────────────
+If after extraction you see:
+D:\MedicalClinic-Source-Code\clean-source\
+
+Then you need to:
+1. Go into: clean-source folder
+2. Select ALL files (Ctrl + A)
+3. Cut them (Ctrl + X)
+4. Go back to: D:\MedicalClinic-Source-Code\
+5. Paste them (Ctrl + V)
+6. Delete empty "clean-source" folder
+
+CORRECT STRUCTURE:
+──────────────────
+D:\MedicalClinic-Source-Code\
+├── backend\
+│   ├── package.json
+│   ├── server.js
+│   └── ...
+├── frontend\
+│   ├── package.json
+│   └── ...
+├── install-everything.bat
+├── start-server.bat
+└── ... (all other files)
+
+THEN RUN:
+─────────
+1. Go to: D:\MedicalClinic-Source-Code\
+2. Right-click: install-everything.bat
+3. Select: "Run as administrator"
+4. Follow the prompts
+
+═══════════════════════════════════════════════════════

@@ -1,0 +1,38 @@
+═══════════════════════════════════════════════════════
+  EXTRACTION INSTRUCTIONS
+═══════════════════════════════════════════════════════
+
+STEP 1: Extract Zip File
+─────────────────────────
+1. Right-click on: MedicalClinic-Source-Code.zip
+2. Click: "Extract All..."
+3. Choose location: D:\MedicalClinic-Source-Code\
+4. Click: "Extract"
+5. Wait for extraction to finish
+
+STEP 2: Verify Structure
+─────────────────────────
+After extraction, you should see:
+D:\MedicalClinic-Source-Code\
+├── backend\
+│   ├── package.json ✅
+│   ├── server.js
+│   └── ...
+├── frontend\
+│   ├── package.json ✅
+│   └── ...
+├── install-everything.bat ✅
+├── start-server.bat ✅
+└── ... (other files)
+
+STEP 3: Run Installation
+─────────────────────────
+1. Go to: D:\MedicalClinic-Source-Code\
+2. Right-click: install-everything.bat
+3. Select: "Run as administrator"
+4. Click: "Yes"
+5. Follow the prompts
+
+✅ That's it! No extra steps needed!
+
+═══════════════════════════════════════════════════════

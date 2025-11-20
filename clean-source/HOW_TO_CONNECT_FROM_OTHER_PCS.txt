@@ -1,0 +1,113 @@
+═══════════════════════════════════════════════════════
+  HOW TO CONNECT FROM OTHER PCs
+═══════════════════════════════════════════════════════
+
+STEP 1: Find Server PC IP Address (On Server PC)
+─────────────────────────────────────────────────────
+
+Method 1: Using the Script (Easiest)
+─────────────────────────────────────
+1. On the SERVER PC (where system is installed)
+2. Find file: find-server-ip.bat
+3. Double-click it
+4. You will see the IP address
+   Example: IPv4 Address: 192.168.1.100
+5. Write down this IP address!
+
+Method 2: Manual (If script doesn't work)
+───────────────────────────────────────────
+1. On the SERVER PC
+2. Press: Windows Key + R
+3. Type: cmd
+4. Press Enter
+5. Type: ipconfig
+6. Press Enter
+7. Look for "IPv4 Address"
+   Example: IPv4 Address . . . . . . . . . . . : 192.168.1.100
+8. Write down this IP address!
+
+═══════════════════════════════════════════════════════
+
+STEP 2: Configure Firewall (On Server PC)
+───────────────────────────────────────────
+
+IMPORTANT: Do this on the SERVER PC only!
+
+1. Find file: setup-network.bat
+2. Right-click → "Run as administrator"
+3. Click "Yes"
+4. Wait for it to finish
+5. This allows other PCs to connect
+
+═══════════════════════════════════════════════════════
+
+STEP 3: Connect from Other PCs
+────────────────────────────────
+
+On ANY OTHER PC (connected to same WiFi):
+
+1. Make sure you're on the SAME WiFi network as server PC
+2. Open your web browser (Chrome, Firefox, Edge, etc.)
+3. Type in the address bar:
+   http://SERVER_IP:5173
+   
+   Replace SERVER_IP with the IP address from Step 1
+   
+   Example:
+   If server IP is: 192.168.1.100
+   Type: http://192.168.1.100:5173
+   
+4. Press Enter
+5. You should see the login page!
+6. Login with:
+   Username: admin
+   Password: admin123
+
+═══════════════════════════════════════════════════════
+
+QUICK REFERENCE:
+────────────────
+
+Server PC (where system is installed):
+→ Access: http://localhost:5173
+→ Or: http://127.0.0.1:5173
+
+Other PCs (on same WiFi):
+→ Access: http://SERVER_IP:5173
+→ Example: http://192.168.1.100:5173
+
+═══════════════════════════════════════════════════════
+
+TROUBLESHOOTING:
+────────────────
+
+Problem: Can't connect from other PC
+Solution:
+- Check if both PCs are on same WiFi
+- Check if server PC is running (start-server.bat)
+- Check if firewall is configured (setup-network.bat)
+- Try ping SERVER_IP from other PC (cmd → ping 192.168.1.100)
+
+Problem: IP address changed
+Solution:
+- Run find-server-ip.bat again on server PC
+- Use new IP address on other PCs
+
+Problem: Connection timeout
+Solution:
+- Check if server is running
+- Check if port 5173 is open
+- Restart server PC
+
+═══════════════════════════════════════════════════════
+
+IMPORTANT NOTES:
+─────────────────
+✅ Server PC must be ON and running
+✅ Both PCs must be on SAME WiFi network
+✅ Firewall must be configured (setup-network.bat)
+✅ Server IP might change if router restarts
+✅ Always use port 5173 after the IP address
+
+═══════════════════════════════════════════════════════
+

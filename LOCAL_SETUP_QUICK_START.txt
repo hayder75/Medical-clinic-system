@@ -1,0 +1,114 @@
+================================================================================
+  MEDICAL CLINIC SYSTEM - LOCAL NETWORK QUICK START GUIDE
+================================================================================
+
+SETUP SUMMARY:
+--------------
+1 Server PC (hosts everything)
+3 Client PCs (access via browser)
+
+================================================================================
+SERVER PC SETUP (Do this first):
+================================================================================
+
+1. INSTALL SOFTWARE:
+   - Node.js: https://nodejs.org/ (LTS version)
+   - PostgreSQL: https://www.postgresql.org/download/windows/
+
+2. FIND YOUR IP ADDRESS:
+   - Open Command Prompt
+   - Type: ipconfig
+   - Copy the "IPv4 Address" (e.g., 192.168.1.100)
+
+3. SETUP PROJECT:
+   - Extract project to: C:\MedicalClinic
+   - Open Command Prompt in backend folder
+   - Run: npm install
+   - Run: npx prisma generate
+   - Run: npx prisma db push
+
+4. CONFIGURE:
+   - Backend: Edit backend\.env
+     DATABASE_URL=postgresql://postgres:YOUR_PASSWORD@localhost:5432/medical_clinic
+     PORT=3000
+     HOST=0.0.0.0
+   
+   - Frontend: Edit frontend\.env
+     VITE_API_URL=http://YOUR_IP:3000/api
+     (Replace YOUR_IP with IP from step 2)
+
+5. BUILD FRONTEND:
+   - cd frontend
+   - npm install
+   - npm run build
+
+6. SETUP AUTO-START:
+   - Copy start-server-startup.bat to Windows Startup folder
+   - Press Windows+R, type: shell:startup
+   - Paste the file there
+
+7. ALLOW FIREWALL:
+   - Windows Firewall → Advanced Settings
+   - Add inbound rules for ports 3000 and 3001
+
+8. TEST:
+   - Double-click start-server.bat
+   - Wait 30 seconds
+   - Open: http://localhost:3001
+   - Should see login page!
+
+================================================================================
+CLIENT PC SETUP (Very Simple):
+================================================================================
+
+1. CONNECT TO SAME WIFI as server PC
+
+2. OPEN BROWSER:
+   - Go to: http://SERVER_IP:3001
+   - (Use the IP from server PC step 2)
+
+3. DONE! Login and use the system.
+
+================================================================================
+DEFAULT LOGIN:
+================================================================================
+Username: admin
+Password: admin123
+
+(Change this immediately after first login!)
+
+================================================================================
+TROUBLESHOOTING:
+================================================================================
+
+Server won't start?
+- Check PostgreSQL is running (Services → postgresql)
+- Check Node.js is installed (node --version)
+- Check ports 3000/3001 are not in use
+
+Clients can't connect?
+- Check server PC is on
+- Check both PCs on same WiFi
+- Check Windows Firewall allows ports 3000/3001
+- Verify server IP address is correct
+
+Forgot server IP?
+- On server PC: ipconfig
+- Look for IPv4 Address
+
+================================================================================
+QUICK COMMANDS:
+================================================================================
+
+Start server manually:
+  start-server.bat
+
+Stop server:
+  stop-server.bat
+
+Find server IP:
+  find-server-ip.bat
+
+================================================================================
+
+

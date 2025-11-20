@@ -1,0 +1,93 @@
+═══════════════════════════════════════════════════════
+  HOW TO CONNECT FROM CLIENT PC
+═══════════════════════════════════════════════════════
+
+This is for OTHER PCs that want to use the system.
+The system is installed on a different PC (SERVER PC).
+
+REQUIREMENTS:
+─────────────
+✅ Client PC must be on SAME WiFi network as Server PC
+✅ Server PC must be ON and system must be running
+✅ You need the Server PC's IP address
+
+STEP 1: Get Server IP Address
+──────────────────────────────
+Ask the person who installed the system:
+"What is the server IP address?"
+
+Or ask them to:
+1. Go to Server PC
+2. Run: find-server-ip.bat
+3. Give you the IP address shown
+   Example: 192.168.1.100
+
+STEP 2: Connect to System
+──────────────────────────
+1. Open your web browser
+   (Chrome, Firefox, Edge, Safari, etc.)
+
+2. In the address bar, type:
+   http://SERVER_IP:5173
+   
+   Replace SERVER_IP with the IP address you got
+   
+   Example:
+   If IP is: 192.168.1.100
+   Type: http://192.168.1.100:5173
+
+3. Press Enter
+
+4. You should see the login page!
+
+5. Login with:
+   Username: admin
+   Password: admin123
+
+═══════════════════════════════════════════════════════
+
+EXAMPLES:
+─────────
+
+If Server IP is: 192.168.1.100
+Type in browser: http://192.168.1.100:5173
+
+If Server IP is: 192.168.0.50
+Type in browser: http://192.168.0.50:5173
+
+If Server IP is: 10.0.0.5
+Type in browser: http://10.0.0.5:5173
+
+═══════════════════════════════════════════════════════
+
+TROUBLESHOOTING:
+────────────────
+
+Can't connect?
+→ Check if you're on same WiFi as Server PC
+→ Check if Server PC is ON
+→ Check if system is running on Server PC
+→ Try typing IP again (make sure no typos)
+→ Make sure you typed: http:// before the IP
+
+Page not loading?
+→ Server PC might be off
+→ System might not be running
+→ Ask Server PC user to check
+
+Connection timeout?
+→ Check WiFi connection
+→ Check if Server IP is correct
+→ Server PC might have restarted (IP might have changed)
+
+═══════════════════════════════════════════════════════
+
+IMPORTANT:
+──────────
+✅ Always use: http:// (not https://)
+✅ Always add: :5173 after the IP
+✅ Format: http://IP_ADDRESS:5173
+✅ No installation needed on Client PC
+✅ Just need browser and WiFi connection
+
+═══════════════════════════════════════════════════════

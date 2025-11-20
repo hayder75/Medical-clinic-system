@@ -1,0 +1,51 @@
+═══════════════════════════════════════════════════════
+  SERVER PC SETUP (For Network Access)
+═══════════════════════════════════════════════════════
+
+This PC will act as the SERVER.
+Other PCs will connect to this PC to use the system.
+
+STEP 1: Find Your IP Address
+─────────────────────────────
+1. Find file: find-server-ip.bat
+2. Double-click it
+3. You will see your IP address
+   Example: 192.168.1.100
+4. Write this down - you'll need it!
+
+STEP 2: Configure Firewall
+────────────────────────────
+1. Find file: setup-network.bat
+2. Right-click → "Run as administrator"
+3. Click "Yes"
+4. This allows other PCs to connect
+
+STEP 3: Start the System
+─────────────────────────
+1. Find file: start-server.bat
+2. Double-click it
+3. Wait for servers to start
+4. System is now running!
+
+STEP 4: Access from This PC
+────────────────────────────
+Open browser: http://localhost:5173
+
+STEP 5: Share IP with Other PCs
+────────────────────────────────
+Tell other users:
+- Your IP address (from Step 1)
+- They should use: http://YOUR_IP:5173
+- Example: http://192.168.1.100:5173
+
+═══════════════════════════════════════════════════════
+
+IMPORTANT:
+──────────
+✅ This PC must stay ON
+✅ System must be running (start-server.bat)
+✅ Other PCs must be on SAME WiFi network
+✅ If IP changes, run find-server-ip.bat again
+
+═══════════════════════════════════════════════════════
+

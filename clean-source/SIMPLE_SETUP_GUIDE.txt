@@ -1,0 +1,102 @@
+═══════════════════════════════════════════════════════
+  SIMPLE SETUP GUIDE (For Non-Technical Users)
+═══════════════════════════════════════════════════════
+
+STEP 1: Extract Zip File
+─────────────────────────
+1. Right-click on MedicalClinic-Source-Code.zip
+2. Click "Extract All..."
+3. Choose a folder (like C:\MedicalClinic\)
+4. Click "Extract"
+5. Wait for extraction to finish
+
+STEP 2: Install Everything
+────────────────────────────
+1. Go to the extracted folder
+2. Find file: install-everything.bat
+3. Right-click on it
+4. Click "Run as administrator"
+5. Click "Yes" when Windows asks for permission
+6. Wait for installation (5-10 minutes)
+   - It will ask to install Node.js (say Yes)
+   - It will open PostgreSQL download page
+   - Install PostgreSQL (remember the password you set!)
+   - After PostgreSQL installation, create database: clinicdb
+7. When installation finishes, press any key to close
+
+STEP 3: Configure Database Password
+─────────────────────────────────────
+✅ AUTOMATIC! No manual configuration needed!
+✅ The installer will ask for your PostgreSQL password
+✅ Just type the password when prompted
+✅ The .env file will be created automatically
+
+STEP 4: License File (Already Included!)
+──────────────────────────────────────────
+✅ License file is already in the package!
+✅ No action needed - it's in backend/license.enc
+✅ System will work for 30 days (trial period)
+
+STEP 5: Setup Network (For Other PCs to Connect)
+──────────────────────────────────────────────────
+1. Find file: setup-network.bat
+2. Right-click → "Run as administrator"
+3. Click "Yes"
+4. Wait for it to finish
+5. This allows other PCs on your WiFi to connect
+
+STEP 5a: Find Your IP Address
+──────────────────────────────
+1. Find file: find-server-ip.bat
+2. Double-click it
+3. Write down the IP address shown
+   Example: 192.168.1.100
+4. Share this IP with other users
+5. They will use: http://YOUR_IP:5173
+   Example: http://192.168.1.100:5173
+
+STEP 6: Setup Auto-Start (Optional)
+─────────────────────────────────────
+1. Find file: setup-auto-start.bat
+2. Right-click → "Run as administrator"
+3. Click "Yes"
+4. System will start automatically when PC boots
+
+STEP 7: Start the System
+──────────────────────────
+1. Find file: start-server.bat
+2. Double-click it
+3. Wait 10-15 seconds
+4. Two windows will open (backend and frontend)
+5. Open your browser
+6. Go to: http://localhost:5173
+7. Login:
+   Username: admin
+   Password: admin123
+8. Change password immediately!
+
+═══════════════════════════════════════════════════════
+
+IMPORTANT NOTES:
+────────────────
+✅ License is already included (30-day trial)
+✅ After 30 days, contact vendor for lifetime license
+✅ PostgreSQL password: Use the password you set during installation
+✅ Database name must be: clinicdb
+
+TROUBLESHOOTING:
+────────────────
+Can't find .env file?
+→ Copy .env.example and rename to .env
+
+Database error?
+→ Check if PostgreSQL is running
+→ Check if password in .env is correct
+→ Make sure database 'clinicdb' exists
+
+System won't start?
+→ Check if Node.js is installed
+→ Check if PostgreSQL is running
+→ Check if license.enc exists in backend folder
+
+═══════════════════════════════════════════════════════

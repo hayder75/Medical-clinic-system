@@ -1,0 +1,78 @@
+═══════════════════════════════════════════════════════
+  HOW TO CONFIGURE DATABASE (Simple Instructions)
+═══════════════════════════════════════════════════════
+
+STEP 1: Find Your PostgreSQL Password
+──────────────────────────────────────
+When you installed PostgreSQL, you set a password.
+This is the password for the 'postgres' user.
+
+If you forgot it:
+- Check your notes
+- Or reinstall PostgreSQL and remember the password
+
+STEP 2: Open the .env File
+──────────────────────────
+1. Go to the backend folder
+2. Find file named: .env
+   (If you don't see it, look for: .env.example)
+   (If .env doesn't exist, copy .env.example and rename to .env)
+
+3. Right-click on .env file
+4. Select: "Open with" → "Notepad"
+   (Or any text editor)
+
+STEP 3: Edit the DATABASE_URL Line
+───────────────────────────────────
+Find this line:
+DATABASE_URL="postgresql://postgres:YOUR_PASSWORD@localhost:5432/clinicdb"
+
+Replace YOUR_PASSWORD with your actual PostgreSQL password.
+
+EXAMPLE:
+──────────────────────────────────────
+If your PostgreSQL password is: mypassword123
+
+Change this:
+DATABASE_URL="postgresql://postgres:YOUR_PASSWORD@localhost:5432/clinicdb"
+
+To this:
+DATABASE_URL="postgresql://postgres:mypassword123@localhost:5432/clinicdb"
+
+IMPORTANT:
+──────────────────────────────────────
+- Keep the quotes (" ") around the URL
+- Don't change anything else
+- Only replace YOUR_PASSWORD with your actual password
+- Make sure clinicdb is the database name
+
+STEP 4: Save the File
+─────────────────────
+1. Press: Ctrl + S (or File → Save)
+2. Close Notepad
+
+DONE! ✅
+──────────────────────────────────────
+Now you can continue with the installation.
+
+═══════════════════════════════════════════════════════
+
+TROUBLESHOOTING:
+────────────────
+Problem: Can't find .env file
+Solution: Copy .env.example and rename to .env
+
+Problem: Database connection error
+Solution: 
+- Check if PostgreSQL is running
+- Check if password is correct
+- Check if database 'clinicdb' exists
+- Create database: Open pgAdmin → Create database 'clinicdb'
+
+Problem: Don't know PostgreSQL password
+Solution:
+- Check installation notes
+- Or reinstall PostgreSQL and set a password you remember
+
+═══════════════════════════════════════════════════════
+

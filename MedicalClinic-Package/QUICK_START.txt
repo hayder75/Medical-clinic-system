@@ -1,0 +1,44 @@
+═══════════════════════════════════════════════════════
+  MEDICAL CLINIC SYSTEM - QUICK START GUIDE
+═══════════════════════════════════════════════════════
+
+INSTALLATION (5 MINUTES):
+-------------------------
+1. Run: MedicalClinic-Setup.exe
+2. Click: Next → Next → Install
+3. Place license.enc in: C:\MedicalClinic\backend\
+4. Restart computer
+5. Done!
+
+ACCESS:
+-------
+Server PC: http://localhost:3001
+Client PCs: http://SERVER_IP:3001
+
+FIND SERVER IP:
+---------------
+Run: find-server-ip.bat
+Or: ipconfig (look for IPv4 Address)
+
+DEFAULT LOGIN:
+-------------
+Username: admin
+Password: admin123
+(Change immediately after first login!)
+
+AUTO-START:
+----------
+System starts automatically on boot.
+No action needed!
+
+TROUBLESHOOTING:
+---------------
+- License error? Check license.enc file exists
+- Can't connect? Check server IP and WiFi
+- Won't start? Run start-server.bat manually
+
+SUPPORT:
+-------
+Contact vendor for license and support.
+
+═══════════════════════════════════════════════════════

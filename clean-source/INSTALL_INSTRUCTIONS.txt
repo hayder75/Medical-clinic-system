@@ -1,0 +1,76 @@
+═══════════════════════════════════════════════════════
+  Medical Clinic System - Installation Instructions
+═══════════════════════════════════════════════════════
+
+PREREQUISITES:
+--------------
+1. Windows 10/11
+2. Node.js (v18 or higher)
+   Download: https://nodejs.org/
+   
+3. PostgreSQL (v14 or higher)
+   Download: https://www.postgresql.org/download/windows/
+
+INSTALLATION STEPS:
+-------------------
+
+Step 1: Install Prerequisites
+   - Install Node.js (if not installed)
+   - Install PostgreSQL (if not installed)
+   - Remember PostgreSQL password you set during installation
+
+Step 2: Run Auto-Installation
+   - Right-click: install-everything.bat
+   - Select: "Run as administrator"
+   - Wait for installation to complete (5-10 minutes)
+
+Step 3: Configure Database
+   - Open: backend/.env
+   - Update DATABASE_URL with your PostgreSQL credentials:
+     DATABASE_URL="postgresql://postgres:YOUR_PASSWORD@localhost:5432/clinicdb"
+   - Replace YOUR_PASSWORD with your PostgreSQL password
+
+Step 4: Add License File
+   - Get license.enc file from vendor
+   - Place it in: backend/license.enc
+   - System will not start without valid license
+
+Step 5: Setup Network Access (Optional)
+   - Right-click: setup-network.bat
+   - Select: "Run as administrator"
+   - This allows other PCs to connect
+
+Step 6: Setup Auto-Start (Optional)
+   - Right-click: setup-auto-start.bat
+   - Select: "Run as administrator"
+   - System will start automatically on boot
+
+Step 7: Start Server
+   - Double-click: start-server.bat
+   - Wait 10-15 seconds
+   - Open browser: http://localhost:5173
+
+DEFAULT LOGIN:
+--------------
+Username: admin
+Password: admin123
+(Change immediately after first login!)
+
+NETWORK ACCESS:
+--------------
+Server PC: http://localhost:5173
+Other PCs: http://SERVER_IP:5173
+
+To find server IP:
+   - Run: find-server-ip.bat
+   - Or: ipconfig (look for IPv4 Address)
+
+TROUBLESHOOTING:
+---------------
+- If Node.js not found: Install Node.js from nodejs.org
+- If PostgreSQL not found: Install PostgreSQL from postgresql.org
+- If port in use: Change PORT in backend/.env
+- If database error: Check DATABASE_URL in backend/.env
+- If license error: Ensure license.enc exists in backend/
+
+═══════════════════════════════════════════════════════

@@ -1,0 +1,45 @@
+═══════════════════════════════════════════════════════
+  QUICK FIX FOR EXISTING EXTRACTION
+═══════════════════════════════════════════════════════
+
+If you already extracted the zip file, here's how to fix it:
+
+CURRENT LOCATION:
+─────────────────
+Your files are probably in:
+D:\MedicalClinic-Source-Code\clean-source\
+
+SOLUTION:
+─────────
+
+Option 1: Move Files Up (Easiest)
+──────────────────────────────────
+1. Go to: D:\MedicalClinic-Source-Code\clean-source\
+2. Select ALL files and folders (Ctrl + A)
+3. Cut them (Ctrl + X)
+4. Go up one folder to: D:\MedicalClinic-Source-Code\
+5. Paste them (Ctrl + V)
+6. Delete the empty "clean-source" folder
+7. Now files are in: D:\MedicalClinic-Source-Code\
+8. Run: install-everything.bat
+
+Option 2: Run from Current Location
+─────────────────────────────────────
+1. Go to: D:\MedicalClinic-Source-Code\clean-source\
+2. Run: install-everything.bat from here
+3. It should work from this location too
+
+═══════════════════════════════════════════════════════
+
+VERIFY LOCATION:
+─────────────────
+After moving files, you should see:
+D:\MedicalClinic-Source-Code\
+├── backend\
+├── frontend\
+├── install-everything.bat
+└── ...
+
+Then run: install-everything.bat
+
+═══════════════════════════════════════════════════════

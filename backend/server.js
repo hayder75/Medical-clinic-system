@@ -41,6 +41,7 @@ const insuranceRoutes = require('./src/routes/insurance');
 const loansRoutes = require('./src/routes/loans');
 const accountsRoutes = require('./src/routes/accounts');
 const walkInOrdersRoutes = require('./src/routes/walkInOrders');
+const licenseRoutes = require('./src/routes/license');
 
 // Middleware
 const authMiddleware = require('./src/middleware/auth');
@@ -48,40 +49,7 @@ const roleGuard = require('./src/middleware/roleGuard');
 const fileUpload = require('./src/middleware/fileUpload');
 const logger = require('./src/middleware/logger');
 
-const fs = require('fs');
-const path = require('path');
-
 const app = express();
-
-// Ensure uploads directory structure exists on startup
-const uploadsDir = process.env.UPLOADS_DIR || 'uploads';
-const uploadsPath = path.resolve(__dirname, uploadsDir);
-const uploadSubdirs = [
-  'patient-attached-images',
-  'dental-photos',
-  'receipts',
-  'patient-gallery'
-];
-
-try {
-  // Create main uploads directory
-  if (!fs.existsSync(uploadsPath)) {
-    fs.mkdirSync(uploadsPath, { recursive: true });
-    console.log(`Created uploads directory: ${uploadsPath}`);
-  }
-  
-  // Create all required subdirectories
-  uploadSubdirs.forEach(subdir => {
-    const subdirPath = path.resolve(uploadsPath, subdir);
-    if (!fs.existsSync(subdirPath)) {
-      fs.mkdirSync(subdirPath, { recursive: true });
-      console.log(`Created ${subdir} directory: ${subdirPath}`);
-    }
-  });
-} catch (error) {
-  console.error('Failed to create uploads directories:', error);
-  process.exit(1);
-}
 
 // Singleton Prisma client - connections are lazy
 const prisma = new PrismaClient({
@@ -103,6 +71,14 @@ app.use(morgan('dev'));
 app.use(express.json());
 app.use('/uploads', express.static('uploads'));
 
+// Serve static frontend files if dist folder exists (for compiled deployment)
+const fs = require('fs');
+const frontendDistPath = path.join(__dirname, '..', 'frontend', 'dist');
+if (fs.existsSync(frontendDistPath)) {
+  app.use(express.static(frontendDistPath));
+  console.log('✅ Frontend static files enabled');
+}
+
 // Middleware to populate req.ip
 app.use((req, res, next) => {
   req.ip = req.ip || req.connection.remoteAddress || req.socket.remoteAddress || 
@@ -112,6 +88,34 @@ app.use((req, res, next) => {
 });
 
 app.use(logger);  // Audit middleware
+
+// Health check endpoint (before license check)
+app.get('/api/health', async (req, res) => {
+  let dbStatus = 'unknown';
+  let dbError = null;
+
+  // Try to ping database without disconnecting
+  try {
+    await prisma.$executeRaw`SELECT 1`;
+    dbStatus = 'connected';
+  } catch (error) {
+    dbStatus = 'disconnected';
+    dbError = error.message;
+  }
+  
+  // Always return 200 OK - service is live, database may be sleeping
+  res.status(200).json({ 
+    status: dbStatus === 'connected' ? 'OK' : 'STARTING',
+    database: dbStatus,
+    error: dbError,
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
+
+// License validation middleware (check before all routes except health)
+const licenseCheck = require('./src/middleware/licenseCheck');
+app.use(licenseCheck);
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -145,6 +149,20 @@ app.use('/api/insurance', insuranceRoutes);
 app.use('/api/loans', loansRoutes);
 app.use('/api/accounts', authMiddleware, accountsRoutes);
 app.use('/api/walk-in-orders', authMiddleware, walkInOrdersRoutes);
+app.use('/api/license', licenseRoutes);
+
+// Serve frontend for all non-API routes (SPA routing)
+// This must be after all API routes
+if (fs.existsSync(frontendDistPath)) {
+  app.get('*', (req, res, next) => {
+    // Only serve frontend for non-API routes and non-upload routes
+    if (!req.path.startsWith('/api') && !req.path.startsWith('/uploads')) {
+      res.sendFile(path.join(frontendDistPath, 'index.html'));
+    } else {
+      next();
+    }
+  });
+}
 
 // Cron for inactivity (run daily)
 cron.schedule('0 0 * * *', async () => {
@@ -159,61 +177,24 @@ cron.schedule('0 0 * * *', async () => {
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 
-// Health check endpoint for Render
-app.get('/api/health', async (req, res) => {
-  let dbStatus = 'unknown';
-  let dbError = null;
-  
-  // Try to ping database without disconnecting
-  try {
-    await prisma.$executeRaw`SELECT 1`;
-    dbStatus = 'connected';
-  } catch (error) {
-    dbStatus = 'disconnected';
-    dbError = error.message;
-  }
-  
-  // Always return 200 OK - service is live, database may be sleeping
-  res.status(200).json({ 
-    status: dbStatus === 'connected' ? 'OK' : 'STARTING',
-    database: dbStatus,
-    error: dbError,
-    timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development'
-  });
-});
+// Validate license before starting server
+const { validateLicense } = require('./src/utils/license');
+const licenseValidation = validateLicense();
 
-// Auto-seed admin user if it doesn't exist (only on startup)
-(async () => {
-  try {
-    const adminExists = await prisma.user.findUnique({
-      where: { username: 'admin' }
-    });
-    
-    if (!adminExists) {
-      console.log('🔧 Admin user not found, creating default admin...');
-      const bcrypt = require('bcryptjs');
-      await prisma.user.create({
-        data: {
-          username: 'admin',
-          fullname: 'System Administrator',
-          email: 'admin@clinic.com',
-          role: 'ADMIN',
-          password: await bcrypt.hash('admin123', 10),
-          availability: true,
-          isActive: true,
-          specialties: []
-        }
-      });
-      console.log('✅ Default admin user created:');
-      console.log('   Username: admin');
-      console.log('   Password: admin123');
-    }
-  } catch (error) {
-    console.error('⚠️  Warning: Could not check/create admin user:', error.message);
-    // Don't exit - server should still start even if seeding fails
-  }
-})();
+if (!licenseValidation.valid) {
+  console.error('\n❌ LICENSE ERROR:');
+  console.error(`   ${licenseValidation.message}`);
+  console.error(`   Error Code: ${licenseValidation.error}`);
+  console.error('\n⚠️  Server cannot start without a valid license!');
+  console.error('   Please contact the vendor to obtain a license file.');
+  console.error('   Place license.enc file in the backend folder and restart.\n');
+  process.exit(1);
+}
+
+console.log('\n✅ License validated successfully');
+console.log(`   Customer: ${licenseValidation.license.customerName}`);
+console.log(`   Expires: ${new Date(licenseValidation.license.expiryDate).toLocaleDateString()}`);
+console.log(`   Days Remaining: ${licenseValidation.daysRemaining}\n`);
 
 app.listen(PORT, HOST, () => {
   console.log(`🚀 Server running on http://${HOST}:${PORT}`);
