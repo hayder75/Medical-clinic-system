@@ -3626,7 +3626,18 @@ exports.deletePatient = async (req, res) => {
       if (visitIds.length > 0) {
         await tx.vitalSign.deleteMany({ where: { visitId: { in: visitIds } } });
         await tx.labOrder.deleteMany({ where: { visitId: { in: visitIds } } });
+        
+        // Get labTestOrder IDs before deleting them, so we can delete results
+        const visitLabTestOrders = await tx.labTestOrder.findMany({
+          where: { visitId: { in: visitIds } },
+          select: { id: true }
+        });
+        const visitLabTestOrderIds = visitLabTestOrders.map(o => o.id);
+        if (visitLabTestOrderIds.length > 0) {
+          await tx.labTestResult.deleteMany({ where: { orderId: { in: visitLabTestOrderIds } } });
+        }
         await tx.labTestOrder.deleteMany({ where: { visitId: { in: visitIds } } });
+        
         await tx.radiologyOrder.deleteMany({ where: { visitId: { in: visitIds } } });
         await tx.medicationOrder.deleteMany({ where: { visitId: { in: visitIds } } });
         await tx.dentalRecord.deleteMany({ where: { visitId: { in: visitIds } } });
@@ -3692,6 +3703,16 @@ exports.deletePatient = async (req, res) => {
       }
 
       // Delete patient-level orders (not linked to visits)
+      // First get all patient-level labTestOrder IDs to delete their results
+      const patientLabTestOrders = await tx.labTestOrder.findMany({
+        where: { patientId },
+        select: { id: true }
+      });
+      const patientLabTestOrderIds = patientLabTestOrders.map(o => o.id);
+      if (patientLabTestOrderIds.length > 0) {
+        await tx.labTestResult.deleteMany({ where: { orderId: { in: patientLabTestOrderIds } } });
+      }
+      
       await tx.labOrder.deleteMany({ where: { patientId } });
       await tx.labTestOrder.deleteMany({ where: { patientId } });
       await tx.radiologyOrder.deleteMany({ where: { patientId } });
