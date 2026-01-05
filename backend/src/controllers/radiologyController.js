@@ -230,14 +230,13 @@ exports.fillReport = async (req, res) => {
       // Handle file attachments for this specific test
       if (attachments && attachments.length > 0) {
         for (const attachment of attachments) {
-          // For now, we'll store the attachment info and create a placeholder file record
-          // In a real implementation, you'd want to handle the actual file upload
+          // Create RadiologyResultFile record with the file path from the uploaded file
           await prisma.radiologyResultFile.create({
             data: {
               resultId: radiologyResult.id,
-              fileUrl: attachment.path || 'placeholder', // This should be the actual file path
-              fileName: attachment.originalName || 'uploaded_file',
-              fileType: attachment.type || 'image/png',
+              fileUrl: attachment.path || attachment.fileUrl || attachment, // Support both path and fileUrl formats
+              fileName: attachment.originalName || attachment.fileName || 'uploaded_file',
+              fileType: attachment.type || attachment.fileType || 'image/png',
               uploadedBy: radiologistId
             }
           });
@@ -850,10 +849,23 @@ exports.getBatchRadiologyResults = async (req, res) => {
       },
       include: {
         testType: true,
-        attachments: true,
+        attachments: {
+          orderBy: { uploadedAt: 'asc' }
+        },
         batchOrder: true
       },
       orderBy: { createdAt: 'asc' }
+    });
+
+    // Debug logging
+    console.log(`📋 [getBatchRadiologyResults] Found ${radiologyResults.length} radiology results for batch order ${batchOrderId}`);
+    radiologyResults.forEach((result, idx) => {
+      console.log(`  Result ${idx + 1}: ${result.testType?.name}, attachments: ${result.attachments?.length || 0}`);
+      if (result.attachments && result.attachments.length > 0) {
+        result.attachments.forEach((att, attIdx) => {
+          console.log(`    Attachment ${attIdx + 1}: ${att.fileName} (${att.fileUrl})`);
+        });
+      }
     });
 
     res.json({ radiologyResults });

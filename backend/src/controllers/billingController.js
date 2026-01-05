@@ -2310,3 +2310,105 @@ exports.deleteVisit = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+// Delete a billing (for billing officers to correct mistakes)
+exports.deleteBilling = async (req, res) => {
+  try {
+    const { billingId } = req.params;
+    const billingOfficerId = req.user.id;
+
+    if (!billingId) {
+      return res.status(400).json({ error: 'Billing ID is required' });
+    }
+
+    // Find the billing with all related data
+    const billing = await prisma.billing.findUnique({
+      where: { id: parseInt(billingId) },
+      include: {
+        patient: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
+        visit: {
+          select: {
+            id: true,
+            visitUid: true
+          }
+        },
+        services: true,
+        payments: true
+      }
+    });
+
+    if (!billing) {
+      return res.status(404).json({ error: 'Billing not found' });
+    }
+
+    // Only allow deletion of PENDING billings
+    if (billing.status !== 'PENDING') {
+      return res.status(400).json({ 
+        error: 'Cannot delete billing that is not in PENDING status',
+        currentStatus: billing.status
+      });
+    }
+
+    // Use transaction to delete all related records
+    await prisma.$transaction(async (tx) => {
+      // Delete payments
+      if (billing.payments.length > 0) {
+        await tx.billPayment.deleteMany({
+          where: { billingId: parseInt(billingId) }
+        });
+      }
+
+      // Delete billing services
+      if (billing.services.length > 0) {
+        await tx.billingService.deleteMany({
+          where: { billingId: parseInt(billingId) }
+        });
+      }
+
+      // Delete the billing
+      await tx.billing.delete({
+        where: { id: parseInt(billingId) }
+      });
+    });
+
+    // Create audit log
+    await prisma.auditLog.create({
+      data: {
+        userId: billingOfficerId,
+        action: 'DELETE_BILLING',
+        entity: 'Billing',
+        entityId: parseInt(billingId),
+        details: JSON.stringify({
+          billingId: billing.id,
+          patientId: billing.patientId,
+          patientName: billing.patient.name,
+          totalAmount: billing.totalAmount,
+          status: billing.status,
+          deletedAt: new Date().toISOString(),
+          reason: 'Billing officer deletion - correction needed'
+        }),
+        ip: req.ip,
+        userAgent: req.get('User-Agent')
+      }
+    });
+
+    res.json({
+      message: 'Billing deleted successfully',
+      deletedBilling: {
+        id: billing.id,
+        patientId: billing.patientId,
+        patientName: billing.patient.name,
+        totalAmount: billing.totalAmount
+      }
+    });
+
+  } catch (error) {
+    console.error('Error deleting billing:', error);
+    res.status(500).json({ error: error.message });
+  }
+};

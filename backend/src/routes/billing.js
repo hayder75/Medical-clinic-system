@@ -18,6 +18,7 @@ router.get('/check-visit-status/:patientId', roleGuard(['BILLING_OFFICER', 'RECE
 // Billing operations (Billing Officers, Admin)
 router.post('/', roleGuard(['BILLING_OFFICER', 'ADMIN']), billingController.createBilling);
 router.get('/', roleGuard(['BILLING_OFFICER', 'ADMIN']), billingController.getBillings);
+router.delete('/:billingId', roleGuard(['BILLING_OFFICER', 'ADMIN']), billingController.deleteBilling);
 router.get('/dashboard-stats', roleGuard(['BILLING_OFFICER', 'ADMIN']), billingController.getBillingDashboardStats);
 router.get('/insurances', roleGuard(['BILLING_OFFICER', 'ADMIN']), billingController.getInsurances);
 router.post('/:billingId/services', roleGuard(['BILLING_OFFICER', 'ADMIN']), billingController.addServiceToBilling);

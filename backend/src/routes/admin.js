@@ -81,4 +81,8 @@ router.get('/system-settings', systemSettingsController.getSystemSettings);
 router.get('/system-settings/:key', systemSettingsController.getSetting);
 router.put('/system-settings/:key', systemSettingsController.updateSetting);
 
+// Patient Management
+router.get('/patients', adminController.getAllPatients);
+router.delete('/patients/:patientId', adminController.deletePatient);
+
 module.exports = router;

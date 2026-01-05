@@ -11,6 +11,7 @@ import DoctorPerformance from '../../components/admin/DoctorPerformance';
 import NursePerformance from '../../components/admin/NursePerformance';
 import LoanApproval from '../../components/admin/LoanApproval';
 import PatientAccounts from '../../components/admin/PatientAccounts';
+import PatientManagement from '../../components/admin/PatientManagement';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
 import { 
@@ -262,6 +263,7 @@ const AdminDashboard = () => {
       <Route path="/nurse-performance" element={<NursePerformance />} />
       <Route path="/loan-approval" element={<LoanApproval />} />
       <Route path="/patient-accounts" element={<PatientAccounts />} />
+      <Route path="/patients" element={<PatientManagement />} />
       <Route path="/continuous-infusions" element={<ContinuousInfusionDashboard />} />
     </Routes>
   );

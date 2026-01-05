@@ -252,7 +252,12 @@ const LabOrdering = ({ visitId, patientId, onOrdersPlaced, existingOrders = [] }
       
     } catch (error) {
       console.error('Error placing lab orders:', error);
-      toast.error(error.response?.data?.error || 'Failed to place lab orders');
+      const errorMessage = error.response?.data?.error || 'Failed to place lab orders';
+      if (errorMessage.includes('inactive') || errorMessage.includes('not found')) {
+        toast.error('One or more selected lab tests are inactive or not available. Please refresh and select only active tests.');
+      } else {
+        toast.error(errorMessage);
+      }
     } finally {
       setLoading(false);
     }

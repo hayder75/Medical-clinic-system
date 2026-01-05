@@ -1072,57 +1072,57 @@ exports.generateLabResultsPDF = async (req, res) => {
       content: content,
       styles: {
         clinicName: {
-          fontSize: 18,
+          fontSize: 24,
           bold: true,
           color: '#000'
         },
         subheader: {
-          fontSize: 14,
+          fontSize: 20,
           color: '#666'
         },
         sectionTitle: {
-          fontSize: 14,
+          fontSize: 20,
           bold: true,
           color: '#000',
           decoration: 'underline'
         },
         field: {
-          fontSize: 11,
+          fontSize: 16,
           color: '#000'
         },
         testTitle: {
-          fontSize: 12,
+          fontSize: 18,
           bold: true,
           color: '#000'
         },
         resultsTable: {
-          fontSize: 10
+          fontSize: 16
         },
         tableHeader: {
-          fontSize: 10,
+          fontSize: 16,
           color: '#000',
           fillColor: '#f0f0f0'
         },
         tableCell: {
-          fontSize: 10,
+          fontSize: 16,
           color: '#000'
         },
         notes: {
-          fontSize: 10,
+          fontSize: 16,
           color: '#000',
           italics: true
         },
         signatureLabel: {
-          fontSize: 10,
+          fontSize: 16,
           color: '#666'
         },
         signatureName: {
-          fontSize: 12,
+          fontSize: 18,
           bold: true,
           color: '#000'
         },
         footer: {
-          fontSize: 9,
+          fontSize: 14,
           color: '#666'
         }
       }

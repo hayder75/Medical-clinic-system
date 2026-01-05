@@ -187,6 +187,26 @@ const BillingQueue = () => {
     setShowPaymentForm(true);
   };
 
+  const [showDeleteBillingModal, setShowDeleteBillingModal] = useState(null);
+  const [deleteBillingLoading, setDeleteBillingLoading] = useState(false);
+
+  const deleteBilling = async (billingId) => {
+    try {
+      setDeleteBillingLoading(true);
+      await api.delete(`/billing/${billingId}`);
+      
+      toast.success('Billing deleted successfully');
+      setShowDeleteBillingModal(null);
+      fetchBillings(); // Refresh the list
+      
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Failed to delete billing');
+      console.error('Delete billing error:', error);
+    } finally {
+      setDeleteBillingLoading(false);
+    }
+  };
+
   const deleteVisit = async (billing) => {
     if (!billing.visitId) {
       toast.error('No visit found for this billing');
@@ -413,6 +433,14 @@ const BillingQueue = () => {
                     Process Payment
                   </button>
                   <button
+                    onClick={() => setShowDeleteBillingModal(billing)}
+                    className="btn btn-outline btn-sm flex items-center text-red-600 hover:bg-red-50 hover:border-red-300"
+                    title="Delete this billing"
+                  >
+                    <Trash2 className="h-4 w-4 mr-1" />
+                    Delete Billing
+                  </button>
+                  <button
                     onClick={() => deleteVisit(billing)}
                     className="btn btn-outline btn-sm flex items-center text-red-600 hover:bg-red-50 hover:border-red-300"
                     title="Delete visit to allow recreation"
@@ -618,6 +646,55 @@ const BillingQueue = () => {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Billing Confirmation Modal */}
+      {showDeleteBillingModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center gap-4 mb-4">
+              <div className="flex-shrink-0">
+                <AlertTriangle className="h-10 w-10 text-red-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-medium text-gray-900">Delete Billing</h3>
+                <p className="text-sm text-gray-500 mt-1">
+                  This action cannot be undone. The billing and all associated services will be permanently deleted.
+                </p>
+              </div>
+            </div>
+            <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-4">
+              <p className="text-sm font-medium text-red-800">
+                Patient: <span className="font-bold">{showDeleteBillingModal.patient.name}</span>
+              </p>
+              <p className="text-sm text-red-700 mt-2">
+                Billing ID: {showDeleteBillingModal.id}
+              </p>
+              <p className="text-sm text-red-700 mt-1">
+                Amount: ETB {showDeleteBillingModal.totalAmount.toLocaleString()}
+              </p>
+              <p className="text-sm text-red-700 mt-1">
+                Services: {showDeleteBillingModal.services?.length || 0} service(s)
+              </p>
+            </div>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowDeleteBillingModal(null)}
+                className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+                disabled={deleteBillingLoading}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => deleteBilling(showDeleteBillingModal.id)}
+                className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                disabled={deleteBillingLoading}
+              >
+                {deleteBillingLoading ? 'Deleting...' : 'Delete Billing'}
+              </button>
             </div>
           </div>
         </div>

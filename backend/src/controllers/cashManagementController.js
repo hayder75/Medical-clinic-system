@@ -598,20 +598,20 @@ exports.exportTransactionsPDF = async (req, res) => {
       ],
       styles: {
         clinicName: {
-          fontSize: 18,
+          fontSize: 24,
           bold: true,
           color: '#000'
         },
         subheader: {
-          fontSize: 14,
+          fontSize: 20,
           color: '#666'
         },
         field: {
-          fontSize: 11,
+          fontSize: 18,
           color: '#000'
         },
         tableHeader: {
-          fontSize: 10,
+          fontSize: 18,
           color: '#000',
           fillColor: '#f0f0f0'
         }

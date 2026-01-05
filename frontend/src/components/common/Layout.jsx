@@ -30,7 +30,8 @@ import {
   DollarSign,
   UserPlus,
   UserCheck,
-  Package
+  Package,
+  Trash2
 } from 'lucide-react';
 
 const Layout = ({ children, title, subtitle }) => {
@@ -70,6 +71,7 @@ const Layout = ({ children, title, subtitle }) => {
           { name: 'Staff Management', href: '/admin/staff', icon: Users },
           { name: 'Service Catalog', href: '/admin/services', icon: Settings },
           { name: 'Insurance Management', href: '/admin/insurances', icon: CreditCard },
+          { name: 'Patient Management', href: '/admin/patients', icon: Users },
           { name: 'Continuous Infusions', href: '/admin/continuous-infusions', icon: Clock },
           { name: 'Audit Logs', href: '/admin/audit', icon: FileText },
           { name: 'Reports', href: '/admin/reports', icon: BarChart3 },

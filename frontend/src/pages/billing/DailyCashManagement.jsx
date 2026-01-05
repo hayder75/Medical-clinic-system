@@ -13,6 +13,8 @@ const DailyCashManagement = () => {
   // Patient receipts for transactions tab
   const [patientReceipts, setPatientReceipts] = useState([]);
   const [loadingPatientReceipts, setLoadingPatientReceipts] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchType, setSearchType] = useState('name'); // 'name' or 'phone'
   
   // Form states (kept for deposits and expenses tabs)
   const [depositForm, setDepositForm] = useState({
@@ -241,7 +243,7 @@ const DailyCashManagement = () => {
             }
             .receipt-page {
               padding: 5mm;
-              font-size: 11px;
+              font-size: 21px;
               min-height: 50mm;
               margin-bottom: 2mm;
               width: 50%;
@@ -255,24 +257,24 @@ const DailyCashManagement = () => {
               margin-bottom: 3px; 
             }
             .clinic-name { 
-              font-size: 16px; 
+              font-size: 22px; 
               font-weight: bold; 
               margin-bottom: 3px; 
               color: #000;
             }
             .receipt-title { 
-              font-size: 14px; 
+              font-size: 21px; 
               font-weight: bold; 
               margin: 3px 0; 
               color: #000;
             }
             .receipt-info {
-              font-size: 11px;
+              font-size: 20px;
               color: #000;
               margin-top: 3px;
             }
             .patient-name {
-              font-size: 12px;
+              font-size: 21px;
               font-weight: bold;
               margin: 5px 0;
             }
@@ -280,7 +282,7 @@ const DailyCashManagement = () => {
               margin: 5px 0;
             }
             .services-section h3 {
-              font-size: 11px;
+              font-size: 21px;
               font-weight: bold;
               margin-bottom: 3px;
               color: #000;
@@ -288,7 +290,7 @@ const DailyCashManagement = () => {
             .service-item { 
               margin-bottom: 3px; 
               padding: 0; 
-              font-size: 10px;
+              font-size: 20px;
             }
             .service-row {
               display: flex;
@@ -304,7 +306,7 @@ const DailyCashManagement = () => {
               justify-content: flex-start;
               gap: 10px;
               font-weight: bold;
-              font-size: 11px;
+              font-size: 21px;
             }
             .signature-area { 
               margin-top: 5px; 
@@ -315,7 +317,7 @@ const DailyCashManagement = () => {
               border-top: 1px solid #000; 
               padding-top: 2px; 
               text-align: left; 
-              font-size: 7px; 
+              font-size: 18px; 
               font-weight: bold;
             }
             .no-print {
@@ -812,13 +814,33 @@ const DailyCashManagement = () => {
                     <div className="flex items-center justify-center py-12">
                       <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
                     </div>
-                  ) : patientReceipts.length === 0 ? (
-                    <div className="bg-white rounded-lg shadow p-8 text-center">
-                      <p className="text-gray-500">No patient receipts found for the selected date</p>
-                    </div>
                   ) : (
-                    <div className="space-y-4">
-                      {patientReceipts.map((patientData, index) => (
+                    (() => {
+                      // Filter patient receipts based on search query
+                      const filteredReceipts = patientReceipts.filter((patientData) => {
+                        if (!searchQuery.trim()) return true;
+                        const query = searchQuery.toLowerCase().trim();
+                        if (searchType === 'name') {
+                          return patientData.patient.name.toLowerCase().includes(query);
+                        } else if (searchType === 'phone') {
+                          return patientData.patient.mobile?.toLowerCase().includes(query) || false;
+                        }
+                        return true;
+                      });
+
+                      if (filteredReceipts.length === 0) {
+                        return (
+                          <div className="bg-white rounded-lg shadow p-8 text-center">
+                            <p className="text-gray-500">
+                              {searchQuery ? 'No patient receipts found matching your search' : 'No patient receipts found for the selected date'}
+                            </p>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div className="space-y-4">
+                          {filteredReceipts.map((patientData, index) => (
                         <div key={patientData.patient.id || index} className="bg-white rounded-lg shadow overflow-hidden">
                           {/* Patient Header */}
                           <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
@@ -885,8 +907,10 @@ const DailyCashManagement = () => {
                             </table>
                           </div>
                         </div>
-                      ))}
-                    </div>
+                          ))}
+                        </div>
+                      );
+                    })()
                   )}
                 </div>
               </div>
