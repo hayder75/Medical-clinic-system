@@ -105,6 +105,11 @@ const completeVisitSchema = z.object({
 exports.getInvestigationTypes = async (req, res) => {
   try {
     const investigationTypes = await prisma.investigationType.findMany({
+      where: {
+        service: {
+          isActive: true
+        }
+      },
       include: {
         service: true
       },
