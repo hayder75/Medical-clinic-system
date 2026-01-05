@@ -209,9 +209,6 @@ const DailyCashManagement = () => {
       const response = await api.get(url);
       if (response.data.success) {
         setPatientReceipts(response.data.patients || []);
-        if (response.data.count === 0 && !searchQuery) {
-          toast.info('No patient receipts found for the selected date');
-        }
       }
     } catch (error) {
       console.error('Error fetching patient receipts:', error);
