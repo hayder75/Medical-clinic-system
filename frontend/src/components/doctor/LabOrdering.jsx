@@ -14,13 +14,8 @@ const LabOrdering = ({ visitId, patientId, onOrdersPlaced, existingOrders = [] }
 
   useEffect(() => {
     fetchLabTests();
-    // Expand all categories by default (Standalone Tests is always visible, no dropdown)
+    // Start with all categories collapsed (Standalone Tests is always visible, no dropdown)
     setExpandedCategories(new Set([
-      'Hematology', 
-      'Blood Chemistry', 
-      'Serology', 
-      'Urinalysis', 
-      'Stool Examination',
       'Standalone Tests' // Always visible, no dropdown needed
     ]));
   }, []);
@@ -316,12 +311,7 @@ const LabOrdering = ({ visitId, patientId, onOrdersPlaced, existingOrders = [] }
                 </div>
               ) : (
                 <div
-                  onClick={() => {
-                    // Controlled expansion: always expand when clicked, don't collapse if already expanded
-                    if (!expandedCategories.has(category)) {
-                      setExpandedCategories(prev => new Set([...prev, category]));
-                    }
-                  }}
+                  onClick={() => toggleCategory(category)}
                   className="w-full flex items-center justify-between py-3 px-4 bg-white hover:bg-gray-50 border border-gray-200 hover:border-gray-300 rounded-lg transition-all cursor-pointer"
                 >
                   <span className="text-base font-semibold text-gray-900">{category}</span>

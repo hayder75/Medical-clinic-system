@@ -35,6 +35,7 @@ router.post('/prescriptions/batch', doctorController.createBatchPrescription);
 router.get('/prescriptions/:visitId', doctorController.getPrescriptionHistory);
 router.post('/visits/:visitId/diagnosis-notes', doctorController.saveDiagnosisNotes);
 router.get('/visits/:visitId/diagnosis-notes', doctorController.getDiagnosisNotes);
+router.delete('/visits/:visitId', doctorController.deleteVisit);
 router.post('/complete', doctorController.completeVisit);
 router.post('/direct-complete', doctorController.directCompleteVisit);
 

@@ -2323,7 +2323,7 @@ exports.deleteBilling = async (req, res) => {
 
     // Find the billing with all related data
     const billing = await prisma.billing.findUnique({
-      where: { id: parseInt(billingId) },
+      where: { id: billingId },
       include: {
         patient: {
           select: {
@@ -2338,7 +2338,9 @@ exports.deleteBilling = async (req, res) => {
           }
         },
         services: true,
-        payments: true
+        payments: true,
+        labTestOrders: true,
+        radiologyOrders: true
       }
     });
 
@@ -2359,20 +2361,42 @@ exports.deleteBilling = async (req, res) => {
       // Delete payments
       if (billing.payments.length > 0) {
         await tx.billPayment.deleteMany({
-          where: { billingId: parseInt(billingId) }
+          where: { billingId: billingId }
         });
       }
 
       // Delete billing services
       if (billing.services.length > 0) {
         await tx.billingService.deleteMany({
-          where: { billingId: parseInt(billingId) }
+          where: { billingId: billingId }
+        });
+      }
+
+      // Update related LabTestOrders: set status to UNPAID and remove billingId
+      if (billing.labTestOrders && billing.labTestOrders.length > 0) {
+        await tx.labTestOrder.updateMany({
+          where: { billingId: billingId },
+          data: {
+            status: 'UNPAID',
+            billingId: null
+          }
+        });
+      }
+
+      // Update related RadiologyOrders: set status to UNPAID and remove billingId
+      if (billing.radiologyOrders && billing.radiologyOrders.length > 0) {
+        await tx.radiologyOrder.updateMany({
+          where: { billingId: billingId },
+          data: {
+            status: 'UNPAID',
+            billingId: null
+          }
         });
       }
 
       // Delete the billing
       await tx.billing.delete({
-        where: { id: parseInt(billingId) }
+        where: { id: billingId }
       });
     });
 
@@ -2382,7 +2406,7 @@ exports.deleteBilling = async (req, res) => {
         userId: billingOfficerId,
         action: 'DELETE_BILLING',
         entity: 'Billing',
-        entityId: parseInt(billingId),
+        entityId: 0, // Billing IDs are strings, use 0 as placeholder
         details: JSON.stringify({
           billingId: billing.id,
           patientId: billing.patientId,
