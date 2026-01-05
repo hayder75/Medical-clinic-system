@@ -1417,6 +1417,14 @@ const PatientQueue = () => {
               >
                 Complete Visit
               </button>
+              <button
+                type="button"
+                onClick={handleDeleteVisit}
+                className="btn btn-error"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete Visit
+              </button>
             </div>
           </form>
         </div>
