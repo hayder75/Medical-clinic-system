@@ -812,7 +812,7 @@ exports.getPatientTransactions = async (req, res) => {
 // Get all patients with their visits, services, and totals for receipt printing
 exports.getPatientReceipts = async (req, res) => {
   try {
-    const { date } = req.query;
+    const { date, search, searchType } = req.query;
     
     // Get date range for filtering
     const targetDate = date ? new Date(date) : new Date();
@@ -820,17 +820,66 @@ exports.getPatientReceipts = async (req, res) => {
     const nextDay = new Date(targetDate);
     nextDay.setDate(nextDay.getDate() + 1);
     
-    // Get all bills for today with payments (PAID status or has payments)
+    // Build where clause for patient search
+    let patientWhere = {};
+    if (search && search.trim()) {
+      const searchTerm = search.trim().toLowerCase();
+      if (searchType === 'phone') {
+        patientWhere = {
+          mobile: {
+            contains: searchTerm,
+            mode: 'insensitive'
+          }
+        };
+      } else {
+        // Default to name search
+        patientWhere = {
+          name: {
+            contains: searchTerm,
+            mode: 'insensitive'
+          }
+        };
+      }
+    }
+    
+    // Get all bills for the selected date with payments
+    // Filter by payment date OR billing creation date (to catch both scenarios)
     const bills = await prisma.billing.findMany({
       where: {
-        OR: [
-          { status: 'PAID' },
-          { payments: { some: {} } }
-        ],
-        createdAt: {
-          gte: targetDate,
-          lt: nextDay
-        }
+        AND: [
+          {
+            OR: [
+              { status: 'PAID' },
+              { payments: { some: {} } }
+            ]
+          },
+          {
+            OR: [
+              // Bills created on this date
+              {
+                createdAt: {
+                  gte: targetDate,
+                  lt: nextDay
+                }
+              },
+              // OR bills with payments made on this date
+              {
+                payments: {
+                  some: {
+                    createdAt: {
+                      gte: targetDate,
+                      lt: nextDay
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          // Apply patient search filter if provided
+          ...(Object.keys(patientWhere).length > 0 ? [
+            { patient: patientWhere }
+          ] : [])
+        ]
       },
       include: {
         patient: {
@@ -854,7 +903,14 @@ exports.getPatientReceipts = async (req, res) => {
             }
           }
         },
-        payments: true,
+        payments: {
+          where: {
+            createdAt: {
+              gte: targetDate,
+              lt: nextDay
+            }
+          }
+        },
         visit: {
           select: {
             id: true,
@@ -919,7 +975,8 @@ exports.getPatientReceipts = async (req, res) => {
     res.json({
       success: true,
       patients,
-      date: targetDate.toISOString().split('T')[0]
+      date: targetDate.toISOString().split('T')[0],
+      count: patients.length
     });
   } catch (error) {
     console.error('Error getting patient receipts:', error);

@@ -189,13 +189,23 @@ const DailyCashManagement = () => {
     try {
       setLoadingPatientReceipts(true);
       const dateParam = selectedDate || new Date().toISOString().split('T')[0];
-      const response = await api.get(`/cash-management/patient-receipts?date=${dateParam}`);
+      let url = `/cash-management/patient-receipts?date=${dateParam}`;
+      
+      // Add search parameters if search query exists
+      if (searchQuery && searchQuery.trim()) {
+        url += `&search=${encodeURIComponent(searchQuery.trim())}&searchType=${searchType}`;
+      }
+      
+      const response = await api.get(url);
       if (response.data.success) {
         setPatientReceipts(response.data.patients || []);
+        if (response.data.count === 0 && !searchQuery) {
+          toast.info('No patient receipts found for the selected date');
+        }
       }
     } catch (error) {
       console.error('Error fetching patient receipts:', error);
-      toast.error('Failed to fetch patient receipts');
+      toast.error(error.response?.data?.error || 'Failed to fetch patient receipts');
     } finally {
       setLoadingPatientReceipts(false);
     }
