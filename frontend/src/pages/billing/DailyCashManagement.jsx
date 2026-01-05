@@ -243,7 +243,7 @@ const DailyCashManagement = () => {
             }
             .receipt-page {
               padding: 5mm;
-              font-size: 21px;
+              font-size: 17px;
               min-height: 50mm;
               margin-bottom: 2mm;
               width: 50%;
@@ -257,24 +257,24 @@ const DailyCashManagement = () => {
               margin-bottom: 3px; 
             }
             .clinic-name { 
-              font-size: 22px; 
+              font-size: 18px; 
               font-weight: bold; 
               margin-bottom: 3px; 
               color: #000;
             }
             .receipt-title { 
-              font-size: 21px; 
+              font-size: 17px; 
               font-weight: bold; 
               margin: 3px 0; 
               color: #000;
             }
             .receipt-info {
-              font-size: 20px;
+              font-size: 16px;
               color: #000;
               margin-top: 3px;
             }
             .patient-name {
-              font-size: 21px;
+              font-size: 17px;
               font-weight: bold;
               margin: 5px 0;
             }
@@ -282,7 +282,7 @@ const DailyCashManagement = () => {
               margin: 5px 0;
             }
             .services-section h3 {
-              font-size: 21px;
+              font-size: 17px;
               font-weight: bold;
               margin-bottom: 3px;
               color: #000;
@@ -290,7 +290,7 @@ const DailyCashManagement = () => {
             .service-item { 
               margin-bottom: 3px; 
               padding: 0; 
-              font-size: 20px;
+              font-size: 16px;
             }
             .service-row {
               display: flex;
@@ -306,7 +306,7 @@ const DailyCashManagement = () => {
               justify-content: flex-start;
               gap: 10px;
               font-weight: bold;
-              font-size: 21px;
+              font-size: 17px;
             }
             .signature-area { 
               margin-top: 5px; 
@@ -317,7 +317,7 @@ const DailyCashManagement = () => {
               border-top: 1px solid #000; 
               padding-top: 2px; 
               text-align: left; 
-              font-size: 18px; 
+              font-size: 15px; 
               font-weight: bold;
             }
             .no-print {
@@ -417,19 +417,19 @@ const DailyCashManagement = () => {
             body {
               font-family: Arial, sans-serif;
               padding: 20px;
-              font-size: 11px;
+              font-size: 9px;
             }
             .header {
               text-align: center;
               margin-bottom: 20px;
             }
             .clinic-name {
-              font-size: 18px;
+              font-size: 15px;
               font-weight: bold;
               margin-bottom: 5px;
             }
             .report-title {
-              font-size: 14px;
+              font-size: 12px;
               color: #666;
               margin-bottom: 10px;
             }

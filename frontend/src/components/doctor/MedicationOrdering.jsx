@@ -351,7 +351,7 @@ const MedicationOrdering = ({ visitId, patientId, patient, doctor, onOrdersPlace
             }
             .prescription-page {
               padding: 3mm;
-              font-size: 21px;
+              font-size: 17px;
               background: white;
               border: 1px solid #ccc;
               box-sizing: border-box;
@@ -365,19 +365,19 @@ const MedicationOrdering = ({ visitId, patientId, patient, doctor, onOrdersPlace
               margin-bottom: 3px; 
             }
             .clinic-name { 
-              font-size: 22px; 
+              font-size: 18px; 
               font-weight: bold; 
               margin-bottom: 2px; 
               color: #000;
             }
             .prescription-title { 
-              font-size: 21px; 
+              font-size: 17px; 
               font-weight: bold; 
               margin: 2px 0; 
               color: #000;
             }
             .prescription-info {
-              font-size: 20px;
+              font-size: 16px;
               color: #000;
               margin-top: 2px;
             }
@@ -387,7 +387,7 @@ const MedicationOrdering = ({ visitId, patientId, patient, doctor, onOrdersPlace
             }
             .patient-section h3 { 
               margin: 0 0 2px 0;
-              font-size: 21px; 
+              font-size: 17px; 
               font-weight: bold; 
               color: #000;
             }
@@ -396,7 +396,7 @@ const MedicationOrdering = ({ visitId, patientId, patient, doctor, onOrdersPlace
               margin-top: 2px; 
             }
             .patient-detail { 
-              font-size: 20px; 
+              font-size: 16px; 
               line-height: 1.4;
               margin-bottom: 2px;
             }
@@ -409,7 +409,7 @@ const MedicationOrdering = ({ visitId, patientId, patient, doctor, onOrdersPlace
               margin: 4px 0;
             }
             .medications-section h3 {
-              font-size: 21px;
+              font-size: 17px;
               font-weight: bold;
               margin-bottom: 3px;
               color: #000;
@@ -431,7 +431,7 @@ const MedicationOrdering = ({ visitId, patientId, patient, doctor, onOrdersPlace
             }
             .medication-name { 
               font-weight: bold; 
-              font-size: 20px; 
+              font-size: 16px; 
               color: #000;
               margin-bottom: 1px;
               line-height: 1.2;
@@ -439,7 +439,7 @@ const MedicationOrdering = ({ visitId, patientId, patient, doctor, onOrdersPlace
             }
             .medication-details { 
               margin-top: 0; 
-              font-size: 19px; 
+              font-size: 15px; 
               line-height: 1.2;
               word-wrap: break-word;
             }
@@ -452,13 +452,13 @@ const MedicationOrdering = ({ visitId, patientId, patient, doctor, onOrdersPlace
             }
             .doctor-section h3 { 
               margin: 0 0 2px 0;
-              font-size: 21px; 
+              font-size: 17px; 
               font-weight: bold; 
               color: #000;
             }
             .doctor-details { 
               margin-top: 2px; 
-              font-size: 20px; 
+              font-size: 16px; 
               line-height: 1.3;
             }
             .doctor-detail { 
