@@ -323,6 +323,29 @@ const PatientQueue = () => {
     }
   };
 
+  const handleDeleteVisit = async () => {
+    if (!selectedVisit) return;
+
+    if (!window.confirm(`Are you sure you want to delete this visit (${selectedVisit.visitUid})? This will permanently delete the visit and all associated records (lab orders, radiology orders, medications, bills, etc.). This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      await api.delete(`/doctors/visits/${selectedVisit.id}`);
+      toast.success('Visit deleted successfully!');
+      setShowPatientForm(false);
+      setSelectedVisit(null);
+      setFormData({
+        diagnosis: '',
+        diagnosisDetails: '',
+        instructions: ''
+      });
+      fetchVisits();
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Failed to delete visit');
+    }
+  };
+
   const handlePrint = () => {
     // TODO: Implement PDF generation
     toast.success('Print functionality coming soon');
