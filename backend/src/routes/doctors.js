@@ -1,0 +1,41 @@
+const express = require('express');
+const doctorController = require('../controllers/doctorController');
+const adminController = require('../controllers/adminController');
+const auth = require('../middleware/auth');
+const roleGuard = require('../middleware/roleGuard');
+
+const router = express.Router();
+
+router.get('/queue', doctorController.getQueue);
+router.get('/results-queue', doctorController.getResultsQueue);
+router.get('/unified-queue', auth, roleGuard(['DOCTOR']), doctorController.getUnifiedQueue);
+router.get('/triage-queue', auth, roleGuard(['DOCTOR', 'ADMIN']), doctorController.getTriageQueue);
+router.get('/queue-status', auth, roleGuard(['ADMIN', 'NURSE', 'BILLING_OFFICER', 'RECEPTIONIST']), doctorController.getDoctorsQueueStatus);
+router.get('/dashboard-stats', auth, roleGuard(['DOCTOR']), doctorController.getDashboardStats);
+router.get('/recent-activity', auth, roleGuard(['DOCTOR']), doctorController.getRecentActivity);
+router.get('/patient-assignments', auth, roleGuard(['ADMIN', 'NURSE', 'BILLING_OFFICER', 'RECEPTIONIST']), doctorController.getPatientAssignments);
+router.get('/visits/:visitId', doctorController.getVisitDetails);
+router.get('/visits/:visitId/medication-check', doctorController.checkMedicationOrdering);
+router.get('/patient-history/:patientId', doctorController.getPatientHistory);
+router.get('/patient-history/:patientId/visit/:visitId/pdf', doctorController.generateVisitHistoryPDF);
+router.get('/vitals/:visitId', doctorController.getPatientVitals);
+router.get('/order-status/:visitId', doctorController.getVisitOrderStatus);
+router.get('/investigation-types', doctorController.getInvestigationTypes);
+router.get('/services', doctorController.getAllServices);
+router.get('/lab-tests/for-ordering', auth, roleGuard(['DOCTOR', 'LAB_TECHNICIAN', 'ADMIN']), adminController.getLabTestsForOrdering);
+router.post('/select', doctorController.selectVisit);
+router.put('/visits/:visitId', doctorController.updateVisit);
+router.post('/lab-orders', doctorController.createLabOrder);
+router.post('/lab-orders/multiple', doctorController.createMultipleLabOrders);
+router.post('/radiology-orders', doctorController.createRadiologyOrder);
+router.post('/radiology-orders/multiple', doctorController.createMultipleRadiologyOrders);
+router.post('/service-orders', doctorController.createDoctorServiceOrder);
+router.post('/medication-orders', doctorController.createMedicationOrder);
+router.post('/prescriptions/batch', doctorController.createBatchPrescription);
+router.get('/prescriptions/:visitId', doctorController.getPrescriptionHistory);
+router.post('/visits/:visitId/diagnosis-notes', doctorController.saveDiagnosisNotes);
+router.get('/visits/:visitId/diagnosis-notes', doctorController.getDiagnosisNotes);
+router.post('/complete', doctorController.completeVisit);
+router.post('/direct-complete', doctorController.directCompleteVisit);
+
+module.exports = router;
