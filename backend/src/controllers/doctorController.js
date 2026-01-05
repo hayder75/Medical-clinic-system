@@ -118,7 +118,14 @@ exports.getInvestigationTypes = async (req, res) => {
         { name: 'asc' }
       ]
     });
-    res.json({ investigationTypes });
+    
+    // Additional client-side filter to ensure we only return active services
+    // This double-checks and filters out any investigation types with inactive services
+    const filteredTypes = investigationTypes.filter(inv => 
+      inv.service && inv.service.isActive === true
+    );
+    
+    res.json({ investigationTypes: filteredTypes });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
