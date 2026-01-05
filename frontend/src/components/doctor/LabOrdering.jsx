@@ -14,10 +14,8 @@ const LabOrdering = ({ visitId, patientId, onOrdersPlaced, existingOrders = [] }
 
   useEffect(() => {
     fetchLabTests();
-    // Start with all categories collapsed (Standalone Tests is always visible, no dropdown)
-    setExpandedCategories(new Set([
-      'Standalone Tests' // Always visible, no dropdown needed
-    ]));
+    // Start with all categories collapsed
+    setExpandedCategories(new Set());
   }, []);
 
   const fetchLabTests = async () => {
@@ -304,27 +302,21 @@ const LabOrdering = ({ visitId, patientId, onOrdersPlaced, existingOrders = [] }
         <div className="space-y-4 max-h-[700px] overflow-y-auto border border-gray-300 rounded-lg p-4 bg-gray-50">
           {Object.entries(organizedTests).map(([category, data]) => (
             <div key={category} className="border-b border-gray-200 pb-4 last:border-b-0">
-              {/* Category Header - For "Standalone Tests", always show expanded, no dropdown */}
-              {category === 'Standalone Tests' ? (
-                <div className="w-full flex items-center justify-between py-3 px-4 bg-white border border-gray-200 rounded-lg">
-                  <span className="text-base font-semibold text-gray-900">{category}</span>
-                </div>
-              ) : (
-                <div
-                  onClick={() => toggleCategory(category)}
-                  className="w-full flex items-center justify-between py-3 px-4 bg-white hover:bg-gray-50 border border-gray-200 hover:border-gray-300 rounded-lg transition-all cursor-pointer"
-                >
-                  <span className="text-base font-semibold text-gray-900">{category}</span>
-                  {expandedCategories.has(category) ? (
-                    <ChevronDown className="w-5 h-5 text-gray-600" />
-                  ) : (
-                    <ChevronRight className="w-5 h-5 text-gray-600" />
-                  )}
-                </div>
-              )}
+              {/* Category Header - All categories are collapsible now */}
+              <div
+                onClick={() => toggleCategory(category)}
+                className="w-full flex items-center justify-between py-3 px-4 bg-white hover:bg-gray-50 border border-gray-200 hover:border-gray-300 rounded-lg transition-all cursor-pointer"
+              >
+                <span className="text-base font-semibold text-gray-900">{category}</span>
+                {expandedCategories.has(category) ? (
+                  <ChevronDown className="w-5 h-5 text-gray-600" />
+                ) : (
+                  <ChevronRight className="w-5 h-5 text-gray-600" />
+                )}
+              </div>
 
               {/* Category Content */}
-              {(category === 'Standalone Tests' || expandedCategories.has(category)) && (
+              {expandedCategories.has(category) && (
                 <div className="mt-3 space-y-3">
                   {/* For "Standalone Tests" category, show tests directly without groups */}
                   {category === 'Standalone Tests' && data.standalone && data.standalone.length > 0 && (
