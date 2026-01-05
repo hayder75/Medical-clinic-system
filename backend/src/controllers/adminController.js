@@ -3679,6 +3679,18 @@ exports.deletePatient = async (req, res) => {
         await tx.visit.deleteMany({ where: { id: { in: visitIds } } });
       }
 
+      // Delete bills that are directly linked to patient (not just through visits)
+      const allPatientBills = await tx.billing.findMany({
+        where: { patientId },
+        select: { id: true }
+      });
+      const allBillingIds = allPatientBills.map(b => b.id);
+      if (allBillingIds.length > 0) {
+        await tx.billPayment.deleteMany({ where: { billingId: { in: allBillingIds } } });
+        await tx.billingService.deleteMany({ where: { billingId: { in: allBillingIds } } });
+        await tx.billing.deleteMany({ where: { id: { in: allBillingIds } } });
+      }
+
       await tx.assignment.deleteMany({ where: { patientId } });
       await tx.dispenseLog.deleteMany({ where: { patientId } });
       await tx.medicalHistory.deleteMany({ where: { patientId } });
