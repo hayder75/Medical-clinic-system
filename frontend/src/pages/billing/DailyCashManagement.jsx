@@ -39,6 +39,16 @@ const DailyCashManagement = () => {
     }
   }, [activeTab, selectedDate]);
 
+  // Refetch when search changes (with debounce)
+  useEffect(() => {
+    if (activeTab === 'transactions') {
+      const timeoutId = setTimeout(() => {
+        fetchPatientReceipts();
+      }, 500); // 500ms debounce
+      return () => clearTimeout(timeoutId);
+    }
+  }, [searchQuery, searchType]);
+
   const fetchCurrentSession = async () => {
     try {
       setLoading(true);
@@ -826,17 +836,8 @@ const DailyCashManagement = () => {
                     </div>
                   ) : (
                     (() => {
-                      // Filter patient receipts based on search query
-                      const filteredReceipts = patientReceipts.filter((patientData) => {
-                        if (!searchQuery.trim()) return true;
-                        const query = searchQuery.toLowerCase().trim();
-                        if (searchType === 'name') {
-                          return patientData.patient.name.toLowerCase().includes(query);
-                        } else if (searchType === 'phone') {
-                          return patientData.patient.mobile?.toLowerCase().includes(query) || false;
-                        }
-                        return true;
-                      });
+                      // Backend handles search filtering now, so use patientReceipts directly
+                      const filteredReceipts = patientReceipts;
 
                       if (filteredReceipts.length === 0) {
                         return (
