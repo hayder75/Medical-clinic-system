@@ -3504,3 +3504,227 @@ exports.getLabTestsForOrdering = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+// Get all patients (for admin patient management)
+exports.getAllPatients = async (req, res) => {
+  try {
+    const { search, page = 1, limit = 10 } = req.query;
+
+    const where = {};
+    if (search) {
+      where.OR = [
+        { id: { contains: search, mode: 'insensitive' } },
+        { name: { contains: search, mode: 'insensitive' } },
+        { mobile: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } }
+      ];
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const [patients, total] = await Promise.all([
+      prisma.patient.findMany({
+        where,
+        skip,
+        take: parseInt(limit),
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          name: true,
+          mobile: true,
+          email: true,
+          gender: true,
+          dob: true,
+          type: true,
+          status: true,
+          cardStatus: true,
+          createdAt: true,
+          _count: {
+            select: {
+              visits: true,
+              labTestOrders: true,
+              radiologyOrders: true,
+              medicationOrders: true,
+              bills: true
+            }
+          }
+        }
+      }),
+      prisma.patient.count({ where })
+    ]);
+
+    res.json({
+      patients,
+      pagination: {
+        total,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        totalPages: Math.ceil(total / parseInt(limit))
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching all patients:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Delete patient with cascade deletion of all related records
+exports.deletePatient = async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const userId = req.user.id;
+
+    const patient = await prisma.patient.findUnique({
+      where: { id: patientId },
+      include: {
+        _count: {
+          select: {
+            visits: true,
+            labOrders: true,
+            labTestOrders: true,
+            radiologyOrders: true,
+            medicationOrders: true,
+            bills: true,
+            payments: true,
+            dispenseLogs: true,
+            history: true,
+            appointments: true,
+            files: true,
+            dentalRecords: true,
+            dentalPhotos: true,
+            attachedImages: true,
+            pharmacyInvoices: true,
+            virtualQueues: true,
+            medicalCertificates: true,
+            diagnosisNotes: true,
+            cardActivations: true,
+            cashTransactions: true,
+            galleryImages: true,
+            insuranceTransactions: true,
+            accountDeposits: true,
+            accountTransactions: true,
+            accountRequests: true,
+            dentalProcedureCompletions: true,
+            nurseWalkInOrders: true,
+            emergencyDrugOrders: true,
+            materialNeedsOrders: true,
+          }
+        }
+      }
+    });
+
+    if (!patient) {
+      return res.status(404).json({ error: 'Patient not found' });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      const visits = await tx.visit.findMany({
+        where: { patientId },
+        select: { id: true }
+      });
+      const visitIds = visits.map(v => v.id);
+
+      if (visitIds.length > 0) {
+        await tx.vitalSign.deleteMany({ where: { visitId: { in: visitIds } } });
+        await tx.labOrder.deleteMany({ where: { visitId: { in: visitIds } } });
+        await tx.labTestOrder.deleteMany({ where: { visitId: { in: visitIds } } });
+        await tx.radiologyOrder.deleteMany({ where: { visitId: { in: visitIds } } });
+        await tx.medicationOrder.deleteMany({ where: { visitId: { in: visitIds } } });
+        await tx.dentalRecord.deleteMany({ where: { visitId: { in: visitIds } } });
+        await tx.dentalPhoto.deleteMany({ where: { visitId: { in: visitIds } } });
+        await tx.patientAttachedImage.deleteMany({ where: { visitId: { in: visitIds } } });
+        await tx.medicalCertificate.deleteMany({ where: { visitId: { in: visitIds } } });
+        await tx.diagnosisNotes.deleteMany({ where: { visitId: { in: visitIds } } });
+        await tx.nurseServiceAssignment.deleteMany({ where: { visitId: { in: visitIds } } });
+        await tx.emergencyDrugOrder.deleteMany({ where: { visitId: { in: visitIds } } });
+        await tx.materialNeedsOrder.deleteMany({ where: { visitId: { in: visitIds } } });
+        await tx.patientGallery.deleteMany({ where: { visitId: { in: visitIds } } });
+        await tx.insuranceTransaction.deleteMany({ where: { visitId: { in: visitIds } } });
+        await tx.accountTransaction.deleteMany({ where: { visitId: { in: visitIds } } });
+        await tx.dentalProcedureCompletion.deleteMany({ where: { visitId: { in: visitIds } } });
+
+        const bills = await tx.billing.findMany({
+          where: { visitId: { in: visitIds } },
+          select: { id: true }
+        });
+        const billingIds = bills.map(b => b.id);
+
+        if (billingIds.length > 0) {
+          await tx.billPayment.deleteMany({ where: { billingId: { in: billingIds } } });
+          await tx.billingService.deleteMany({ where: { billingId: { in: billingIds } } });
+          await tx.billing.deleteMany({ where: { id: { in: billingIds } } });
+        }
+
+        const batchOrders = await tx.batchOrder.findMany({
+          where: { visitId: { in: visitIds } },
+          select: { id: true }
+        });
+        const batchOrderIds = batchOrders.map(bo => bo.id);
+
+        if (batchOrderIds.length > 0) {
+          await tx.batchOrderService.deleteMany({ where: { batchOrderId: { in: batchOrderIds } } });
+          await tx.batchOrder.deleteMany({ where: { id: { in: batchOrderIds } } });
+        }
+
+        const pharmacyInvoices = await tx.pharmacyInvoice.findMany({
+          where: { visitId: { in: visitIds } },
+          select: { id: true }
+        });
+        const pharmacyInvoiceIds = pharmacyInvoices.map(pi => pi.id);
+
+        if (pharmacyInvoiceIds.length > 0) {
+          await tx.pharmacyInvoiceItem.deleteMany({ where: { invoiceId: { in: pharmacyInvoiceIds } } });
+          await tx.pharmacyInvoice.deleteMany({ where: { id: { in: pharmacyInvoiceIds } } });
+        }
+
+        await tx.visit.deleteMany({ where: { id: { in: visitIds } } });
+      }
+
+      await tx.assignment.deleteMany({ where: { patientId } });
+      await tx.dispenseLog.deleteMany({ where: { patientId } });
+      await tx.medicalHistory.deleteMany({ where: { patientId } });
+      await tx.appointment.deleteMany({ where: { patientId } });
+      await tx.file.deleteMany({ where: { patientId } });
+      await tx.virtualQueue.deleteMany({ where: { patientId } });
+      await tx.medicalCertificate.deleteMany({ where: { patientId } });
+      await tx.diagnosisNotes.deleteMany({ where: { patientId } });
+      await tx.cardActivation.deleteMany({ where: { patientId } });
+      await tx.cashTransaction.deleteMany({ where: { patientId } });
+      await tx.patientGallery.deleteMany({ where: { patientId } });
+      await tx.insuranceTransaction.deleteMany({ where: { patientId } });
+      await tx.accountDeposit.deleteMany({ where: { patientId } });
+      await tx.accountTransaction.deleteMany({ where: { patientId } });
+      await tx.accountRequest.deleteMany({ where: { patientId } });
+      await tx.dentalProcedureCompletion.deleteMany({ where: { patientId } });
+      await tx.nurseWalkInOrder.deleteMany({ where: { patientId } });
+      await tx.emergencyDrugOrder.deleteMany({ where: { patientId } });
+      await tx.materialNeedsOrder.deleteMany({ where: { patientId } });
+      await tx.patientAccount.deleteMany({ where: { patientId } });
+      await tx.patient.delete({ where: { id: patientId } });
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        userId: userId,
+        action: 'DELETE_PATIENT',
+        entity: 'Patient',
+        entityId: patientId,
+        details: JSON.stringify({
+          patientId: patientId,
+          patientName: patient.name,
+          deletedRecords: patient._count
+        }),
+        ip: req.ip,
+        userAgent: req.get('User-Agent')
+      }
+    });
+
+    res.json({
+      message: 'Patient and all related records deleted successfully',
+      deletedRecords: patient._count
+    });
+  } catch (error) {
+    console.error('Error deleting patient:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
