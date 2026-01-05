@@ -193,44 +193,6 @@ exports.createPatient = async (req, res) => {
     const maxRetries = 5;
     const year = new Date().getFullYear();
     
-    while (retries < maxRetries) {
-      try {
-        // Use timestamp + random for better uniqueness
-        const timestamp = Date.now().toString().slice(-6); // Last 6 digits
-        const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-        patientId = `PAT-${year}-${timestamp}-${random}`;
-        
-        // Verify it doesn't exist (unlikely but possible)
-        const existing = await prisma.patient.findUnique({
-          where: { id: patientId }
-        });
-        
-        if (!existing) {
-          break; // Unique ID found
-        }
-        
-        retries++;
-        if (retries >= maxRetries) {
-          throw new Error('Unable to generate unique patient ID. Please try again.');
-        }
-        await new Promise(resolve => setTimeout(resolve, 10));
-      } catch (error) {
-        if (error.message.includes('Unable to generate')) {
-          throw error;
-        }
-        // If it's a unique constraint error, retry
-        if (error.code === 'P2002' && error.meta?.target?.includes('id')) {
-          retries++;
-          if (retries >= maxRetries) {
-            throw new Error('Unable to generate unique patient ID. Please try again.');
-          }
-          await new Promise(resolve => setTimeout(resolve, 10));
-        } else {
-          throw error;
-        }
-      }
-    }
-    
     // Get card registration service (300 Birr)
     const cardRegService = await prisma.service.findFirst({
       where: { code: 'CARD-REG', isActive: true }
@@ -240,24 +202,50 @@ exports.createPatient = async (req, res) => {
       return res.status(400).json({ error: 'Card registration service not found. Please contact admin.' });
     }
     
-    // Create patient with INACTIVE card status (emergency patients still need to pay card fee)
-    const patient = await prisma.patient.create({
-      data: {
-        id: patientId,
-        name: validatedData.name,
-        dob: validatedData.dob ? new Date(validatedData.dob) : null,
-        gender: validatedData.gender || null,
-        type: validatedData.type,
-        mobile: validatedData.mobile || null,
-        email: validatedData.email || null,
-        address: validatedData.address || null,
-        emergencyContact: validatedData.emergencyContact || null,
-        bloodType: validatedData.bloodType || null,
-        maritalStatus: validatedData.maritalStatus || null,
-        insuranceId: validatedData.insuranceId || null,
-        cardStatus: 'INACTIVE' // All patients start with INACTIVE card until payment
+    let patient;
+    while (retries < maxRetries) {
+      try {
+        // Use timestamp + random for better uniqueness
+        const timestamp = Date.now().toString().slice(-6); // Last 6 digits
+        const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+        patientId = `PAT-${year}-${timestamp}-${random}`;
+        
+        // Create patient with INACTIVE card status (emergency patients still need to pay card fee)
+        patient = await prisma.patient.create({
+          data: {
+            id: patientId,
+            name: validatedData.name,
+            dob: validatedData.dob ? new Date(validatedData.dob) : null,
+            gender: validatedData.gender || null,
+            type: validatedData.type,
+            mobile: validatedData.mobile || null,
+            email: validatedData.email || null,
+            address: validatedData.address || null,
+            emergencyContact: validatedData.emergencyContact || null,
+            bloodType: validatedData.bloodType || null,
+            maritalStatus: validatedData.maritalStatus || null,
+            insuranceId: validatedData.insuranceId || null,
+            cardStatus: 'INACTIVE' // All patients start with INACTIVE card until payment
+          }
+        });
+        
+        break; // Success - patient created
+      } catch (error) {
+        // If it's a unique constraint error, retry with a new ID
+        if (error.code === 'P2002' && error.meta?.target?.includes('id')) {
+          retries++;
+          if (retries >= maxRetries) {
+            console.error('Failed to generate unique patientId after', maxRetries, 'attempts');
+            throw new Error('Unable to generate unique patient ID. Please try again.');
+          }
+          // Wait a tiny bit before retrying (adds more randomness)
+          await new Promise(resolve => setTimeout(resolve, 10));
+        } else {
+          // Different error - throw it
+          throw error;
+        }
       }
-    });
+    }
     
     // Create billing for card registration (300 Birr) - ALL patients need to pay card fee
     const billing = await prisma.billing.create({

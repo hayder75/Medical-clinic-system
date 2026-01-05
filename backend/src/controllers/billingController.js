@@ -122,6 +122,7 @@ exports.registerPatient = async (req, res) => {
     let retries = 0;
     const maxRetries = 5;
     
+    let patient;
     while (retries < maxRetries) {
       try {
         if (type === 'EMERGENCY') {
@@ -136,38 +137,8 @@ exports.registerPatient = async (req, res) => {
           id = `PAT-${year}-${timestamp}-${random}`;
         }
         
-        // Verify it doesn't exist (unlikely but possible)
-        const existing = await prisma.patient.findUnique({
-          where: { id }
-        });
-        
-        if (!existing) {
-          break; // Unique ID found
-        }
-        
-        retries++;
-        if (retries >= maxRetries) {
-          throw new Error('Unable to generate unique patient ID. Please try again.');
-        }
-        await new Promise(resolve => setTimeout(resolve, 10));
-      } catch (error) {
-        if (error.message.includes('Unable to generate')) {
-          throw error;
-        }
-        // If it's a unique constraint error, retry
-        if (error.code === 'P2002' && error.meta?.target?.includes('id')) {
-          retries++;
-          if (retries >= maxRetries) {
-            throw new Error('Unable to generate unique patient ID. Please try again.');
-          }
-          await new Promise(resolve => setTimeout(resolve, 10));
-        } else {
-          throw error;
-        }
-      }
-    }
-
-    const patient = await prisma.patient.create({ 
+        // Create patient - if unique constraint error, retry with new ID
+        patient = await prisma.patient.create({ 
       data: { 
         id, 
         name,
