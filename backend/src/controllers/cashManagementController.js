@@ -842,45 +842,49 @@ exports.getPatientReceipts = async (req, res) => {
       }
     }
     
-    // Get all bills for the selected date with payments
-    // Filter by payment date OR billing creation date (to catch both scenarios)
-    const bills = await prisma.billing.findMany({
-      where: {
-        AND: [
-          {
-            OR: [
-              { status: 'PAID' },
-              { payments: { some: {} } }
-            ]
-          },
-          {
-            OR: [
-              // Bills created on this date
-              {
-                createdAt: {
-                  gte: targetDate,
-                  lt: nextDay
-                }
-              },
-              // OR bills with payments made on this date
-              {
-                payments: {
-                  some: {
-                    createdAt: {
-                      gte: targetDate,
-                      lt: nextDay
-                    }
+    // Build the main where clause
+    const whereClause = {
+      AND: [
+        {
+          OR: [
+            { status: 'PAID' },
+            { payments: { some: {} } }
+          ]
+        },
+        {
+          OR: [
+            // Bills created on this date
+            {
+              createdAt: {
+                gte: targetDate,
+                lt: nextDay
+              }
+            },
+            // OR bills with payments made on this date
+            {
+              payments: {
+                some: {
+                  createdAt: {
+                    gte: targetDate,
+                    lt: nextDay
                   }
                 }
               }
-            ]
-          },
-          // Apply patient search filter if provided
-          ...(Object.keys(patientWhere).length > 0 ? [
-            { patient: patientWhere }
-          ] : [])
-        ]
-      },
+            }
+          ]
+        }
+      ]
+    };
+
+    // Add patient search filter if provided
+    if (Object.keys(patientWhere).length > 0) {
+      whereClause.AND.push({ patient: patientWhere });
+    }
+    
+    // Get all bills for the selected date with payments
+    // Filter by payment date OR billing creation date (to catch both scenarios)
+    const bills = await prisma.billing.findMany({
+      where: whereClause,
       include: {
         patient: {
           select: {
@@ -903,14 +907,7 @@ exports.getPatientReceipts = async (req, res) => {
             }
           }
         },
-        payments: {
-          where: {
-            createdAt: {
-              gte: targetDate,
-              lt: nextDay
-            }
-          }
-        },
+        payments: true, // Get all payments, not filtered by date
         visit: {
           select: {
             id: true,
