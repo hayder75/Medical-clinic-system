@@ -843,6 +843,10 @@ exports.getInvestigationTypes = async (req, res) => {
     if (category) {
       whereClause.category = category;
     }
+    // Only show active investigation types
+    whereClause.service = {
+      isActive: true
+    };
 
     const investigationTypes = await prisma.investigationType.findMany({
       where: whereClause,
@@ -852,7 +856,8 @@ exports.getInvestigationTypes = async (req, res) => {
             id: true,
             code: true,
             name: true,
-            price: true
+            price: true,
+            isActive: true
           }
         }
       },
