@@ -4,3 +4,6 @@ dist/
 *.log
 
 
+.env
+backend/.env
+frontend/.env
