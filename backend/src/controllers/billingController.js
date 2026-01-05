@@ -337,17 +337,44 @@ exports.createVisitForExistingPatient = async (req, res) => {
       });
     }
 
-    // Create a new visit record
-    const visitUid = `VISIT-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${String(Date.now()).slice(-4)}`;
-    const visit = await prisma.visit.create({
-      data: {
-        visitUid: visitUid,
-        patientId: patient.id,
-        status: 'WAITING_FOR_TRIAGE',
-        isEmergency: type === 'EMERGENCY',
-        notes: notes || `Returning patient visit - ${type || 'regular'}`
+    // Create a new visit record with unique visitUid (retry logic for race conditions)
+    let visitUid;
+    let visit;
+    let retries = 0;
+    const maxRetries = 5;
+    
+    while (retries < maxRetries) {
+      try {
+        const now = new Date();
+        const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
+        const timestamp = Date.now().toString().slice(-6);
+        const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+        visitUid = `VISIT-${dateStr}-${timestamp}-${random}`;
+        
+        visit = await prisma.visit.create({
+          data: {
+            visitUid: visitUid,
+            patientId: patient.id,
+            status: 'WAITING_FOR_TRIAGE',
+            isEmergency: type === 'EMERGENCY',
+            notes: notes || `Returning patient visit - ${type || 'regular'}`
+          }
+        });
+        
+        break; // Success
+      } catch (error) {
+        // If it's a unique constraint error on visitUid, retry
+        if (error.code === 'P2002' && error.meta?.target?.includes('visitUid')) {
+          retries++;
+          if (retries >= maxRetries) {
+            throw new Error('Unable to generate unique visit ID. Please try again.');
+          }
+          await new Promise(resolve => setTimeout(resolve, 10));
+        } else {
+          throw error;
+        }
       }
-    });
+    }
 
     // Create entry fee billing for non-emergency patients
     let billing = null;
