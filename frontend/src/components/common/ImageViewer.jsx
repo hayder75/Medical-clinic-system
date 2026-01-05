@@ -143,8 +143,8 @@ const ImageViewer = ({ isOpen, onClose, images, currentIndex = 0 }) => {
       {/* Image Container */}
       <div className="relative max-w-full max-h-full p-20">
         <img
-          src={getImageUrl(currentImage.filePath || currentImage.fileUrl)}
-          alt={currentImage.fileName || 'Radiology image'}
+          src={getImageUrl(currentImage.filePath || currentImage.fileUrl || currentImage.path)}
+          alt={currentImage.fileName || currentImage.name || 'Radiology image'}
           className="max-w-full max-h-full object-contain transition-transform duration-200"
           style={{
             transform: `scale(${zoom}) rotate(${rotation}deg)`,
@@ -152,17 +152,19 @@ const ImageViewer = ({ isOpen, onClose, images, currentIndex = 0 }) => {
           }}
           draggable={false}
           onError={(e) => {
+            const imagePath = currentImage.filePath || currentImage.fileUrl || currentImage.path;
             console.error('[ImageViewer] Image load error:', {
               filePath: currentImage.filePath,
               fileUrl: currentImage.fileUrl,
-              finalUrl: getImageUrl(currentImage.filePath || currentImage.fileUrl),
+              path: currentImage.path,
+              finalUrl: getImageUrl(imagePath),
               image: currentImage
             });
             e.target.style.display = 'none';
             // Show error message
             const errorDiv = document.createElement('div');
             errorDiv.className = 'text-white text-center p-4';
-            errorDiv.textContent = 'Failed to load image. Please check the file path.';
+            errorDiv.textContent = `Failed to load image. URL: ${getImageUrl(imagePath)}`;
             e.target.parentElement.appendChild(errorDiv);
           }}
           onLoad={() => {
