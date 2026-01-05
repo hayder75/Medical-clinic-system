@@ -116,29 +116,55 @@ exports.registerPatient = async (req, res) => {
       }
     }
     
+    // Generate unique patient ID with retry logic to handle race conditions
     const year = new Date().getFullYear();
     let id;
+    let retries = 0;
+    const maxRetries = 5;
     
-    if (type === 'EMERGENCY') {
-      const lastTemp = await prisma.patient.findFirst({
-        where: { id: { startsWith: `PAT-${year}-TEMP` } },
-        orderBy: { id: 'desc' },
-      });
-      let tempNum = 1;
-      if (lastTemp) {
-        tempNum = parseInt(lastTemp.id.split('-')[3]) + 1;
+    while (retries < maxRetries) {
+      try {
+        if (type === 'EMERGENCY') {
+          // Emergency patients use timestamp + random for uniqueness
+          const timestamp = Date.now().toString().slice(-6);
+          const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+          id = `PAT-${year}-TEMP-${timestamp}-${random}`;
+        } else {
+          // Regular patients use timestamp + random for uniqueness
+          const timestamp = Date.now().toString().slice(-6);
+          const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+          id = `PAT-${year}-${timestamp}-${random}`;
+        }
+        
+        // Verify it doesn't exist (unlikely but possible)
+        const existing = await prisma.patient.findUnique({
+          where: { id }
+        });
+        
+        if (!existing) {
+          break; // Unique ID found
+        }
+        
+        retries++;
+        if (retries >= maxRetries) {
+          throw new Error('Unable to generate unique patient ID. Please try again.');
+        }
+        await new Promise(resolve => setTimeout(resolve, 10));
+      } catch (error) {
+        if (error.message.includes('Unable to generate')) {
+          throw error;
+        }
+        // If it's a unique constraint error, retry
+        if (error.code === 'P2002' && error.meta?.target?.includes('id')) {
+          retries++;
+          if (retries >= maxRetries) {
+            throw new Error('Unable to generate unique patient ID. Please try again.');
+          }
+          await new Promise(resolve => setTimeout(resolve, 10));
+        } else {
+          throw error;
+        }
       }
-      id = `PAT-${year}-TEMP${tempNum.toString().padStart(2, '0')}`;
-    } else {
-      const lastPatient = await prisma.patient.findFirst({
-        where: { id: { startsWith: `PAT-${year}-` } },
-        orderBy: { id: 'desc' },
-      });
-      let nn = 1;
-      if (lastPatient && !lastPatient.id.includes('TEMP')) {
-        nn = parseInt(lastPatient.id.split('-')[2]) + 1;
-      }
-      id = `PAT-${year}-${nn.toString().padStart(2, '0')}`;
     }
 
     const patient = await prisma.patient.create({ 
@@ -159,17 +185,44 @@ exports.registerPatient = async (req, res) => {
       } 
     });
 
-    // Create a visit record for tracking through the system
-    const visitUid = `VISIT-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${String(Date.now()).slice(-4)}`;
-    const visit = await prisma.visit.create({
-      data: {
-        visitUid: visitUid,
-        patientId: patient.id,
-        status: 'WAITING_FOR_TRIAGE',
-        isEmergency: type === 'EMERGENCY',
-        notes: `Patient registered via ${type === 'EMERGENCY' ? 'emergency' : 'regular'} registration`
+    // Create a visit record for tracking through the system with unique visitUid
+    let visitUid;
+    let visit;
+    let visitRetries = 0;
+    const maxVisitRetries = 5;
+    
+    while (visitRetries < maxVisitRetries) {
+      try {
+        const now = new Date();
+        const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
+        const timestamp = Date.now().toString().slice(-6);
+        const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+        visitUid = `VISIT-${dateStr}-${timestamp}-${random}`;
+        
+        visit = await prisma.visit.create({
+          data: {
+            visitUid: visitUid,
+            patientId: patient.id,
+            status: 'WAITING_FOR_TRIAGE',
+            isEmergency: type === 'EMERGENCY',
+            notes: `Patient registered via ${type === 'EMERGENCY' ? 'emergency' : 'regular'} registration`
+          }
+        });
+        
+        break; // Success
+      } catch (error) {
+        // If it's a unique constraint error on visitUid, retry
+        if (error.code === 'P2002' && error.meta?.target?.includes('visitUid')) {
+          visitRetries++;
+          if (visitRetries >= maxVisitRetries) {
+            throw new Error('Unable to generate unique visit ID. Please try again.');
+          }
+          await new Promise(resolve => setTimeout(resolve, 10));
+        } else {
+          throw error;
+        }
       }
-    });
+    }
 
     // Create entry fee billing for non-emergency patients
     let billing = null;
