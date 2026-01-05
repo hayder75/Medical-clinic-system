@@ -542,7 +542,8 @@ exports.getCardServices = async (req, res) => {
       where: {
         code: {
           in: ['CARD-REG', 'CARD-ACT']
-        }
+        },
+        isActive: true
       },
       orderBy: { code: 'asc' }
     });

@@ -76,8 +76,11 @@ exports.createBatchOrder = async (req, res) => {
     
     const [validServices, validInvestigationTypes] = await Promise.all([
       prisma.service.findMany({
-        where: { id: { in: uniqueServiceIds } },
-        select: { id: true, name: true, price: true, category: true }
+        where: { 
+          id: { in: uniqueServiceIds },
+          isActive: true
+        },
+        select: { id: true, name: true, price: true, category: true, isActive: true }
       }),
       investigationTypeIds.length > 0 ? prisma.investigationType.findMany({
         where: { id: { in: investigationTypeIds } },
@@ -87,11 +90,11 @@ exports.createBatchOrder = async (req, res) => {
 
     // Debug - validation complete
 
-    // Check if all unique service IDs were found (not the total count, since we allow duplicates for quantities)
+    // Check if all unique service IDs were found and active (not the total count, since we allow duplicates for quantities)
     if (validServices.length !== uniqueServiceIds.length) {
       const missingIds = uniqueServiceIds.filter(id => !validServices.find(s => s.id === id));
-      console.error('❌ Missing service IDs:', missingIds);
-      return res.status(404).json({ error: 'One or more services not found', missingIds });
+      console.error('❌ Missing or inactive service IDs:', missingIds);
+      return res.status(404).json({ error: 'One or more services not found or inactive', missingIds });
     }
 
     if (investigationTypeIds.length > 0 && validInvestigationTypes.length !== investigationTypeIds.length) {

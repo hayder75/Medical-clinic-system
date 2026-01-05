@@ -743,30 +743,63 @@ const DailyCashManagement = () => {
             {/* Transactions Tab - Patient Receipts */}
             {activeTab === 'transactions' && (
               <div className="space-y-6">
-                {/* Header with Date Filter */}
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                  <div className="flex items-center gap-4">
-                    <label className="text-sm font-medium text-gray-700">Filter by Date:</label>
-                    <input
-                      type="date"
-                      value={selectedDate}
-                      onChange={(e) => setSelectedDate(e.target.value)}
-                      className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
+                {/* Header with Date Filter and Search */}
+                <div className="flex flex-col gap-4">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div className="flex items-center gap-4">
+                      <label className="text-sm font-medium text-gray-700">Filter by Date:</label>
+                      <input
+                        type="date"
+                        value={selectedDate}
+                        onChange={(e) => setSelectedDate(e.target.value)}
+                        className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <button
+                        onClick={() => setSelectedDate('')}
+                        className="px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
+                      >
+                        Clear
+                      </button>
+                    </div>
                     <button
-                      onClick={() => setSelectedDate('')}
-                      className="px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
+                      onClick={fetchPatientReceipts}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center gap-2"
                     >
-                      Clear
+                      <Calendar className="h-4 w-4" />
+                      Refresh
                     </button>
                   </div>
-                  <button
-                    onClick={fetchPatientReceipts}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center gap-2"
-                  >
-                    <Calendar className="h-4 w-4" />
-                    Refresh
-                  </button>
+                  
+                  {/* Search Bar */}
+                  <div className="flex items-center gap-4">
+                    <label className="text-sm font-medium text-gray-700">Search:</label>
+                    <select
+                      value={searchType}
+                      onChange={(e) => {
+                        setSearchType(e.target.value);
+                        setSearchQuery('');
+                      }}
+                      className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="name">By Name</option>
+                      <option value="phone">By Phone</option>
+                    </select>
+                    <input
+                      type="text"
+                      placeholder={`Search ${searchType === 'name' ? 'by patient name' : 'by phone number'}...`}
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    {searchQuery && (
+                      <button
+                        onClick={() => setSearchQuery('')}
+                        className="px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Patient Receipts List */}

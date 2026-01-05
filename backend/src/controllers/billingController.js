@@ -557,6 +557,10 @@ exports.createBilling = async (req, res) => {
         return res.status(404).json({ error: `Service with ID ${serviceData.serviceId} not found` });
       }
 
+      if (!service.isActive) {
+        return res.status(400).json({ error: `Service with ID ${serviceData.serviceId} is not active` });
+      }
+
       const unitPrice = serviceData.unitPrice || service.price;
       const totalPrice = unitPrice * serviceData.quantity;
       totalAmount += totalPrice;
@@ -1839,6 +1843,10 @@ exports.addServiceToBilling = async (req, res) => {
 
     if (!service) {
       return res.status(404).json({ error: 'Service not found' });
+    }
+
+    if (!service.isActive) {
+      return res.status(400).json({ error: 'Service is not active' });
     }
 
     const finalUnitPrice = unitPrice || service.price;

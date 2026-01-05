@@ -621,14 +621,41 @@ exports.deleteService = async (req, res) => {
       return res.status(404).json({ error: 'Service not found' });
     }
 
-    // Check if service is being used in any billings
-    const billingServices = await prisma.billingService.findFirst({
-      where: { serviceId: id }
-    });
+    // Check if service is being used anywhere in the system
+    const [
+      billingServices,
+      labTests,
+      investigationTypes,
+      nurseAssignments,
+      nurseWalkInOrders,
+      emergencyDrugOrders,
+      materialNeedsOrders,
+      batchOrderServices
+    ] = await Promise.all([
+      prisma.billingService.findFirst({ where: { serviceId: id } }),
+      prisma.labTest.findFirst({ where: { serviceId: id } }),
+      prisma.investigationType.findFirst({ where: { serviceId: id } }),
+      prisma.nurseServiceAssignment.findFirst({ where: { serviceId: id } }),
+      prisma.nurseWalkInOrder.findFirst({ where: { serviceId: id } }),
+      prisma.emergencyDrugOrder.findFirst({ where: { serviceId: id } }),
+      prisma.materialNeedsOrder.findFirst({ where: { serviceId: id } }),
+      prisma.batchOrderService.findFirst({ where: { serviceId: id } })
+    ]);
 
-    if (billingServices) {
+    // Build list of usage locations
+    const usageLocations = [];
+    if (billingServices) usageLocations.push('billing records');
+    if (labTests) usageLocations.push('lab tests');
+    if (investigationTypes) usageLocations.push('radiology types');
+    if (nurseAssignments) usageLocations.push('nurse service assignments');
+    if (nurseWalkInOrders) usageLocations.push('nurse walk-in orders');
+    if (emergencyDrugOrders) usageLocations.push('emergency drug orders');
+    if (materialNeedsOrders) usageLocations.push('material needs orders');
+    if (batchOrderServices) usageLocations.push('batch orders');
+
+    if (usageLocations.length > 0) {
       return res.status(400).json({ 
-        error: 'Cannot delete service that is being used in billing records' 
+        error: `Cannot delete service that is being used in: ${usageLocations.join(', ')}. Please deactivate it instead.` 
       });
     }
 

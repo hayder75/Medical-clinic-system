@@ -552,7 +552,7 @@ const LabOrders = () => {
             body { 
               font-family: Arial, sans-serif; 
               padding: 40px 60px; 
-              font-size: 11px;
+              font-size: 14px;
               color: #000;
             }
             .clinic-header {
@@ -560,12 +560,12 @@ const LabOrders = () => {
               margin-bottom: 20px;
             }
             .clinic-name {
-              font-size: 18px;
+              font-size: 24px;
               font-weight: bold;
               margin-bottom: 5px;
             }
             .subheader {
-              font-size: 14px;
+              font-size: 18px;
               color: #666;
               margin-bottom: 20px;
             }
@@ -574,7 +574,7 @@ const LabOrders = () => {
               margin: 15px 0;
             }
             .section-title {
-              font-size: 14px;
+              font-size: 18px;
               font-weight: bold;
               text-decoration: underline;
               margin: 15px 0 10px 0;
@@ -584,14 +584,14 @@ const LabOrders = () => {
               flex-wrap: wrap;
               gap: 20px;
               margin-bottom: 15px;
-              font-size: 11px;
+              font-size: 14px;
             }
             .test-section {
               page-break-inside: avoid;
               margin: 30px 0;
             }
             .test-title {
-              font-size: 12px;
+              font-size: 16px;
               font-weight: bold;
               margin: 10px 0 5px 0;
             }
@@ -599,10 +599,10 @@ const LabOrders = () => {
               width: 100%;
               border-collapse: collapse;
               margin: 10px 0;
-              font-size: 10px;
+              font-size: 13px;
             }
             table td {
-              padding: 8px;
+              padding: 10px;
               border: 1px solid #ddd;
             }
             .field-name {
@@ -614,7 +614,7 @@ const LabOrders = () => {
               padding: 10px;
               background: #f9f9f9;
               font-style: italic;
-              font-size: 10px;
+              font-size: 13px;
             }
             .footer-section {
               margin-top: 30px;
@@ -623,12 +623,12 @@ const LabOrders = () => {
             }
             .signature-line {
               margin: 20px 0 5px 0;
-              font-size: 10px;
+              font-size: 13px;
               color: #666;
             }
             .footer-text {
               text-align: center;
-              font-size: 9px;
+              font-size: 12px;
               color: #666;
               margin: 20px 0 5px 0;
             }

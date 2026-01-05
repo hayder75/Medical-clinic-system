@@ -1333,13 +1333,17 @@ exports.assignNurseService = async (req, res) => {
       return res.status(400).json({ error: 'Visit must be triaged before assigning nurse service' });
     }
 
-    // Check if service exists and is a nurse service
+    // Check if service exists, is active, and is a nurse service
     const service = await prisma.service.findUnique({
       where: { id: serviceId }
     });
 
     if (!service) {
       return res.status(404).json({ error: 'Service not found' });
+    }
+
+    if (!service.isActive) {
+      return res.status(400).json({ error: 'Service is not active' });
     }
 
     if (service.category !== 'NURSE') {
@@ -1451,16 +1455,17 @@ exports.assignNurseServices = async (req, res) => {
       return res.status(400).json({ error: 'Visit must be triaged before assigning services' });
     }
 
-    // Check if all services exist and are either NURSE or DENTAL services
+    // Check if all services exist, are active, and are either NURSE or DENTAL services
     const services = await prisma.service.findMany({
       where: { 
         id: { in: serviceIds },
-        category: { in: ['NURSE', 'DENTAL'] }
+        category: { in: ['NURSE', 'DENTAL'] },
+        isActive: true
       }
     });
 
     if (services.length !== serviceIds.length) {
-      return res.status(404).json({ error: 'One or more services not found or not valid (must be NURSE or DENTAL category)' });
+      return res.status(404).json({ error: 'One or more services not found, inactive, or not valid (must be NURSE or DENTAL category)' });
     }
 
     // Create a map of serviceId -> quantity (default to 1 if not provided)
