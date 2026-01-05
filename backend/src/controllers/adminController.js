@@ -3215,7 +3215,7 @@ exports.getLabTestsForOrdering = async (req, res) => {
     
     // Define tests that should be extracted from groups and made independent
     // These will appear in the top-level "Standalone Tests" list for doctors
-    // (e.g. ESR, Blood Group & Rh, Retic, BT/CT, PBF, HCG, RTD, etc.)
+    // (e.g. ESR, Blood Group & Rh, Retic, BT/CT, PBF, HCG, RTD, BF (Blood Film), etc.)
     const independentTestCodes = [
       'ESR001',
       'BGRH001',
@@ -3226,7 +3226,8 @@ exports.getLabTestsForOrdering = async (req, res) => {
       // Serology tests requested to be independent choices
       'HCG001', // HCG (Qualitative)
       'HCG002', // HCG (Quantitative)
-      'RTD001'  // RTD (Rapid Test Device)
+      'RTD001', // RTD (Rapid Test Device)
+      'PICT001' // BF (Blood Film) - previously PICT – Malaria
     ];
     
     // Add groups, but exclude independent tests from group.tests
@@ -3248,12 +3249,11 @@ exports.getLabTestsForOrdering = async (req, res) => {
           'WEIL001',  // Weil-Felix Test (next to Widal)
           'RPR001',
           'HBSAG001', // HBsAg
+          'HCV001',   // HCV Antibody - directly under HBsAg
           'HIV001',   // HIV
           'RF001',
           'ASO001',
-          'HCV001',
-          'VDRL001',
-          'PICT001'
+          'VDRL001'
         ];
 
         const orderIndex = {};
@@ -3301,10 +3301,11 @@ exports.getLabTestsForOrdering = async (req, res) => {
       'BT001': 'Bleeding Time',
       'CT001': 'Clotting Time',
       'PBF001': 'Peripheral Blood Film',
-      // Independent HCG & RTD categories
+      // Independent HCG, RTD & BF (Blood Film) categories
       'HCG001': 'HCG (Qualitative)',
       'HCG002': 'HCG (Quantitative)',
-      'RTD001': 'RTD (Rapid Test Device)'
+      'RTD001': 'RTD (Rapid Test Device)',
+      'PICT001': 'BF (Blood Film)'
     };
 
     // Combine independent tests from both standalone and groups
@@ -3350,11 +3351,18 @@ exports.getLabTestsForOrdering = async (req, res) => {
           if (test.code === 'HIV001') {
             test.name = 'HIV Test (PICT)';
           }
+          if (test.code === 'PICT001') {
+            // Rename PICT – Malaria to BF (Blood Film)
+            test.name = 'BF (Blood Film)';
+          }
         });
       });
       category.standalone?.forEach(test => {
         if (test.code === 'HIV001') {
           test.name = 'HIV Test (PICT)';
+        }
+        if (test.code === 'PICT001') {
+          test.name = 'BF (Blood Film)';
         }
       });
     });
