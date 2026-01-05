@@ -3245,11 +3245,14 @@ exports.getLabTestsForOrdering = async (req, res) => {
       include: {
         tests: {
           where: { 
-            isActive: true,
-            // Also filter by service.isActive if serviceId exists
-            OR: [
-              { serviceId: null },
-              { service: { isActive: true } }
+            AND: [
+              { isActive: true },
+              {
+                OR: [
+                  { serviceId: null },
+                  { service: { isActive: true } }
+                ]
+              }
             ]
           },
           orderBy: { displayOrder: 'asc' },
@@ -3272,12 +3275,15 @@ exports.getLabTestsForOrdering = async (req, res) => {
     // Get standalone tests (not in groups)
     const standaloneTests = await prisma.labTest.findMany({
       where: {
-        isActive: true,
-        groupId: null,
-        // Also filter by service.isActive if serviceId exists
-        OR: [
-          { serviceId: null },
-          { service: { isActive: true } }
+        AND: [
+          { isActive: true },
+          { groupId: null },
+          {
+            OR: [
+              { serviceId: null },
+              { service: { isActive: true } }
+            ]
+          }
         ]
       },
       orderBy: [
