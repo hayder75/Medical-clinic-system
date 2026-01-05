@@ -2338,9 +2338,7 @@ exports.deleteBilling = async (req, res) => {
           }
         },
         services: true,
-        payments: true,
-        labTestOrders: true,
-        radiologyOrders: true
+        payments: true
       }
     });
 
@@ -2373,7 +2371,10 @@ exports.deleteBilling = async (req, res) => {
       }
 
       // Update related LabTestOrders: set status to UNPAID and remove billingId
-      if (billing.labTestOrders && billing.labTestOrders.length > 0) {
+      const labTestOrdersCount = await tx.labTestOrder.count({
+        where: { billingId: billingId }
+      });
+      if (labTestOrdersCount > 0) {
         await tx.labTestOrder.updateMany({
           where: { billingId: billingId },
           data: {
@@ -2384,7 +2385,10 @@ exports.deleteBilling = async (req, res) => {
       }
 
       // Update related RadiologyOrders: set status to UNPAID and remove billingId
-      if (billing.radiologyOrders && billing.radiologyOrders.length > 0) {
+      const radiologyOrdersCount = await tx.radiologyOrder.count({
+        where: { billingId: billingId }
+      });
+      if (radiologyOrdersCount > 0) {
         await tx.radiologyOrder.updateMany({
           where: { billingId: billingId },
           data: {
