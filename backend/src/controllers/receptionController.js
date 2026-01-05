@@ -432,32 +432,52 @@ exports.createVisit = async (req, res) => {
       });
     }
     
-    // Generate visit UID
-    const now = new Date();
-    const dateStr = now.toISOString().split('T')[0].replace(/-/g, '');
-    const visitCount = await prisma.visit.count({
-      where: {
-        createdAt: {
-          gte: new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    // Generate unique visit UID with retry logic to handle race conditions
+    let visitUid;
+    let visit;
+    let retries = 0;
+    const maxRetries = 5;
+    
+    while (retries < maxRetries) {
+      try {
+        const now = new Date();
+        const dateStr = now.toISOString().split('T')[0].replace(/-/g, '');
+        const timestamp = Date.now().toString().slice(-6); // Last 6 digits of timestamp
+        const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0'); // 3 digit random
+        visitUid = `VISIT-${dateStr}-${timestamp}-${random}`;
+        
+        // Create visit
+        visit = await prisma.visit.create({
+          data: {
+            visitUid,
+            patientId: patient.id,
+            createdById: receptionistId,
+            suggestedDoctorId: validatedData.suggestedDoctorId || null,
+            notes: validatedData.notes || null,
+            queueType: validatedData.queueType,
+            isEmergency: validatedData.isEmergency,
+            status: validatedData.isEmergency ? 'WAITING_FOR_TRIAGE' : 'WAITING_FOR_TRIAGE'
+          }
+        });
+        
+        // Success - break out of retry loop
+        break;
+      } catch (error) {
+        // If it's a unique constraint error on visitUid, retry with a new ID
+        if (error.code === 'P2002' && error.meta?.target?.includes('visitUid')) {
+          retries++;
+          if (retries >= maxRetries) {
+            console.error('Failed to generate unique visitUid after', maxRetries, 'attempts');
+            throw new Error('Unable to generate unique visit ID. Please try again.');
+          }
+          // Wait a tiny bit before retrying (adds more randomness)
+          await new Promise(resolve => setTimeout(resolve, 10));
+        } else {
+          // Different error - throw it
+          throw error;
         }
       }
-    });
-    const visitNumber = String(visitCount + 1).padStart(4, '0');
-    const visitUid = `VISIT-${dateStr}-${visitNumber}`;
-    
-    // Create visit
-    const visit = await prisma.visit.create({
-      data: {
-        visitUid,
-        patientId: patient.id,
-        createdById: receptionistId,
-        suggestedDoctorId: validatedData.suggestedDoctorId || null,
-        notes: validatedData.notes || null,
-        queueType: validatedData.queueType,
-        isEmergency: validatedData.isEmergency,
-        status: validatedData.isEmergency ? 'WAITING_FOR_TRIAGE' : 'WAITING_FOR_TRIAGE'
-      }
-    });
+    }
     
     // For emergency visits, create emergency billing (no consultation fee upfront)
     let billing = null;
