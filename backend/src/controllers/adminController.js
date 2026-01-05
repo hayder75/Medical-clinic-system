@@ -3544,7 +3544,6 @@ exports.getAllPatients = async (req, res) => {
               visits: true,
               labTestOrders: true,
               radiologyOrders: true,
-              medicationOrders: true,
               bills: true
             }
           }
