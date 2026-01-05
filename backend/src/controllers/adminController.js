@@ -3582,7 +3582,7 @@ exports.deletePatient = async (req, res) => {
             labOrders: true,
             labTestOrders: true,
             radiologyOrders: true,
-            medicationOrders: true,
+            orders: true,
             bills: true,
             payments: true,
             dispenseLogs: true,
