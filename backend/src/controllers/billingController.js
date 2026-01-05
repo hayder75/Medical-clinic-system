@@ -138,23 +138,41 @@ exports.registerPatient = async (req, res) => {
         }
         
         // Create patient - if unique constraint error, retry with new ID
-        patient = await prisma.patient.create({ 
-      data: { 
-        id, 
-        name,
-        type,
-        dob: dob ? new Date(dob) : null,
-        gender,
-        mobile,
-        email,
-        address,
-        emergencyContact,
-        bloodType,
-        maritalStatus,
-        insuranceId,
-        status: 'Active' 
-      } 
-    });
+        patient = await prisma.patient.create({
+          data: { 
+            id, 
+            name,
+            type,
+            dob: dob ? new Date(dob) : null,
+            gender,
+            mobile,
+            email,
+            address,
+            emergencyContact,
+            bloodType,
+            maritalStatus,
+            insuranceId,
+            status: 'Active' 
+          } 
+        });
+        
+        break; // Success - patient created
+      } catch (error) {
+        // If it's a unique constraint error, retry with a new ID
+        if (error.code === 'P2002' && error.meta?.target?.includes('id')) {
+          retries++;
+          if (retries >= maxRetries) {
+            console.error('Failed to generate unique patient ID after', maxRetries, 'attempts');
+            throw new Error('Unable to generate unique patient ID. Please try again.');
+          }
+          // Wait a tiny bit before retrying (adds more randomness)
+          await new Promise(resolve => setTimeout(resolve, 10));
+        } else {
+          // Different error - throw it
+          throw error;
+        }
+      }
+    }
 
     // Create a visit record for tracking through the system with unique visitUid
     let visitUid;
