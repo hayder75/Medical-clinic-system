@@ -3691,6 +3691,13 @@ exports.deletePatient = async (req, res) => {
         await tx.billing.deleteMany({ where: { id: { in: allBillingIds } } });
       }
 
+      // Delete patient-level orders (not linked to visits)
+      await tx.labOrder.deleteMany({ where: { patientId } });
+      await tx.labTestOrder.deleteMany({ where: { patientId } });
+      await tx.radiologyOrder.deleteMany({ where: { patientId } });
+      await tx.medicationOrder.deleteMany({ where: { patientId } });
+      await tx.batchOrder.deleteMany({ where: { patientId } });
+
       await tx.assignment.deleteMany({ where: { patientId } });
       await tx.dispenseLog.deleteMany({ where: { patientId } });
       await tx.medicalHistory.deleteMany({ where: { patientId } });
