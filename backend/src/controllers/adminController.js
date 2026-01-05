@@ -562,6 +562,40 @@ exports.updateService = async (req, res) => {
       data
     });
 
+    // Sync price and name changes to associated LabTest if this service is linked to a lab test
+    if (data.price !== undefined || data.name !== undefined) {
+      const linkedLabTest = await prisma.labTest.findFirst({
+        where: { serviceId: id }
+      });
+
+      if (linkedLabTest) {
+        const labTestUpdate = {};
+        if (data.price !== undefined) labTestUpdate.price = data.price;
+        if (data.name !== undefined) labTestUpdate.name = data.name;
+
+        await prisma.labTest.updateMany({
+          where: { serviceId: id },
+          data: labTestUpdate
+        });
+      }
+
+      // Also sync to RadiologyType if linked
+      const linkedRadiologyType = await prisma.radiologyType.findFirst({
+        where: { serviceId: id }
+      });
+
+      if (linkedRadiologyType) {
+        const radiologyUpdate = {};
+        if (data.price !== undefined) radiologyUpdate.price = data.price;
+        if (data.name !== undefined) radiologyUpdate.name = data.name;
+
+        await prisma.radiologyType.updateMany({
+          where: { serviceId: id },
+          data: radiologyUpdate
+        });
+      }
+    }
+
     res.json({
       message: 'Service updated successfully',
       service
