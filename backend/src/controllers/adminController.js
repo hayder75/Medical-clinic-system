@@ -3244,7 +3244,14 @@ exports.getLabTestsForOrdering = async (req, res) => {
       where: { isActive: true },
       include: {
         tests: {
-          where: { isActive: true },
+          where: { 
+            isActive: true,
+            // Also filter by service.isActive if serviceId exists
+            OR: [
+              { serviceId: null },
+              { service: { isActive: true } }
+            ]
+          },
           orderBy: { displayOrder: 'asc' },
           select: {
             id: true,
@@ -3266,7 +3273,12 @@ exports.getLabTestsForOrdering = async (req, res) => {
     const standaloneTests = await prisma.labTest.findMany({
       where: {
         isActive: true,
-        groupId: null
+        groupId: null,
+        // Also filter by service.isActive if serviceId exists
+        OR: [
+          { serviceId: null },
+          { service: { isActive: true } }
+        ]
       },
       orderBy: [
         { category: 'asc' },
