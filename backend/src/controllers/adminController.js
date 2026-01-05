@@ -3719,7 +3719,7 @@ exports.deletePatient = async (req, res) => {
         userId: userId,
         action: 'DELETE_PATIENT',
         entity: 'Patient',
-        entityId: patientId,
+        entityId: 0, // Patient IDs are strings, use 0 as placeholder
         details: JSON.stringify({
           patientId: patientId,
           patientName: patient.name,
