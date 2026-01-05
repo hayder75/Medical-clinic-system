@@ -579,19 +579,19 @@ exports.updateService = async (req, res) => {
         });
       }
 
-      // Also sync to RadiologyType if linked
-      const linkedRadiologyType = await prisma.radiologyType.findFirst({
+      // Also sync to InvestigationType if linked (used for radiology)
+      const linkedInvestigationType = await prisma.investigationType.findFirst({
         where: { serviceId: id }
       });
 
-      if (linkedRadiologyType) {
-        const radiologyUpdate = {};
-        if (data.price !== undefined) radiologyUpdate.price = data.price;
-        if (data.name !== undefined) radiologyUpdate.name = data.name;
+      if (linkedInvestigationType) {
+        const investigationUpdate = {};
+        if (data.price !== undefined) investigationUpdate.price = data.price;
+        if (data.name !== undefined) investigationUpdate.name = data.name;
 
-        await prisma.radiologyType.updateMany({
+        await prisma.investigationType.updateMany({
           where: { serviceId: id },
-          data: radiologyUpdate
+          data: investigationUpdate
         });
       }
     }
