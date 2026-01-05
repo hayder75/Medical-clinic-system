@@ -320,7 +320,7 @@ const MedicationOrdering = ({ visitId, patientId, patient, doctor, onOrdersPlace
               }
               body { 
                 margin: 0 !important;
-                padding: 10mm 8mm !important; /* 10mm top/bottom, 8mm left/right */
+                padding: 8mm 6mm !important;
                 color: #000 !important;
                 background: white !important;
                 width: 80mm !important;
@@ -331,8 +331,7 @@ const MedicationOrdering = ({ visitId, patientId, patient, doctor, onOrdersPlace
                 display: none !important; 
               }
               .prescription-page {
-                border: 1px solid #ddd !important;
-                padding: 3mm !important;
+                padding: 0 !important;
                 margin: 0 auto !important;
                 width: 100% !important;
                 max-width: 100% !important;
@@ -342,7 +341,7 @@ const MedicationOrdering = ({ visitId, patientId, patient, doctor, onOrdersPlace
             body { 
               font-family: Arial, sans-serif; 
               margin: 0; 
-              padding: 10mm 8mm;
+              padding: 8mm 6mm;
               color: #000;
               background: white;
               width: 80mm;
@@ -350,145 +349,158 @@ const MedicationOrdering = ({ visitId, patientId, patient, doctor, onOrdersPlace
               box-sizing: border-box;
             }
             .prescription-page {
-              padding: 3mm;
-              font-size: 17px;
+              padding: 0;
+              font-size: 16px;
               background: white;
-              border: 1px solid #ccc;
               box-sizing: border-box;
               max-width: 100%;
               margin: 0 auto;
               width: 100%;
             }
             .header { 
-              text-align: left; 
-              padding-bottom: 3px; 
-              margin-bottom: 3px; 
+              text-align: center; 
+              padding-bottom: 6px; 
+              margin-bottom: 8px; 
+              border-bottom: 1px solid #ddd;
+              padding-bottom: 8px;
             }
             .clinic-name { 
-              font-size: 18px; 
+              font-size: 17px; 
               font-weight: bold; 
-              margin-bottom: 2px; 
+              margin-bottom: 3px; 
               color: #000;
             }
             .prescription-title { 
-              font-size: 17px; 
+              font-size: 15px; 
               font-weight: bold; 
-              margin: 2px 0; 
+              margin: 3px 0; 
               color: #000;
             }
             .prescription-info {
-              font-size: 16px;
-              color: #000;
-              margin-top: 2px;
+              font-size: 13px;
+              color: #666;
+              margin-top: 3px;
             }
             .patient-section { 
-              margin: 4px 0; 
+              margin: 8px 0 6px 0; 
               padding: 0; 
             }
             .patient-section h3 { 
-              margin: 0 0 2px 0;
-              font-size: 17px; 
+              margin: 0 0 4px 0;
+              font-size: 15px; 
               font-weight: bold; 
               color: #000;
+              border-bottom: 1px solid #eee;
+              padding-bottom: 3px;
             }
             .patient-details { 
               display: block; 
-              margin-top: 2px; 
+              margin-top: 4px; 
             }
             .patient-detail { 
-              font-size: 16px; 
-              line-height: 1.4;
-              margin-bottom: 2px;
+              font-size: 14px; 
+              line-height: 1.5;
+              margin-bottom: 3px;
             }
             .patient-detail strong { 
               display: inline-block; 
-              min-width: 70px; 
+              min-width: 75px; 
               color: #000;
+              font-weight: 600;
             }
             .medications-section {
-              margin: 4px 0;
+              margin: 8px 0 6px 0;
             }
             .medications-section h3 {
-              font-size: 17px;
+              font-size: 15px;
               font-weight: bold;
-              margin-bottom: 3px;
+              margin-bottom: 5px;
               color: #000;
+              border-bottom: 1px solid #eee;
+              padding-bottom: 3px;
             }
             .medications-grid {
               display: grid !important;
               grid-template-columns: ${numColumns === 1 ? '1fr' : numColumns === 2 ? '1fr 1fr' : '1fr 1fr 1fr'} !important;
-              gap: 3px 4px !important;
-              margin-top: 2px;
+              gap: 5px 6px !important;
+              margin-top: 4px;
               max-width: 100%;
               box-sizing: border-box;
               width: 100%;
             }
             .medication { 
-              margin-bottom: 2px; 
-              padding: 2px 0;
+              margin-bottom: 4px; 
+              padding: 4px 0;
               break-inside: avoid;
               page-break-inside: avoid;
             }
             .medication-name { 
               font-weight: bold; 
-              font-size: 16px; 
+              font-size: 14px; 
               color: #000;
-              margin-bottom: 1px;
-              line-height: 1.2;
+              margin-bottom: 2px;
+              line-height: 1.3;
               word-wrap: break-word;
             }
             .medication-details { 
-              margin-top: 0; 
-              font-size: 15px; 
-              line-height: 1.2;
+              margin-top: 2px; 
+              font-size: 13px; 
+              line-height: 1.4;
               word-wrap: break-word;
+              color: #333;
             }
             .medication-details span {
               margin-right: 2px;
             }
             .doctor-section { 
-              margin-top: 4px; 
+              margin-top: 8px; 
               padding: 0; 
+              border-top: 1px solid #eee;
+              padding-top: 6px;
             }
             .doctor-section h3 { 
-              margin: 0 0 2px 0;
-              font-size: 17px; 
+              margin: 0 0 4px 0;
+              font-size: 15px; 
               font-weight: bold; 
               color: #000;
+              border-bottom: 1px solid #eee;
+              padding-bottom: 3px;
             }
             .doctor-details { 
-              margin-top: 2px; 
-              font-size: 16px; 
-              line-height: 1.3;
+              margin-top: 4px; 
+              font-size: 14px; 
+              line-height: 1.5;
             }
             .doctor-detail { 
-              margin: 2px 0; 
+              margin: 3px 0; 
             }
             .doctor-detail strong {
               display: inline-block;
-              min-width: 70px;
+              min-width: 75px;
               color: #000;
+              font-weight: 600;
             }
             .signature-area { 
-              margin-top: 5px; 
-              padding-top: 3px;
+              margin-top: 8px; 
+              padding-top: 6px;
               text-align: center;
             }
             .signature-box { 
-              width: 80px; 
+              width: 100px; 
               margin: 0 auto;
               border-top: 1px solid #000; 
-              padding-top: 2px; 
+              padding-top: 4px; 
               text-align: center; 
-              font-size: 7px; 
+              font-size: 11px; 
               font-weight: bold;
             }
             .footer { 
-              margin-top: 4px; 
+              margin-top: 6px; 
               text-align: center; 
-              font-size: 7px; 
-              color: #000; 
-              padding-top: 2px;
+              font-size: 10px; 
+              color: #666; 
+              padding-top: 4px;
+              border-top: 1px solid #eee;
             }
             .no-print {
               text-align: center;
