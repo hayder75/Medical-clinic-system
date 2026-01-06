@@ -262,18 +262,7 @@ const LabOrdering = ({ visitId, patientId, onOrdersPlaced, existingOrders = [] }
     return getSelectedTests().reduce((sum, test) => sum + (test.price || 0), 0);
   };
 
-  if (fetchingTests) {
-    return (
-      <div className="flex items-center justify-center py-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
-        <span className="ml-2 text-gray-600">Loading lab tests...</span>
-      </div>
-    );
-  }
-
-  const selectedTests = getSelectedTests();
-
-  // Flatten all tests for search
+  // Flatten all tests for search - MUST be before early return
   const allTestsFlat = useMemo(() => {
     const tests = [];
     Object.entries(organizedTests).forEach(([category, data]) => {
@@ -291,7 +280,7 @@ const LabOrdering = ({ visitId, patientId, onOrdersPlaced, existingOrders = [] }
     return tests;
   }, [organizedTests]);
 
-  // Filter tests based on search query
+  // Filter tests based on search query - MUST be before early return
   const filteredTests = useMemo(() => {
     if (!searchQuery.trim()) return null; // null means show categories
     
@@ -304,7 +293,7 @@ const LabOrdering = ({ visitId, patientId, onOrdersPlaced, existingOrders = [] }
     );
   }, [searchQuery, allTestsFlat]);
 
-  // Filter organized tests based on search
+  // Filter organized tests based on search - MUST be before early return
   const filteredOrganizedTests = useMemo(() => {
     if (!searchQuery.trim()) return organizedTests;
     
@@ -352,6 +341,18 @@ const LabOrdering = ({ visitId, patientId, onOrdersPlaced, existingOrders = [] }
     
     return filtered;
   }, [searchQuery, organizedTests]);
+
+  // Early return MUST be after all hooks
+  if (fetchingTests) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+        <span className="ml-2 text-gray-600">Loading lab tests...</span>
+      </div>
+    );
+  }
+
+  const selectedTests = getSelectedTests();
 
   return (
     <div className="space-y-6">
