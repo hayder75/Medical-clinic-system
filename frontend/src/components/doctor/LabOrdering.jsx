@@ -604,18 +604,39 @@ const LabOrdering = ({ visitId, patientId, onOrdersPlaced, existingOrders = [] }
                   <div className="space-y-4">
                     {filteredOrganizedTests[selectedCategory]?.groups && filteredOrganizedTests[selectedCategory].groups.length > 0 && (
                       <div className="flex flex-wrap gap-3">
-                        {filteredOrganizedTests[selectedCategory].groups.map((group) => (
-                          <button
-                            key={group.id}
-                            onClick={() => setSelectedGroupId(group.id)}
-                            className="px-6 py-3 bg-green-600 text-white rounded-lg text-base font-semibold hover:bg-green-700 transition-all shadow-md hover:shadow-lg"
-                          >
-                            {group.name}
-                            <span className="ml-2 text-sm bg-green-500 px-2 py-1 rounded">
-                              {group.tests?.length || 0} tests
-                            </span>
-                          </button>
-                        ))}
+                        {filteredOrganizedTests[selectedCategory].groups.map((group) => {
+                          const allGroupTestsSelected = group.tests?.every(test => selectedTestIds.has(test.id));
+                          const someGroupTestsSelected = group.tests?.some(test => selectedTestIds.has(test.id));
+                          
+                          return (
+                            <div key={group.id} className="flex items-center gap-2">
+                              <button
+                                onClick={() => setSelectedGroupId(group.id)}
+                                className="px-6 py-3 bg-green-600 text-white rounded-lg text-base font-semibold hover:bg-green-700 transition-all shadow-md hover:shadow-lg"
+                              >
+                                {group.name}
+                                <span className="ml-2 text-sm bg-green-500 px-2 py-1 rounded">
+                                  {group.tests?.length || 0} tests
+                                </span>
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handlePanelSelect(group);
+                                }}
+                                className={`px-4 py-3 rounded-lg text-sm font-semibold transition-all shadow-md hover:shadow-lg ${
+                                  allGroupTestsSelected
+                                    ? 'bg-green-700 text-white hover:bg-green-800'
+                                    : someGroupTestsSelected
+                                      ? 'bg-green-500 text-white hover:bg-green-600'
+                                      : 'bg-green-100 text-green-700 hover:bg-green-200'
+                                }`}
+                              >
+                                {allGroupTestsSelected ? 'Deselect All' : 'Select All'}
+                              </button>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                     {/* Also show standalone tests in Serology if any */}
@@ -681,18 +702,39 @@ const LabOrdering = ({ visitId, patientId, onOrdersPlaced, existingOrders = [] }
                   <div className="space-y-4">
                     {filteredOrganizedTests[selectedCategory]?.groups && filteredOrganizedTests[selectedCategory].groups.length > 0 && (
                       <div className="flex flex-wrap gap-3">
-                        {filteredOrganizedTests[selectedCategory].groups.map((group) => (
-                          <button
-                            key={group.id}
-                            onClick={() => setSelectedGroupId(group.id)}
-                            className="px-6 py-3 bg-orange-600 text-white rounded-lg text-base font-semibold hover:bg-orange-700 transition-all shadow-md hover:shadow-lg"
-                          >
-                            {group.name}
-                            <span className="ml-2 text-sm bg-orange-500 px-2 py-1 rounded">
-                              {group.tests?.length || 0} tests
-                            </span>
-                          </button>
-                        ))}
+                        {filteredOrganizedTests[selectedCategory].groups.map((group) => {
+                          const allGroupTestsSelected = group.tests?.every(test => selectedTestIds.has(test.id));
+                          const someGroupTestsSelected = group.tests?.some(test => selectedTestIds.has(test.id));
+                          
+                          return (
+                            <div key={group.id} className="flex items-center gap-2">
+                              <button
+                                onClick={() => setSelectedGroupId(group.id)}
+                                className="px-6 py-3 bg-orange-600 text-white rounded-lg text-base font-semibold hover:bg-orange-700 transition-all shadow-md hover:shadow-lg"
+                              >
+                                {group.name}
+                                <span className="ml-2 text-sm bg-orange-500 px-2 py-1 rounded">
+                                  {group.tests?.length || 0} tests
+                                </span>
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handlePanelSelect(group);
+                                }}
+                                className={`px-4 py-3 rounded-lg text-sm font-semibold transition-all shadow-md hover:shadow-lg ${
+                                  allGroupTestsSelected
+                                    ? 'bg-orange-700 text-white hover:bg-orange-800'
+                                    : someGroupTestsSelected
+                                      ? 'bg-orange-500 text-white hover:bg-orange-600'
+                                      : 'bg-orange-100 text-orange-700 hover:bg-orange-200'
+                                }`}
+                              >
+                                {allGroupTestsSelected ? 'Deselect All' : 'Select All'}
+                              </button>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                     {/* Also show standalone tests in Blood Chemistry if any */}
@@ -756,28 +798,55 @@ const LabOrdering = ({ visitId, patientId, onOrdersPlaced, existingOrders = [] }
                 {/* Show tests for selected group */}
                 {selectedGroupId && (
                   <div className="space-y-4">
-                    {/* Group selection header - show all groups as buttons */}
+                    {/* Group selection header - show all groups as buttons with Select All */}
                     <div className="flex flex-wrap gap-3">
-                      {filteredOrganizedTests[selectedCategory]?.groups?.map((group) => (
-                        <button
-                          key={group.id}
-                          onClick={() => setSelectedGroupId(group.id)}
-                          className={`px-6 py-3 text-white rounded-lg text-base font-semibold transition-all shadow-md hover:shadow-lg ${
-                            selectedGroupId === group.id
-                              ? selectedCategory === 'Serology' 
-                                ? 'bg-green-700 ring-2 ring-green-300' 
-                                : 'bg-orange-700 ring-2 ring-orange-300'
-                              : selectedCategory === 'Serology'
-                                ? 'bg-green-600 hover:bg-green-700'
-                                : 'bg-orange-600 hover:bg-orange-700'
-                          }`}
-                        >
-                          {group.name}
-                          <span className="ml-2 text-sm bg-white bg-opacity-30 px-2 py-1 rounded">
-                            {group.tests?.length || 0} tests
-                          </span>
-                        </button>
-                      ))}
+                      {filteredOrganizedTests[selectedCategory]?.groups?.map((group) => {
+                        const allGroupTestsSelected = group.tests?.every(test => selectedTestIds.has(test.id));
+                        const someGroupTestsSelected = group.tests?.some(test => selectedTestIds.has(test.id));
+                        
+                        return (
+                          <div key={group.id} className="flex items-center gap-2">
+                            <button
+                              onClick={() => setSelectedGroupId(group.id)}
+                              className={`px-6 py-3 text-white rounded-lg text-base font-semibold transition-all shadow-md hover:shadow-lg ${
+                                selectedGroupId === group.id
+                                  ? selectedCategory === 'Serology' 
+                                    ? 'bg-green-700 ring-2 ring-green-300' 
+                                    : 'bg-orange-700 ring-2 ring-orange-300'
+                                  : selectedCategory === 'Serology'
+                                    ? 'bg-green-600 hover:bg-green-700'
+                                    : 'bg-orange-600 hover:bg-orange-700'
+                              }`}
+                            >
+                              {group.name}
+                              <span className="ml-2 text-sm bg-white bg-opacity-30 px-2 py-1 rounded">
+                                {group.tests?.length || 0} tests
+                              </span>
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handlePanelSelect(group);
+                              }}
+                              className={`px-4 py-3 rounded-lg text-sm font-semibold transition-all shadow-md hover:shadow-lg ${
+                                allGroupTestsSelected
+                                  ? selectedCategory === 'Serology'
+                                    ? 'bg-green-700 text-white hover:bg-green-800'
+                                    : 'bg-orange-700 text-white hover:bg-orange-800'
+                                  : someGroupTestsSelected
+                                    ? selectedCategory === 'Serology'
+                                      ? 'bg-green-500 text-white hover:bg-green-600'
+                                      : 'bg-orange-500 text-white hover:bg-orange-600'
+                                    : selectedCategory === 'Serology'
+                                      ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                                      : 'bg-orange-100 text-orange-700 hover:bg-orange-200'
+                              }`}
+                            >
+                              {allGroupTestsSelected ? 'Deselect All' : 'Select All'}
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
 
                     {/* Group tests as cards - Sort VDRL below Weil-Felix for Serology */}
