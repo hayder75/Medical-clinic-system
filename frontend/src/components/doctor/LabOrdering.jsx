@@ -485,10 +485,357 @@ const LabOrdering = ({ visitId, patientId, onOrdersPlaced, existingOrders = [] }
           </div>
         )}
         
-        {/* Category View (when not searching) */}
+        {/* Category View (when not searching) - Button-based UI */}
         {!searchQuery && (
-          <div className="space-y-3 max-h-[700px] overflow-y-auto">
-            {Object.entries(filteredOrganizedTests).map(([category, data]) => (
+          <div className="space-y-4">
+            {/* Main Category Buttons - 3 round buttons */}
+            {!selectedCategory && (
+              <div className="flex flex-wrap gap-4 justify-center">
+                {['Serology', 'Blood Chemistry', 'Standalone Tests'].map((catName) => {
+                  const categoryData = filteredOrganizedTests[catName];
+                  if (!categoryData) return null;
+                  
+                  const testCount = (categoryData.groups?.reduce((sum, g) => sum + (g.tests?.length || 0), 0) || 0) + 
+                                   (categoryData.standalone?.length || 0);
+                  
+                  return (
+                    <button
+                      key={catName}
+                      onClick={() => setSelectedCategory(catName)}
+                      className="px-8 py-4 bg-blue-600 text-white rounded-full text-lg font-bold hover:bg-blue-700 transition-all shadow-lg hover:shadow-xl min-w-[200px]"
+                    >
+                      {catName}
+                      <span className="ml-2 text-sm bg-blue-500 px-3 py-1 rounded-full">
+                        {testCount} tests
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Selected Category View */}
+            {selectedCategory && (
+              <div className="space-y-4">
+                {/* Back button */}
+                <button
+                  onClick={() => {
+                    setSelectedCategory(null);
+                    setSelectedGroupId(null);
+                  }}
+                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors flex items-center space-x-2"
+                >
+                  <ChevronRight className="w-5 h-5 rotate-180" />
+                  <span>Back to Categories</span>
+                </button>
+
+                {/* Standalone Tests - Show directly */}
+                {selectedCategory === 'Standalone Tests' && filteredOrganizedTests[selectedCategory]?.standalone && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {filteredOrganizedTests[selectedCategory].standalone.map((test) => {
+                      const isSelected = selectedTestIds.has(test.id);
+                      const isOrdered = isTestOrdered(test.id);
+                      
+                      return (
+                        <div
+                          key={test.id}
+                          className={`p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 ${
+                            isOrdered 
+                              ? 'border-gray-300 bg-gray-100 opacity-60 cursor-not-allowed' 
+                              : isSelected 
+                                ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200' 
+                                : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50'
+                          }`}
+                          onClick={() => !isOrdered && handleTestSelect(test.id)}
+                        >
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="flex-1">
+                              <h5 className="text-base font-bold text-gray-900">{test.name}</h5>
+                              {test.description && (
+                                <p className="text-sm text-gray-600 mt-1">{test.description}</p>
+                              )}
+                            </div>
+                            {isSelected && !isOrdered && (
+                              <CheckCircle className="h-5 w-5 text-blue-600 flex-shrink-0 ml-2" />
+                            )}
+                          </div>
+                          <div className="flex items-center justify-between mt-3">
+                            <span className="text-sm font-semibold text-gray-700">
+                              {test.price ? `${test.price.toFixed(2)} ETB` : 'N/A'}
+                            </span>
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              disabled={isOrdered}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                handleTestSelect(test.id);
+                              }}
+                              className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Serology - Show group buttons */}
+                {selectedCategory === 'Serology' && !selectedGroupId && (
+                  <div className="space-y-4">
+                    {filteredOrganizedTests[selectedCategory]?.groups && filteredOrganizedTests[selectedCategory].groups.length > 0 && (
+                      <div className="flex flex-wrap gap-3">
+                        {filteredOrganizedTests[selectedCategory].groups.map((group) => (
+                          <button
+                            key={group.id}
+                            onClick={() => setSelectedGroupId(group.id)}
+                            className="px-6 py-3 bg-green-600 text-white rounded-lg text-base font-semibold hover:bg-green-700 transition-all shadow-md hover:shadow-lg"
+                          >
+                            {group.name}
+                            <span className="ml-2 text-sm bg-green-500 px-2 py-1 rounded">
+                              {group.tests?.length || 0} tests
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {/* Also show standalone tests in Serology if any */}
+                    {filteredOrganizedTests[selectedCategory]?.standalone && 
+                     filteredOrganizedTests[selectedCategory].standalone.length > 0 && (
+                      <div>
+                        <h5 className="text-md font-semibold text-gray-700 mb-2">Other Serology Tests</h5>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {filteredOrganizedTests[selectedCategory].standalone.map((test) => {
+                            const isSelected = selectedTestIds.has(test.id);
+                            const isOrdered = isTestOrdered(test.id);
+                            
+                            return (
+                              <div
+                                key={test.id}
+                                className={`p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 ${
+                                  isOrdered 
+                                    ? 'border-gray-300 bg-gray-100 opacity-60 cursor-not-allowed' 
+                                    : isSelected 
+                                      ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200' 
+                                      : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50'
+                                }`}
+                                onClick={() => !isOrdered && handleTestSelect(test.id)}
+                              >
+                                <div className="flex items-start justify-between mb-2">
+                                  <div className="flex-1">
+                                    <h5 className="text-base font-bold text-gray-900">{test.name}</h5>
+                                    {test.description && (
+                                      <p className="text-sm text-gray-600 mt-1">{test.description}</p>
+                                    )}
+                                  </div>
+                                  {isSelected && !isOrdered && (
+                                    <CheckCircle className="h-5 w-5 text-blue-600 flex-shrink-0 ml-2" />
+                                  )}
+                                </div>
+                                <div className="flex items-center justify-between mt-3">
+                                  <span className="text-sm font-semibold text-gray-700">
+                                    {test.price ? `${test.price.toFixed(2)} ETB` : 'N/A'}
+                                  </span>
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    disabled={isOrdered}
+                                    onChange={(e) => {
+                                      e.stopPropagation();
+                                      handleTestSelect(test.id);
+                                    }}
+                                    className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                    onClick={(e) => e.stopPropagation()}
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Blood Chemistry - Show group buttons */}
+                {selectedCategory === 'Blood Chemistry' && !selectedGroupId && (
+                  <div className="space-y-4">
+                    {filteredOrganizedTests[selectedCategory]?.groups && filteredOrganizedTests[selectedCategory].groups.length > 0 && (
+                      <div className="flex flex-wrap gap-3">
+                        {filteredOrganizedTests[selectedCategory].groups.map((group) => (
+                          <button
+                            key={group.id}
+                            onClick={() => setSelectedGroupId(group.id)}
+                            className="px-6 py-3 bg-orange-600 text-white rounded-lg text-base font-semibold hover:bg-orange-700 transition-all shadow-md hover:shadow-lg"
+                          >
+                            {group.name}
+                            <span className="ml-2 text-sm bg-orange-500 px-2 py-1 rounded">
+                              {group.tests?.length || 0} tests
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {/* Also show standalone tests in Blood Chemistry if any */}
+                    {filteredOrganizedTests[selectedCategory]?.standalone && 
+                     filteredOrganizedTests[selectedCategory].standalone.length > 0 && (
+                      <div>
+                        <h5 className="text-md font-semibold text-gray-700 mb-2">Other Blood Chemistry Tests</h5>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {filteredOrganizedTests[selectedCategory].standalone.map((test) => {
+                            const isSelected = selectedTestIds.has(test.id);
+                            const isOrdered = isTestOrdered(test.id);
+                            
+                            return (
+                              <div
+                                key={test.id}
+                                className={`p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 ${
+                                  isOrdered 
+                                    ? 'border-gray-300 bg-gray-100 opacity-60 cursor-not-allowed' 
+                                    : isSelected 
+                                      ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200' 
+                                      : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50'
+                                }`}
+                                onClick={() => !isOrdered && handleTestSelect(test.id)}
+                              >
+                                <div className="flex items-start justify-between mb-2">
+                                  <div className="flex-1">
+                                    <h5 className="text-base font-bold text-gray-900">{test.name}</h5>
+                                    {test.description && (
+                                      <p className="text-sm text-gray-600 mt-1">{test.description}</p>
+                                    )}
+                                  </div>
+                                  {isSelected && !isOrdered && (
+                                    <CheckCircle className="h-5 w-5 text-blue-600 flex-shrink-0 ml-2" />
+                                  )}
+                                </div>
+                                <div className="flex items-center justify-between mt-3">
+                                  <span className="text-sm font-semibold text-gray-700">
+                                    {test.price ? `${test.price.toFixed(2)} ETB` : 'N/A'}
+                                  </span>
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    disabled={isOrdered}
+                                    onChange={(e) => {
+                                      e.stopPropagation();
+                                      handleTestSelect(test.id);
+                                    }}
+                                    className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                    onClick={(e) => e.stopPropagation()}
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Show tests for selected group */}
+                {selectedGroupId && (
+                  <div className="space-y-4">
+                    {/* Back to groups button */}
+                    <button
+                      onClick={() => setSelectedGroupId(null)}
+                      className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors flex items-center space-x-2"
+                    >
+                      <ChevronRight className="w-5 h-5 rotate-180" />
+                      <span>Back to {selectedCategory}</span>
+                    </button>
+
+                    {/* Group tests as cards - Sort VDRL below Weil-Felix for Serology */}
+                    {filteredOrganizedTests[selectedCategory]?.groups?.find(g => g.id === selectedGroupId)?.tests && (() => {
+                      let tests = [...filteredOrganizedTests[selectedCategory].groups.find(g => g.id === selectedGroupId).tests];
+                      
+                      // Sort Serology tests: Weil-Felix first, then VDRL, then others
+                      if (selectedCategory === 'Serology') {
+                        tests.sort((a, b) => {
+                          const aName = a.name?.toLowerCase() || '';
+                          const bName = b.name?.toLowerCase() || '';
+                          
+                          // Weil-Felix first
+                          if (aName.includes('weil') || aName.includes('weil-felix')) return -1;
+                          if (bName.includes('weil') || bName.includes('weil-felix')) return 1;
+                          
+                          // VDRL second (after Weil-Felix)
+                          if (aName.includes('vdrl')) {
+                            if (bName.includes('weil') || bName.includes('weil-felix')) return 1;
+                            return -1;
+                          }
+                          if (bName.includes('vdrl')) {
+                            if (aName.includes('weil') || aName.includes('weil-felix')) return -1;
+                            return 1;
+                          }
+                          
+                          // Other tests alphabetically
+                          return aName.localeCompare(bName);
+                        });
+                      }
+                      
+                      return (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {tests.map((test) => {
+                            const isSelected = selectedTestIds.has(test.id);
+                            const isOrdered = isTestOrdered(test.id);
+                            
+                            return (
+                              <div
+                                key={test.id}
+                                className={`p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 ${
+                                  isOrdered 
+                                    ? 'border-gray-300 bg-gray-100 opacity-60 cursor-not-allowed' 
+                                    : isSelected 
+                                      ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200' 
+                                      : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50'
+                                }`}
+                                onClick={() => !isOrdered && handleTestSelect(test.id)}
+                              >
+                                <div className="flex items-start justify-between mb-2">
+                                  <div className="flex-1">
+                                    <h5 className="text-base font-bold text-gray-900">{test.name}</h5>
+                                    {test.description && (
+                                      <p className="text-sm text-gray-600 mt-1">{test.description}</p>
+                                    )}
+                                  </div>
+                                  {isSelected && !isOrdered && (
+                                    <CheckCircle className="h-5 w-5 text-blue-600 flex-shrink-0 ml-2" />
+                                  )}
+                                </div>
+                                <div className="flex items-center justify-between mt-3">
+                                  <span className="text-sm font-semibold text-gray-700">
+                                    {test.price ? `${test.price.toFixed(2)} ETB` : 'N/A'}
+                                  </span>
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    disabled={isOrdered}
+                                    onChange={(e) => {
+                                      e.stopPropagation();
+                                      handleTestSelect(test.id);
+                                    }}
+                                    className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                    onClick={(e) => e.stopPropagation()}
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+        
+        {/* OLD Category View - REMOVED */}
+        {false && Object.entries(filteredOrganizedTests).map(([category, data]) => (
             <div key={category} className="mb-3">
               {/* Category Header - Large button-style */}
               <button
@@ -785,8 +1132,6 @@ const LabOrdering = ({ visitId, patientId, onOrdersPlaced, existingOrders = [] }
               )}
             </div>
           ))}
-          </div>
-        )}
       </div>
 
       {/* Selected Tests Summary */}
