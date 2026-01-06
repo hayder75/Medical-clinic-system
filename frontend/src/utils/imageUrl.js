@@ -16,14 +16,19 @@ function getBaseUrl() {
   if (import.meta.env.VITE_API_URL) {
     apiUrl = import.meta.env.VITE_API_URL;
   } else {
-    // Use the current hostname from the browser
-    // This ensures images work whether accessed via localhost or server IP
+    // Use the current hostname and protocol from the browser
+    // In production (behind Nginx), images are served at the same domain (via Nginx proxy)
+    // In development (localhost), use port 3000 for backend
     const protocol = window.location.protocol;
     const hostname = window.location.hostname;
     
-    // Always use port 3000 for backend file serving
-    // The backend serves files at http://hostname:3000/uploads/...
-    apiUrl = `${protocol}//${hostname}:3000/api`;
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      // Local development - backend runs on port 3000
+      apiUrl = `${protocol}//${hostname}:3000/api`;
+    } else {
+      // Production - Nginx proxies /uploads, so use same hostname (no port needed)
+      apiUrl = `${protocol}//${hostname}/api`;
+    }
   }
   
   // Remove /api suffix if present (images are served at /uploads, not /api/uploads)
