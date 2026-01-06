@@ -1510,15 +1510,16 @@ const LabOrders = () => {
                                     newResults[field.fieldName] = e.target.value;
                                     
                                     // Special handling for Malaria: Auto-fill remarks when Negative is selected
-                                    const isMalariaParasiteDetected = field.fieldName === 'parasite_detected' && 
+                                    // Special handling for Malaria: Auto-fill remarks when Negative/Positive
+                                    const isMalariaResult = field.fieldName === 'result' && 
                                       testResults[selectedService]?.labTest?.code === 'PICT001';
                                     
-                                    if (isMalariaParasiteDetected && e.target.value === 'Negative') {
+                                    if (isMalariaResult && e.target.value === 'Negative') {
                                       // Auto-fill remarks with default negative message
-                                      newResults.remarks = 'No malaria parasite seen after examining 100 oil immersion fields.';
-                                    } else if (isMalariaParasiteDetected && e.target.value === 'Positive' && newResults.remarks === 'No malaria parasite seen after examining 100 oil immersion fields.') {
-                                      // Clear the auto-filled message when changing to Positive
-                                      newResults.remarks = '';
+                                      newResults.remarks = 'No malaria parasite seen.';
+                                    } else if (isMalariaResult && e.target.value === 'Positive') {
+                                      // Auto-fill remarks with default positive message
+                                      newResults.remarks = 'Malaria parasite seen.';
                                     }
                                     
                                     updateTestResult(selectedService, 'results', newResults);
