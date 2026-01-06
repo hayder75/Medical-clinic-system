@@ -42,15 +42,14 @@ async function consolidateCBC() {
         console.log(`   - ${test.code} (${test.name}): ${orderCount} orders, ${resultCount} results`);
       });
 
-      // Step 2: Remove individual CBC tests (user confirmed no current patients using them)
-      console.log('\n🗑️  Removing individual CBC tests...');
+      // Step 2: Mark individual CBC tests as inactive (they have existing orders, can't delete)
+      console.log('\n🗑️  Marking individual CBC tests as inactive...');
       const cbcTestCodes = ['HCT001', 'RBC001', 'WBC001', 'PLT001', 'RCI001', 'WBCD001', 'HB001'];
       
       for (const testCode of cbcTestCodes) {
         const test = await prisma.labTest.findUnique({
           where: { code: testCode },
           include: {
-            resultFields: true,
             labTestOrders: true,
             labTestResults: true,
             service: true
@@ -58,38 +57,56 @@ async function consolidateCBC() {
         });
 
         if (test) {
-          // Delete result fields first (cascade should handle this, but being explicit)
-          await prisma.labTestResultField.deleteMany({
-            where: { testId: test.id }
-          });
-
           // Check for orders and results
           if (test.labTestOrders.length > 0 || test.labTestResults.length > 0) {
-            console.log(`   ⚠️  Warning: ${testCode} has ${test.labTestOrders.length} orders and ${test.labTestResults.length} results`);
-            console.log(`   ⚠️  Deleting anyway as per user request (no current patients using them)...`);
-          }
-
-          // Delete the test
-          await prisma.labTest.delete({
-            where: { id: test.id }
-          });
-
-          // Optionally delete associated service if it exists and not used elsewhere
-          if (test.serviceId) {
-            const serviceUsage = await prisma.billingService.count({
-              where: { serviceId: test.serviceId }
+            console.log(`   ⚠️  ${testCode} has ${test.labTestOrders.length} orders and ${test.labTestResults.length} results - marking as inactive`);
+            
+            // Mark test as inactive instead of deleting
+            await prisma.labTest.update({
+              where: { id: test.id },
+              data: { isActive: false }
             });
-
-            if (serviceUsage === 0) {
-              await prisma.service.delete({
-                where: { id: test.serviceId }
+            
+            // Also mark associated service as inactive
+            if (test.serviceId) {
+              await prisma.service.update({
+                where: { id: test.serviceId },
+                data: { isActive: false }
               });
-              console.log(`   ✅ Deleted test ${testCode} and its service`);
+              console.log(`   ✅ Marked test ${testCode} and its service as inactive`);
             } else {
-              console.log(`   ✅ Deleted test ${testCode} (service still in use, keeping it)`);
+              console.log(`   ✅ Marked test ${testCode} as inactive`);
             }
           } else {
-            console.log(`   ✅ Deleted test ${testCode}`);
+            // No orders/results - safe to delete
+            await prisma.labTestResultField.deleteMany({
+              where: { testId: test.id }
+            });
+
+            await prisma.labTest.delete({
+              where: { id: test.id }
+            });
+
+            if (test.serviceId) {
+              const serviceUsage = await prisma.billingService.count({
+                where: { serviceId: test.serviceId }
+              });
+
+              if (serviceUsage === 0) {
+                await prisma.service.delete({
+                  where: { id: test.serviceId }
+                });
+                console.log(`   ✅ Deleted test ${testCode} and its service (no orders)`);
+              } else {
+                await prisma.service.update({
+                  where: { id: test.serviceId },
+                  data: { isActive: false }
+                });
+                console.log(`   ✅ Deleted test ${testCode}, marked service as inactive`);
+              }
+            } else {
+              console.log(`   ✅ Deleted test ${testCode} (no orders)`);
+            }
           }
         } else {
           console.log(`   ℹ️  Test ${testCode} not found, skipping`);
