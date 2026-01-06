@@ -12,6 +12,8 @@ const LabOrdering = ({ visitId, patientId, onOrdersPlaced, existingOrders = [] }
   const [loading, setLoading] = useState(false);
   const [fetchingTests, setFetchingTests] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [selectedGroupId, setSelectedGroupId] = useState(null);
 
   useEffect(() => {
     fetchLabTests();
