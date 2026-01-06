@@ -488,46 +488,64 @@ const LabOrdering = ({ visitId, patientId, onOrdersPlaced, existingOrders = [] }
         {/* Category View (when not searching) - Button-based UI */}
         {!searchQuery && (
           <div className="space-y-4">
-            {/* Main Category Buttons - 3 round buttons */}
-            {!selectedCategory && (
-              <div className="flex flex-wrap gap-4 justify-center">
-                {['Serology', 'Blood Chemistry', 'Standalone Tests'].map((catName) => {
-                  const categoryData = filteredOrganizedTests[catName];
-                  if (!categoryData) return null;
-                  
-                  const testCount = (categoryData.groups?.reduce((sum, g) => sum + (g.tests?.length || 0), 0) || 0) + 
-                                   (categoryData.standalone?.length || 0);
-                  
-                  return (
-                    <button
-                      key={catName}
-                      onClick={() => setSelectedCategory(catName)}
-                      className="px-8 py-4 bg-blue-600 text-white rounded-full text-lg font-bold hover:bg-blue-700 transition-all shadow-lg hover:shadow-xl min-w-[200px]"
-                    >
-                      {catName}
-                      <span className="ml-2 text-sm bg-blue-500 px-3 py-1 rounded-full">
-                        {testCount} tests
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+            {/* Main Category Buttons - 3 rectangular buttons, always visible, side-by-side, connected */}
+            <div className="flex w-full">
+              {['Serology', 'Blood Chemistry', 'Standalone Tests'].map((catName, index) => {
+                const categoryData = filteredOrganizedTests[catName];
+                if (!categoryData) return null;
+                
+                const testCount = (categoryData.groups?.reduce((sum, g) => sum + (g.tests?.length || 0), 0) || 0) + 
+                                 (categoryData.standalone?.length || 0);
+                
+                // Different colors for each button
+                const colors = {
+                  'Serology': {
+                    bg: selectedCategory === catName ? 'bg-green-700' : 'bg-green-600',
+                    hover: 'hover:bg-green-700',
+                    badge: 'bg-green-500'
+                  },
+                  'Blood Chemistry': {
+                    bg: selectedCategory === catName ? 'bg-orange-700' : 'bg-orange-600',
+                    hover: 'hover:bg-orange-700',
+                    badge: 'bg-orange-500'
+                  },
+                  'Standalone Tests': {
+                    bg: selectedCategory === catName ? 'bg-blue-700' : 'bg-blue-600',
+                    hover: 'hover:bg-blue-700',
+                    badge: 'bg-blue-500'
+                  }
+                };
+                
+                const colorScheme = colors[catName] || colors['Standalone Tests'];
+                
+                return (
+                  <button
+                    key={catName}
+                    onClick={() => {
+                      setSelectedCategory(catName);
+                      setSelectedGroupId(null);
+                    }}
+                    className={`flex-1 py-4 ${colorScheme.bg} ${colorScheme.hover} text-white text-lg font-bold transition-all shadow-md ${
+                      index === 0 ? 'rounded-l-lg' : ''
+                    } ${
+                      index === ['Serology', 'Blood Chemistry', 'Standalone Tests'].length - 1 ? 'rounded-r-lg' : ''
+                    } ${
+                      index > 0 ? 'border-l-2 border-white' : ''
+                    } flex flex-col items-center justify-center`}
+                  >
+                    <span>{catName}</span>
+                    <span className={`mt-1 text-sm ${colorScheme.badge} px-3 py-1 rounded-full`}>
+                      {testCount} tests
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
 
             {/* Selected Category View */}
             {selectedCategory && (
               <div className="space-y-4">
-                {/* Back button */}
-                <button
-                  onClick={() => {
-                    setSelectedCategory(null);
-                    setSelectedGroupId(null);
-                  }}
-                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors flex items-center space-x-2"
-                >
-                  <ChevronRight className="w-5 h-5 rotate-180" />
-                  <span>Back to Categories</span>
-                </button>
+                {/* Remove back button - main buttons stay visible */}
 
                 {/* Standalone Tests - Show directly */}
                 {selectedCategory === 'Standalone Tests' && filteredOrganizedTests[selectedCategory]?.standalone && (
@@ -738,14 +756,29 @@ const LabOrdering = ({ visitId, patientId, onOrdersPlaced, existingOrders = [] }
                 {/* Show tests for selected group */}
                 {selectedGroupId && (
                   <div className="space-y-4">
-                    {/* Back to groups button */}
-                    <button
-                      onClick={() => setSelectedGroupId(null)}
-                      className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors flex items-center space-x-2"
-                    >
-                      <ChevronRight className="w-5 h-5 rotate-180" />
-                      <span>Back to {selectedCategory}</span>
-                    </button>
+                    {/* Group selection header - show all groups as buttons */}
+                    <div className="flex flex-wrap gap-3">
+                      {filteredOrganizedTests[selectedCategory]?.groups?.map((group) => (
+                        <button
+                          key={group.id}
+                          onClick={() => setSelectedGroupId(group.id)}
+                          className={`px-6 py-3 text-white rounded-lg text-base font-semibold transition-all shadow-md hover:shadow-lg ${
+                            selectedGroupId === group.id
+                              ? selectedCategory === 'Serology' 
+                                ? 'bg-green-700 ring-2 ring-green-300' 
+                                : 'bg-orange-700 ring-2 ring-orange-300'
+                              : selectedCategory === 'Serology'
+                                ? 'bg-green-600 hover:bg-green-700'
+                                : 'bg-orange-600 hover:bg-orange-700'
+                          }`}
+                        >
+                          {group.name}
+                          <span className="ml-2 text-sm bg-white bg-opacity-30 px-2 py-1 rounded">
+                            {group.tests?.length || 0} tests
+                          </span>
+                        </button>
+                      ))}
+                    </div>
 
                     {/* Group tests as cards - Sort VDRL below Weil-Felix for Serology */}
                     {filteredOrganizedTests[selectedCategory]?.groups?.find(g => g.id === selectedGroupId)?.tests && (() => {
