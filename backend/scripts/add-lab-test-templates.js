@@ -223,13 +223,13 @@ async function addLabTestTemplates() {
         where: { testId: pictTest.id }
       });
 
-      // Add new fields (Malaria guide: updated species, density grading, stage seen)
+      // Add new fields (Simplified for medium clinic - Ethiopia standards)
       await prisma.labTestResultField.createMany({
         data: [
           {
             testId: pictTest.id,
-            fieldName: 'parasite_detected',
-            label: 'Parasite Detected',
+            fieldName: 'result',
+            label: 'Result',
             fieldType: 'select',
             unit: null,
             normalRange: 'Negative',
@@ -244,75 +244,9 @@ async function addLabTestTemplates() {
             fieldType: 'select',
             unit: null,
             normalRange: null,
-            options: ['Plasmodium falciparum', 'Plasmodium vivax', 'Mixed infection (Pf + Pv)', 'Other (specify)'],
+            options: ['Plasmodium falciparum', 'Plasmodium vivax', 'Mixed infection (Pf + Pv)'],
             isRequired: false,
             displayOrder: 2
-          },
-          {
-            testId: pictTest.id,
-            fieldName: 'parasite_count',
-            label: 'Parasite Count',
-            fieldType: 'text',
-            unit: 'parasites/μL',
-            normalRange: null,
-            options: null,
-            isRequired: false,
-            displayOrder: 3
-          },
-          {
-            testId: pictTest.id,
-            fieldName: 'parasite_density',
-            label: 'Parasite Density / Grading',
-            fieldType: 'select',
-            unit: null,
-            normalRange: null,
-            options: ['(1+) : 1–10 parasites / 100 fields', '++ (2+) : 11–100 parasites / 100 fields', '+++ (3+) : 1–10 parasites / single field', '++++ (4+) : >10 parasites / single field'],
-            isRequired: false,
-            displayOrder: 4
-          },
-          {
-            testId: pictTest.id,
-            fieldName: 'stage_seen',
-            label: 'Stage Seen (optional)',
-            fieldType: 'select',
-            unit: null,
-            normalRange: null,
-            options: ['Ring form', 'Trophozoite', 'Schizont', 'Gametocyte'],
-            isRequired: false,
-            displayOrder: 5
-          },
-          {
-            testId: pictTest.id,
-            fieldName: 'red_blood_cells',
-            label: 'Red Blood Cells',
-            fieldType: 'textarea',
-            unit: null,
-            normalRange: null,
-            options: null,
-            isRequired: false,
-            displayOrder: 6
-          },
-          {
-            testId: pictTest.id,
-            fieldName: 'white_blood_cells',
-            label: 'White Blood Cells',
-            fieldType: 'textarea',
-            unit: null,
-            normalRange: null,
-            options: null,
-            isRequired: false,
-            displayOrder: 7
-          },
-          {
-            testId: pictTest.id,
-            fieldName: 'platelets',
-            label: 'Platelets',
-            fieldType: 'textarea',
-            unit: null,
-            normalRange: null,
-            options: null,
-            isRequired: false,
-            displayOrder: 8
           },
           {
             testId: pictTest.id,
@@ -323,7 +257,7 @@ async function addLabTestTemplates() {
             normalRange: null,
             options: null,
             isRequired: false,
-            displayOrder: 9
+            displayOrder: 3
           }
         ]
       });

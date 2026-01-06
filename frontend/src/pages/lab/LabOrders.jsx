@@ -1555,15 +1555,21 @@ const LabOrders = () => {
                                   updateTestResult(selectedService, 'results', newResults);
                                 }}
                                 onFocus={(e) => {
-                                  // Auto-fill Malaria remarks when field is focused and Negative is selected
+                                  // Auto-fill Malaria remarks when field is focused
                                   const isMalariaRemarks = field.fieldName === 'remarks' && 
                                     testResults[selectedService]?.labTest?.code === 'PICT001';
-                                  const parasiteDetected = testResults[selectedService]?.results?.parasite_detected;
+                                  const malariaResult = testResults[selectedService]?.results?.result;
                                   
-                                  if (isMalariaRemarks && parasiteDetected === 'Negative' && !e.target.value) {
+                                  if (isMalariaRemarks && !e.target.value) {
                                     const newResults = { ...result.results };
-                                    newResults[field.fieldName] = 'No malaria parasite seen after examining 100 oil immersion fields.';
-                                    updateTestResult(selectedService, 'results', newResults);
+                                    if (malariaResult === 'Negative') {
+                                      newResults[field.fieldName] = 'No malaria parasite seen.';
+                                    } else if (malariaResult === 'Positive') {
+                                      newResults[field.fieldName] = 'Malaria parasite seen.';
+                                    }
+                                    if (newResults[field.fieldName]) {
+                                      updateTestResult(selectedService, 'results', newResults);
+                                    }
                                   }
                                 }}
                                 className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${isCompleted ? 'bg-gray-100 cursor-not-allowed' : ''}`}
