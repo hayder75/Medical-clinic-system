@@ -89,15 +89,24 @@ export const getDefaultValueForField = (field) => {
 /**
  * Generate default results object for a lab test based on its resultFields
  * @param {Array} resultFields - Array of LabTestResultField objects
+ * @param {String} labTestCode - Optional lab test code to apply special rules
  * @returns {Object} - Object with fieldName as keys and default values as values
  */
-export const generateDefaultResults = (resultFields) => {
+export const generateDefaultResults = (resultFields, labTestCode = null) => {
   if (!resultFields || !Array.isArray(resultFields)) {
     return {};
   }
 
+  // Fields that should NOT have default values for CBC
+  const cbcAdditionalFields = ['mcv', 'mch', 'mchc'];
+  
   const defaults = {};
   resultFields.forEach(field => {
+    // Skip CBC additional fields (MCV, MCH, MCHC) - they should be empty by default
+    if (labTestCode === 'CBC001' && cbcAdditionalFields.includes(field.fieldName)) {
+      return; // Don't set default values for these fields
+    }
+    
     const defaultValue = getDefaultValueForField(field);
     if (defaultValue !== null && defaultValue !== undefined) {
       defaults[field.fieldName] = defaultValue;

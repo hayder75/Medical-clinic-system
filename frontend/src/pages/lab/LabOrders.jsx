@@ -271,7 +271,8 @@ const LabOrders = () => {
           }
         } else {
           // No existing result - generate defaults from normalRange
-          const defaultResults = generateDefaultResults(labTest.resultFields || []);
+          // Pass labTest code to exclude CBC additional fields (MCV, MCH, MCHC) from defaults
+          const defaultResults = generateDefaultResults(labTest.resultFields || [], labTest.code);
           parsedResults = defaultResults;
         }
         
