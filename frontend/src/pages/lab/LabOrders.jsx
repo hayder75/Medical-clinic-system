@@ -21,6 +21,7 @@ const LabOrders = () => {
   const [selectedService, setSelectedService] = useState(null);
   const [showServiceTemplate, setShowServiceTemplate] = useState(false);
   const [savedFormData, setSavedFormData] = useState({});
+  const [showCBCAdditionalFields, setShowCBCAdditionalFields] = useState({}); // Track which CBC tests have additional fields shown
 
   useEffect(() => {
     fetchOrders();
