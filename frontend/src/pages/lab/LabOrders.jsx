@@ -1543,14 +1543,18 @@ const LabOrders = () => {
                                   const newResults = { ...result.results };
                                   newResults[field.fieldName] = e.target.value;
                                   
-                                  // Special handling for Malaria: Auto-fill remarks when Negative
+                                  // Special handling for Malaria: Auto-fill remarks
                                   const isMalariaRemarks = field.fieldName === 'remarks' && 
                                     testResults[selectedService]?.labTest?.code === 'PICT001';
-                                  const parasiteDetected = testResults[selectedService]?.results?.parasite_detected;
+                                  const malariaResult = testResults[selectedService]?.results?.result;
                                   
-                                  if (isMalariaRemarks && parasiteDetected === 'Negative' && !e.target.value) {
-                                    // Auto-fill if empty and Negative is selected
-                                    newResults[field.fieldName] = 'No malaria parasite seen after examining 100 oil immersion fields.';
+                                  if (isMalariaRemarks && !e.target.value) {
+                                    // Auto-fill if empty based on result
+                                    if (malariaResult === 'Negative') {
+                                      newResults[field.fieldName] = 'No malaria parasite seen.';
+                                    } else if (malariaResult === 'Positive') {
+                                      newResults[field.fieldName] = 'Malaria parasite seen.';
+                                    }
                                   }
                                   
                                   updateTestResult(selectedService, 'results', newResults);
