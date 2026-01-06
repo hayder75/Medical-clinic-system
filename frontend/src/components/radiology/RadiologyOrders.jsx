@@ -142,21 +142,41 @@ const RadiologyOrders = () => {
         return;
       }
 
-      // Store the file info locally (will be uploaded with the test result)
+      if (!selectedOrder) {
+        toast.error('No order selected');
+        return;
+      }
+
+      // Upload the file immediately
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const uploadResponse = await api.post(
+        `/radiologies/batch-orders/${selectedOrder.id}/attachment`,
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        }
+      );
+
+      // Store the uploaded file info
       const fileData = {
         id: `temp_${Date.now()}_${Math.random()}`,
         originalName: file.name,
         fileType: file.type,
         size: file.size,
-        uploaded: false,
-        file: file // Store the actual file object
+        uploaded: true,
+        path: uploadResponse.data.file.path,
+        filePath: uploadResponse.data.file.path
       };
       
       updateTestResult(testId, 'files', [...(testResult.files || []), fileData]);
-      toast.success('File added successfully - will be uploaded with results');
+      toast.success('File uploaded successfully');
     } catch (error) {
-      console.error('Error adding file:', error);
-      toast.error('Failed to add file');
+      console.error('Error uploading file:', error);
+      toast.error(error.response?.data?.error || 'Failed to upload file');
     } finally {
       setUploadingFiles(prev => ({ ...prev, [testId]: false }));
     }
@@ -173,7 +193,7 @@ const RadiologyOrders = () => {
         return;
       }
 
-      // First, upload all files and get their paths
+      // Collect already uploaded file paths
       const uploadedFiles = {};
       
       for (const [testId, result] of Object.entries(testResults)) {
@@ -181,23 +201,10 @@ const RadiologyOrders = () => {
           const testUploadedFiles = [];
           
           for (const fileData of result.files) {
-            if (fileData.file) {
-              // Upload the file to batch attachment endpoint
-              const formData = new FormData();
-              formData.append('file', fileData.file);
-              
-              const uploadResponse = await api.post(
-                `/radiologies/batch-orders/${selectedOrder.id}/attachment`,
-                formData,
-                {
-                  headers: {
-                    'Content-Type': 'multipart/form-data',
-                  },
-                }
-              );
-              
+            // Files are already uploaded, just use their paths
+            if (fileData.path || fileData.filePath) {
               testUploadedFiles.push({
-                path: uploadResponse.data.file.path,
+                path: fileData.path || fileData.filePath,
                 type: fileData.fileType,
                 originalName: fileData.originalName
               });
