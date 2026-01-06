@@ -51,8 +51,27 @@ export function getImageUrl(filePath) {
     return '';
   }
 
-  // If already a full URL (starts with http:// or https://), return as is
+  // If already a full URL, check if it contains localhost:3000 and fix it
   if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
+    // If URL contains localhost:3000, replace it with the current hostname
+    if (filePath.includes('localhost:3000') || filePath.includes('127.0.0.1:3000')) {
+      const url = new URL(filePath);
+      const protocol = window.location.protocol;
+      const hostname = window.location.hostname;
+      
+      // Extract the path from the URL
+      const path = url.pathname;
+      
+      // Reconstruct URL with current hostname (no port for production, use Nginx)
+      const baseUrl = (hostname === 'localhost' || hostname === '127.0.0.1') 
+        ? `${protocol}//${hostname}:3000`
+        : `${protocol}//${hostname}`;
+      
+      const finalUrl = `${baseUrl}${path}`;
+      console.debug('[getImageUrl] Fixed localhost URL:', { original: filePath, finalUrl });
+      return finalUrl;
+    }
+    // Otherwise return as is
     return filePath;
   }
 
