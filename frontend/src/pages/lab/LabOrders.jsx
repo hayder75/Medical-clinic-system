@@ -1451,17 +1451,31 @@ const LabOrders = () => {
                                 }
                               }
                               
+                              // Check if this is VDRL titer field - enable only when result is "Reactive"
+                              const isVDRLTiter = field.fieldName === 'titer' && 
+                                testResults[selectedService]?.labTest?.code === 'VDRL001';
+                              const vdrlResult = testResults[selectedService]?.results?.result;
+                              const isTiterEnabled = !isVDRLTiter || vdrlResult === 'Reactive';
+                              
                               return (
                                 <select
                                   value={fieldValue}
-                                  disabled={isCompleted}
+                                  disabled={isCompleted || !isTiterEnabled}
                                   onChange={(e) => {
                                     if (isCompleted) return;
                                     const newResults = { ...result.results };
                                     newResults[field.fieldName] = e.target.value;
+                                    
+                                    // Special handling for VDRL: Clear titer if result becomes Non-reactive
+                                    if (isVDRLTiter && vdrlResult !== 'Reactive') {
+                                      newResults.titer = '';
+                                    }
+                                    
                                     updateTestResult(selectedService, 'results', newResults);
                                   }}
-                                  className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${isCompleted ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                                  className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                                    isCompleted || !isTiterEnabled ? 'bg-gray-100 cursor-not-allowed' : ''
+                                  }`}
                                 >
                                   <option value="">-- Select --</option>
                                   {optionsList.map(option => (
@@ -1494,6 +1508,19 @@ const LabOrders = () => {
                                     if (isCompleted) return;
                                     const newResults = { ...result.results };
                                     newResults[field.fieldName] = e.target.value;
+                                    
+                                    // Special handling for Malaria: Auto-fill remarks when Negative is selected
+                                    const isMalariaParasiteDetected = field.fieldName === 'parasite_detected' && 
+                                      testResults[selectedService]?.labTest?.code === 'PICT001';
+                                    
+                                    if (isMalariaParasiteDetected && e.target.value === 'Negative') {
+                                      // Auto-fill remarks with default negative message
+                                      newResults.remarks = 'No malaria parasite seen after examining 100 oil immersion fields.';
+                                    } else if (isMalariaParasiteDetected && e.target.value === 'Positive' && newResults.remarks === 'No malaria parasite seen after examining 100 oil immersion fields.') {
+                                      // Clear the auto-filled message when changing to Positive
+                                      newResults.remarks = '';
+                                    }
+                                    
                                     updateTestResult(selectedService, 'results', newResults);
                                   }}
                                   className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${isCompleted ? 'bg-gray-100 cursor-not-allowed' : ''}`}
@@ -1514,7 +1541,30 @@ const LabOrders = () => {
                                   if (isCompleted) return;
                                   const newResults = { ...result.results };
                                   newResults[field.fieldName] = e.target.value;
+                                  
+                                  // Special handling for Malaria: Auto-fill remarks when Negative
+                                  const isMalariaRemarks = field.fieldName === 'remarks' && 
+                                    testResults[selectedService]?.labTest?.code === 'PICT001';
+                                  const parasiteDetected = testResults[selectedService]?.results?.parasite_detected;
+                                  
+                                  if (isMalariaRemarks && parasiteDetected === 'Negative' && !e.target.value) {
+                                    // Auto-fill if empty and Negative is selected
+                                    newResults[field.fieldName] = 'No malaria parasite seen after examining 100 oil immersion fields.';
+                                  }
+                                  
                                   updateTestResult(selectedService, 'results', newResults);
+                                }}
+                                onFocus={(e) => {
+                                  // Auto-fill Malaria remarks when field is focused and Negative is selected
+                                  const isMalariaRemarks = field.fieldName === 'remarks' && 
+                                    testResults[selectedService]?.labTest?.code === 'PICT001';
+                                  const parasiteDetected = testResults[selectedService]?.results?.parasite_detected;
+                                  
+                                  if (isMalariaRemarks && parasiteDetected === 'Negative' && !e.target.value) {
+                                    const newResults = { ...result.results };
+                                    newResults[field.fieldName] = 'No malaria parasite seen after examining 100 oil immersion fields.';
+                                    updateTestResult(selectedService, 'results', newResults);
+                                  }
                                 }}
                                 className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${isCompleted ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                                 rows={3}

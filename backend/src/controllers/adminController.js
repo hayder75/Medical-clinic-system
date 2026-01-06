@@ -3306,8 +3306,9 @@ exports.getLabTestsForOrdering = async (req, res) => {
     
     // Define tests that should be extracted from groups and made independent
     // These will appear in the top-level "Standalone Tests" list for doctors
-    // (e.g. ESR, Blood Group & Rh, Retic, BT/CT, PBF, HCG, RTD, BF (Blood Film), etc.)
+    // (e.g. CBC, ESR, Blood Group & Rh, Retic, BT/CT, PBF, HCG, RTD, BF (Blood Film), etc.)
     const independentTestCodes = [
+      'CBC001', // Complete Blood Count (CBC) - now consolidated as single test
       'ESR001',
       'BGRH001',
       'RET001',
@@ -3386,6 +3387,7 @@ exports.getLabTestsForOrdering = async (req, res) => {
       });
     });
     const independentTestMap = {
+      'CBC001': 'Complete Blood Count (CBC)',
       'ESR001': 'ESR',
       'BGRH001': 'Blood Group & Rh',
       'RET001': 'Reticulocyte Count',

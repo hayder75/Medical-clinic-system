@@ -25,7 +25,7 @@ async function addLabTestTemplates() {
         where: { testId: weilTest.id }
       });
 
-      // Add new fields
+      // Add new fields (Ethiopian standards: reduced titers)
       await prisma.labTestResultField.createMany({
         data: [
           {
@@ -35,7 +35,7 @@ async function addLabTestTemplates() {
             fieldType: 'select',
             unit: null,
             normalRange: 'Negative',
-            options: ['Negative', '1:40', '1:80', '1:160', '1:320', '1:640', '1:1280'],
+            options: ['Negative', '1:80', '1:160', '1:320'],
             isRequired: true,
             displayOrder: 1
           },
@@ -46,7 +46,7 @@ async function addLabTestTemplates() {
             fieldType: 'select',
             unit: null,
             normalRange: 'Negative',
-            options: ['Negative', '1:40', '1:80', '1:160', '1:320', '1:640', '1:1280'],
+            options: ['Negative', '1:80', '1:160', '1:320'],
             isRequired: true,
             displayOrder: 2
           },
@@ -57,14 +57,14 @@ async function addLabTestTemplates() {
             fieldType: 'select',
             unit: null,
             normalRange: 'Negative',
-            options: ['Negative', '1:40', '1:80', '1:160', '1:320', '1:640', '1:1280'],
+            options: ['Negative', '1:80', '1:160', '1:320'],
             isRequired: true,
             displayOrder: 3
           },
           {
             testId: weilTest.id,
-            fieldName: 'interpretation',
-            label: 'Interpretation',
+            fieldName: 'comment',
+            label: 'Comment',
             fieldType: 'textarea',
             unit: null,
             normalRange: null,
@@ -91,7 +91,7 @@ async function addLabTestTemplates() {
         where: { testId: widalTest.id }
       });
 
-      // Add new fields
+      // Add new fields (Ethiopian standards: reduced titers per antigen)
       await prisma.labTestResultField.createMany({
         data: [
           {
@@ -101,7 +101,7 @@ async function addLabTestTemplates() {
             fieldType: 'select',
             unit: null,
             normalRange: 'Negative',
-            options: ['Negative', '1:40', '1:80', '1:160', '1:320', '1:640', '1:1280'],
+            options: ['Negative', '1:80', '1:160', '1:320'],
             isRequired: true,
             displayOrder: 1
           },
@@ -112,7 +112,7 @@ async function addLabTestTemplates() {
             fieldType: 'select',
             unit: null,
             normalRange: 'Negative',
-            options: ['Negative', '1:40', '1:80', '1:160', '1:320', '1:640', '1:1280'],
+            options: ['Negative', '1:80', '1:160', '1:320'],
             isRequired: true,
             displayOrder: 2
           },
@@ -123,7 +123,7 @@ async function addLabTestTemplates() {
             fieldType: 'select',
             unit: null,
             normalRange: 'Negative',
-            options: ['Negative', '1:40', '1:80', '1:160', '1:320', '1:640', '1:1280'],
+            options: ['Negative', '1:80', '1:160'],
             isRequired: true,
             displayOrder: 3
           },
@@ -134,14 +134,14 @@ async function addLabTestTemplates() {
             fieldType: 'select',
             unit: null,
             normalRange: 'Negative',
-            options: ['Negative', '1:40', '1:80', '1:160', '1:320', '1:640', '1:1280'],
+            options: ['Negative', '1:80', '1:160'],
             isRequired: true,
             displayOrder: 4
           },
           {
             testId: widalTest.id,
-            fieldName: 'interpretation',
-            label: 'Interpretation',
+            fieldName: 'comment',
+            label: 'Comment',
             fieldType: 'textarea',
             unit: null,
             normalRange: null,
@@ -168,7 +168,7 @@ async function addLabTestTemplates() {
         where: { testId: vdrlTest.id }
       });
 
-      // Add new fields
+      // Add new fields (Ethiopian standards: reduced titers, removed Weakly Reactive)
       await prisma.labTestResultField.createMany({
         data: [
           {
@@ -178,7 +178,7 @@ async function addLabTestTemplates() {
             fieldType: 'select',
             unit: null,
             normalRange: 'Non-reactive',
-            options: ['Non-reactive', 'Reactive', 'Weakly Reactive'],
+            options: ['Non-reactive', 'Reactive'],
             isRequired: true,
             displayOrder: 1
           },
@@ -189,14 +189,14 @@ async function addLabTestTemplates() {
             fieldType: 'select',
             unit: null,
             normalRange: null,
-            options: ['1:1', '1:2', '1:4', '1:8', '1:16', '1:32', '1:64', '1:128', '1:256', '1:512'],
+            options: ['1:2', '1:4', '1:8', '1:16', '1:32', '1:64'],
             isRequired: false,
             displayOrder: 2
           },
           {
             testId: vdrlTest.id,
-            fieldName: 'interpretation',
-            label: 'Interpretation',
+            fieldName: 'comment',
+            label: 'Comment',
             fieldType: 'textarea',
             unit: null,
             normalRange: null,
@@ -223,7 +223,7 @@ async function addLabTestTemplates() {
         where: { testId: pictTest.id }
       });
 
-      // Add new fields
+      // Add new fields (Malaria guide: updated species, density grading, stage seen)
       await prisma.labTestResultField.createMany({
         data: [
           {
@@ -244,7 +244,7 @@ async function addLabTestTemplates() {
             fieldType: 'select',
             unit: null,
             normalRange: null,
-            options: ['Plasmodium falciparum', 'Plasmodium vivax', 'Plasmodium malariae', 'Plasmodium ovale', 'Mixed infection'],
+            options: ['Plasmodium falciparum', 'Plasmodium vivax', 'Mixed infection (Pf + Pv)', 'Other (specify)'],
             isRequired: false,
             displayOrder: 2
           },
@@ -262,13 +262,24 @@ async function addLabTestTemplates() {
           {
             testId: pictTest.id,
             fieldName: 'parasite_density',
-            label: 'Parasite Density',
+            label: 'Parasite Density / Grading',
             fieldType: 'select',
             unit: null,
             normalRange: null,
-            options: ['Low (<1%)', 'Moderate (1-5%)', 'High (5-10%)', 'Very High (>10%)'],
+            options: ['(1+) : 1–10 parasites / 100 fields', '++ (2+) : 11–100 parasites / 100 fields', '+++ (3+) : 1–10 parasites / single field', '++++ (4+) : >10 parasites / single field'],
             isRequired: false,
             displayOrder: 4
+          },
+          {
+            testId: pictTest.id,
+            fieldName: 'stage_seen',
+            label: 'Stage Seen (optional)',
+            fieldType: 'select',
+            unit: null,
+            normalRange: null,
+            options: ['Ring form', 'Trophozoite', 'Schizont', 'Gametocyte'],
+            isRequired: false,
+            displayOrder: 5
           },
           {
             testId: pictTest.id,
@@ -279,7 +290,7 @@ async function addLabTestTemplates() {
             normalRange: null,
             options: null,
             isRequired: false,
-            displayOrder: 5
+            displayOrder: 6
           },
           {
             testId: pictTest.id,
@@ -290,7 +301,7 @@ async function addLabTestTemplates() {
             normalRange: null,
             options: null,
             isRequired: false,
-            displayOrder: 6
+            displayOrder: 7
           },
           {
             testId: pictTest.id,
@@ -301,18 +312,18 @@ async function addLabTestTemplates() {
             normalRange: null,
             options: null,
             isRequired: false,
-            displayOrder: 7
+            displayOrder: 8
           },
           {
             testId: pictTest.id,
-            fieldName: 'interpretation',
-            label: 'Interpretation',
+            fieldName: 'remarks',
+            label: 'Remarks',
             fieldType: 'textarea',
             unit: null,
             normalRange: null,
             options: null,
             isRequired: false,
-            displayOrder: 8
+            displayOrder: 9
           }
         ]
       });
