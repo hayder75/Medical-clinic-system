@@ -1381,6 +1381,107 @@ exports.processPayment = async (req, res) => {
             });
             console.log(`   Found ${ordersBeforeUpdate} LabTestOrders for this visit`);
             
+            // Separate radiology and lab services
+            const radiologyServices = billing.services.filter(s => s.service.category === 'RADIOLOGY');
+            const labServices = billing.services.filter(s => s.service.category === 'LAB');
+            
+            // Handle radiology services - create batch orders if they don't exist
+            if (radiologyServices.length > 0) {
+              console.log(`   Processing ${radiologyServices.length} radiology service(s)`);
+              
+              // Find investigation types for radiology services
+              const radiologyServiceIds = radiologyServices.map(s => s.serviceId);
+              const investigationTypes = await tx.investigationType.findMany({
+                where: {
+                  serviceId: { in: radiologyServiceIds },
+                  category: 'RADIOLOGY'
+                }
+              });
+              
+              // Group services by serviceId to create batch orders
+              const servicesByServiceId = {};
+              radiologyServices.forEach(bs => {
+                if (!servicesByServiceId[bs.serviceId]) {
+                  servicesByServiceId[bs.serviceId] = [];
+                }
+                servicesByServiceId[bs.serviceId].push(bs);
+              });
+              
+              // Create or update batch orders for radiology
+              for (const serviceId of Object.keys(servicesByServiceId)) {
+                const investigationType = investigationTypes.find(it => it.serviceId === serviceId);
+                
+                if (investigationType) {
+                  // Check if batch order already exists for this service
+                  const existingBatchOrder = await tx.batchOrder.findFirst({
+                    where: {
+                      visitId: billing.visit.id,
+                      type: 'RADIOLOGY',
+                      services: {
+                        some: {
+                          serviceId: serviceId,
+                          investigationTypeId: investigationType.id
+                        }
+                      }
+                    },
+                    include: {
+                      services: true
+                    }
+                  });
+                  
+                  if (existingBatchOrder) {
+                    // Update existing batch order
+                    await tx.batchOrder.update({
+                      where: { id: existingBatchOrder.id },
+                      data: { status: 'PAID' }
+                    });
+                    await tx.batchOrderService.updateMany({
+                      where: {
+                        batchOrderId: existingBatchOrder.id,
+                        serviceId: serviceId
+                      },
+                      data: { status: 'PAID' }
+                    });
+                    console.log(`   ✅ Updated existing radiology batch order ${existingBatchOrder.id} to PAID`);
+                  } else {
+                    // Create new batch order for this radiology service
+                    // Get doctor from visit assignment or use a default
+                    const visitWithAssignment = await tx.visit.findUnique({
+                      where: { id: billing.visit.id },
+                      include: {
+                        assignment: {
+                          include: {
+                            doctor: true
+                          }
+                        }
+                      }
+                    });
+                    
+                    const doctorId = visitWithAssignment?.assignment?.doctorId || null;
+                    
+                    const newBatchOrder = await tx.batchOrder.create({
+                      data: {
+                        visitId: billing.visit.id,
+                        patientId: billing.patientId,
+                        doctorId: doctorId,
+                        type: 'RADIOLOGY',
+                        status: 'PAID',
+                        instructions: `Radiology service ordered via billing: ${investigationType.name}`,
+                        services: {
+                          create: {
+                            serviceId: serviceId,
+                            investigationTypeId: investigationType.id,
+                            status: 'PAID'
+                          }
+                        }
+                      }
+                    });
+                    console.log(`   ✅ Created new radiology batch order ${newBatchOrder.id} for service ${investigationType.name}`);
+                  }
+                }
+              }
+            }
+            
             // Update batch orders (old system)
             const batchOrdersUpdated = await tx.batchOrder.updateMany({
               where: {
