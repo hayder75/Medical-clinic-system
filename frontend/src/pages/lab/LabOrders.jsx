@@ -1384,6 +1384,28 @@ const LabOrders = () => {
                       const fieldValue = result.results?.[field.fieldName] || '';
                       const isCompleted = selectedOrder && selectedOrder.status === 'COMPLETED';
                       
+                      // CBC: Hide additional fields (MCV, MCH, MCHC) if none are filled
+                      const isCBCAdditional = result.labTest?.code === 'CBC001' && 
+                        ['mcv', 'mch', 'mchc'].includes(field.fieldName);
+                      const hasCBCAdditional = isCBCAdditional && (
+                        result.results?.mcv || 
+                        result.results?.mch || 
+                        result.results?.mchc
+                      );
+                      
+                      // HIV: Hide remarks field if result is not "Reactive"
+                      const isHIVRemarks = result.labTest?.code === 'HIV001' && field.fieldName === 'remarks';
+                      const hivResult = result.results?.result;
+                      const shouldShowHIVRemarks = !isHIVRemarks || hivResult === 'Reactive';
+                      
+                      // Don't render if field should be hidden
+                      if (isCBCAdditional && !hasCBCAdditional) {
+                        return null;
+                      }
+                      if (isHIVRemarks && !shouldShowHIVRemarks) {
+                        return null;
+                      }
+                      
                       return (
                         <div key={field.id} className="space-y-1">
                           <label className="block text-sm font-medium text-gray-700">
@@ -1457,10 +1479,17 @@ const LabOrders = () => {
                               const vdrlResult = testResults[selectedService]?.results?.result;
                               const isTiterEnabled = !isVDRLTiter || vdrlResult === 'Reactive';
                               
+                              // Check if this is Stool parasite_type field - enable only when parasite is "Seen"
+                              const isStoolParasiteType = field.fieldName === 'parasite_type' && 
+                                (testResults[selectedService]?.labTest?.code === 'STOOL001' ||
+                                 testResults[selectedService]?.labTest?.name?.toLowerCase().includes('stool'));
+                              const stoolParasite = testResults[selectedService]?.results?.parasite;
+                              const isParasiteTypeEnabled = !isStoolParasiteType || stoolParasite === 'Seen';
+                              
                               return (
                                 <select
                                   value={fieldValue}
-                                  disabled={isCompleted || !isTiterEnabled}
+                                  disabled={isCompleted || !isTiterEnabled || !isParasiteTypeEnabled}
                                   onChange={(e) => {
                                     if (isCompleted) return;
                                     const newResults = { ...result.results };
@@ -1471,10 +1500,25 @@ const LabOrders = () => {
                                       newResults.titer = '';
                                     }
                                     
+                                    // Special handling for Stool: Clear parasite_type if parasite is not "Seen"
+                                    const isStoolParasite = field.fieldName === 'parasite' && 
+                                      (testResults[selectedService]?.labTest?.code === 'STOOL001' ||
+                                       testResults[selectedService]?.labTest?.name?.toLowerCase().includes('stool'));
+                                    if (isStoolParasite && e.target.value !== 'Seen') {
+                                      newResults.parasite_type = '';
+                                    }
+                                    
+                                    // Special handling for HIV: Clear remarks if result is not "Reactive"
+                                    const isHIVResult = field.fieldName === 'result' && 
+                                      testResults[selectedService]?.labTest?.code === 'HIV001';
+                                    if (isHIVResult && e.target.value !== 'Reactive') {
+                                      newResults.remarks = '';
+                                    }
+                                    
                                     updateTestResult(selectedService, 'results', newResults);
                                   }}
                                   className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                                    isCompleted || !isTiterEnabled ? 'bg-gray-100 cursor-not-allowed' : ''
+                                    isCompleted || !isTiterEnabled || !isParasiteTypeEnabled ? 'bg-gray-100 cursor-not-allowed' : ''
                                   }`}
                                 >
                                   <option value="">-- Select --</option>
@@ -1522,6 +1566,23 @@ const LabOrders = () => {
                                       newResults.remarks = 'Malaria parasite seen.';
                                     }
                                     
+                                    // Special handling for Stool: Clear parasite_type if parasite is not "Seen"
+                                    const isStoolParasite = field.fieldName === 'parasite' && 
+                                      (testResults[selectedService]?.labTest?.code === 'STOOL001' ||
+                                       testResults[selectedService]?.labTest?.name?.toLowerCase().includes('stool'));
+                                    
+                                    if (isStoolParasite && e.target.value !== 'Seen') {
+                                      newResults.parasite_type = '';
+                                    }
+                                    
+                                    // Special handling for HIV: Clear remarks if result is not "Reactive"
+                                    const isHIVResult = field.fieldName === 'result' && 
+                                      testResults[selectedService]?.labTest?.code === 'HIV001';
+                                    
+                                    if (isHIVResult && e.target.value !== 'Reactive') {
+                                      newResults.remarks = '';
+                                    }
+                                    
                                     updateTestResult(selectedService, 'results', newResults);
                                   }}
                                   className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${isCompleted ? 'bg-gray-100 cursor-not-allowed' : ''}`}
@@ -1538,6 +1599,13 @@ const LabOrders = () => {
                               <textarea
                                 value={fieldValue}
                                 readOnly={isCompleted}
+                                disabled={(() => {
+                                  // HIV: Disable remarks if result is not "Reactive"
+                                  const isHIVRemarks = field.fieldName === 'remarks' && 
+                                    testResults[selectedService]?.labTest?.code === 'HIV001';
+                                  const hivResult = testResults[selectedService]?.results?.result;
+                                  return isHIVRemarks && hivResult !== 'Reactive';
+                                })()}
                                 onChange={(e) => {
                                   if (isCompleted) return;
                                   const newResults = { ...result.results };
@@ -1577,7 +1645,12 @@ const LabOrders = () => {
                                     }
                                   }
                                 }}
-                                className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${isCompleted ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                                className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                                  isCompleted || (field.fieldName === 'remarks' && 
+                                    testResults[selectedService]?.labTest?.code === 'HIV001' &&
+                                    testResults[selectedService]?.results?.result !== 'Reactive') 
+                                    ? 'bg-gray-100 cursor-not-allowed' : ''
+                                }`}
                                 rows={3}
                                 placeholder="Enter details..."
                                 required={field.isRequired}

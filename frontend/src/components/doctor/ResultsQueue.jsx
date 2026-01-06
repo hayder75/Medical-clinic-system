@@ -115,23 +115,34 @@ const LabResultsDisplay = ({ batchOrder }) => {
                   Test Results
                 </h5>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {Object.entries(result.results).map(([key, value]) => {
-                    // Show dash for blank/empty values
-                    const displayValue = (value === null || value === undefined || value === '' || String(value).trim() === '') 
-                      ? '-' 
-                      : value;
-                    
-                    return (
-                      <div key={key} className="flex flex-col space-y-1 p-3 bg-gray-50 rounded-lg">
-                        <span className="text-xs font-medium text-gray-600 uppercase tracking-wide">
-                          {key.replace(/([A-Z])/g, ' $1').trim()}
-                        </span>
-                        <span className={`text-sm font-semibold ${displayValue === '-' ? 'text-gray-400' : 'text-gray-900'}`}>
-                          {displayValue}
-                        </span>
-                      </div>
-                    );
-                  })}
+                  {Object.entries(result.results)
+                    .filter(([key, value]) => {
+                      // CBC: Hide additional fields (MCV, MCH, MCHC) if none are filled
+                      const isCBCAdditional = ['mcv', 'mch', 'mchc'].includes(key.toLowerCase());
+                      if (isCBCAdditional) {
+                        // Check if any additional field has a value
+                        const hasAdditional = result.results?.mcv || result.results?.mch || result.results?.mchc;
+                        return hasAdditional;
+                      }
+                      return true;
+                    })
+                    .map(([key, value]) => {
+                      // Show dash for blank/empty values
+                      const displayValue = (value === null || value === undefined || value === '' || String(value).trim() === '') 
+                        ? '-' 
+                        : value;
+                      
+                      return (
+                        <div key={key} className="flex flex-col space-y-1 p-3 bg-gray-50 rounded-lg">
+                          <span className="text-xs font-medium text-gray-600 uppercase tracking-wide">
+                            {key.replace(/([A-Z])/g, ' $1').trim()}
+                          </span>
+                          <span className={`text-sm font-semibold ${displayValue === '-' ? 'text-gray-400' : 'text-gray-900'}`}>
+                            {displayValue}
+                          </span>
+                        </div>
+                      );
+                    })}
                 </div>
               </div>
               
