@@ -207,7 +207,7 @@ exports.fillReport = async (req, res) => {
       return res.status(404).json({ error: 'Radiology batch order not found' });
     }
 
-    if (batchOrder.status !== 'QUEUED') {
+    if (!['QUEUED', 'PAID'].includes(batchOrder.status)) {
       return res.status(400).json({ error: 'Order is not in queue for processing' });
     }
 
