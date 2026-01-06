@@ -1522,9 +1522,6 @@ const PatientConsultationPage = () => {
                                               {field.label}
                                             </div>
                                             <div className="text-gray-600">{fieldValue} {field.unit || ''}</div>
-                                            {field.normalRange && (
-                                              <div className="text-xs text-gray-500 mt-1">Normal: {field.normalRange}</div>
-                                            )}
                                           </div>
                                         );
                                       })}
