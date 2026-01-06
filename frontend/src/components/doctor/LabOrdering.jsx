@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { TestTube, Plus, X, CheckCircle, Clock, ChevronDown, ChevronRight, Package } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { TestTube, Plus, X, CheckCircle, Clock, ChevronDown, ChevronRight, Package, Search } from 'lucide-react';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
 
@@ -11,6 +11,7 @@ const LabOrdering = ({ visitId, patientId, onOrdersPlaced, existingOrders = [] }
   const [instructions, setInstructions] = useState('');
   const [loading, setLoading] = useState(false);
   const [fetchingTests, setFetchingTests] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     fetchLabTests();
@@ -272,6 +273,86 @@ const LabOrdering = ({ visitId, patientId, onOrdersPlaced, existingOrders = [] }
 
   const selectedTests = getSelectedTests();
 
+  // Flatten all tests for search
+  const allTestsFlat = useMemo(() => {
+    const tests = [];
+    Object.entries(organizedTests).forEach(([category, data]) => {
+      // Add groups tests
+      data.groups?.forEach(group => {
+        group.tests?.forEach(test => {
+          tests.push({ ...test, category, groupName: group.name, type: 'group' });
+        });
+      });
+      // Add standalone tests
+      data.standalone?.forEach(test => {
+        tests.push({ ...test, category, type: 'standalone' });
+      });
+    });
+    return tests;
+  }, [organizedTests]);
+
+  // Filter tests based on search query
+  const filteredTests = useMemo(() => {
+    if (!searchQuery.trim()) return null; // null means show categories
+    
+    const query = searchQuery.toLowerCase().trim();
+    return allTestsFlat.filter(test => 
+      test.name.toLowerCase().includes(query) ||
+      test.description?.toLowerCase().includes(query) ||
+      test.category.toLowerCase().includes(query) ||
+      test.groupName?.toLowerCase().includes(query)
+    );
+  }, [searchQuery, allTestsFlat]);
+
+  // Filter organized tests based on search
+  const filteredOrganizedTests = useMemo(() => {
+    if (!searchQuery.trim()) return organizedTests;
+    
+    const query = searchQuery.toLowerCase().trim();
+    const filtered = {};
+    
+    Object.entries(organizedTests).forEach(([category, data]) => {
+      const categoryMatches = category.toLowerCase().includes(query);
+      const filteredGroups = [];
+      const filteredStandalone = [];
+      
+      // Filter groups
+      data.groups?.forEach(group => {
+        const groupMatches = group.name.toLowerCase().includes(query);
+        const filteredGroupTests = group.tests?.filter(test =>
+          test.name.toLowerCase().includes(query) ||
+          test.description?.toLowerCase().includes(query) ||
+          groupMatches ||
+          categoryMatches
+        ) || [];
+        
+        if (filteredGroupTests.length > 0) {
+          filteredGroups.push({ ...group, tests: filteredGroupTests });
+        }
+      });
+      
+      // Filter standalone
+      data.standalone?.forEach(test => {
+        if (
+          test.name.toLowerCase().includes(query) ||
+          test.description?.toLowerCase().includes(query) ||
+          categoryMatches
+        ) {
+          filteredStandalone.push(test);
+        }
+      });
+      
+      if (categoryMatches || filteredGroups.length > 0 || filteredStandalone.length > 0) {
+        filtered[category] = {
+          groups: filteredGroups,
+          standalone: filteredStandalone
+        };
+      }
+    });
+    
+    return filtered;
+  }, [searchQuery, organizedTests]);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -293,31 +374,163 @@ const LabOrdering = ({ visitId, patientId, onOrdersPlaced, existingOrders = [] }
         )}
       </div>
 
+      {/* Search Bar */}
+      <div className="relative">
+        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+          <Search className="h-5 w-5 text-gray-400" />
+        </div>
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search lab tests by name, category, or description..."
+          className="w-full pl-12 pr-4 py-3 text-lg border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+        />
+        {searchQuery && (
+          <button
+            onClick={() => setSearchQuery('')}
+            className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        )}
+      </div>
+
       {/* Available Lab Tests - Hierarchical View */}
       <div>
         <div className="mb-4">
-          <h4 className="text-lg font-semibold text-gray-900">Available Lab Tests</h4>
+          <h4 className="text-lg font-semibold text-gray-900">
+            {searchQuery ? `Search Results (${filteredTests?.length || 0})` : 'Available Lab Tests'}
+          </h4>
         </div>
         
-        <div className="space-y-4 max-h-[700px] overflow-y-auto border border-gray-300 rounded-lg p-4 bg-gray-50">
-          {Object.entries(organizedTests).map(([category, data]) => (
-            <div key={category} className="border-b border-gray-200 pb-4 last:border-b-0">
-              {/* Category Header - All categories are collapsible now */}
-              <div
+        {/* Search Results View */}
+        {searchQuery && filteredTests && filteredTests.length > 0 && (
+          <div className="space-y-3 max-h-[700px] overflow-y-auto border border-gray-300 rounded-lg p-4 bg-gray-50">
+            {filteredTests.map((test) => {
+              const isSelected = selectedTestIds.has(test.id);
+              const isOrdered = isTestOrdered(test.id);
+              
+              return (
+                <div
+                  key={test.id}
+                  className={`p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 ${
+                    isOrdered 
+                      ? 'border-gray-300 bg-gray-100 opacity-60 cursor-not-allowed' 
+                      : isSelected 
+                        ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200' 
+                        : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50'
+                  }`}
+                  onClick={() => !isOrdered && handleTestSelect(test.id)}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-3">
+                        <TestTube className={`w-6 h-6 ${isOrdered ? 'text-gray-400' : isSelected ? 'text-blue-600' : 'text-gray-500'}`} />
+                        <div>
+                          <h5 className="text-lg font-bold text-gray-900">{test.name}</h5>
+                          {test.groupName && (
+                            <span className="text-sm text-gray-600">({test.groupName} • {test.category})</span>
+                          )}
+                          {!test.groupName && (
+                            <span className="text-sm text-gray-600">({test.category})</span>
+                          )}
+                        </div>
+                        {isSelected && !isOrdered && (
+                          <CheckCircle className="h-6 w-6 text-blue-600" />
+                        )}
+                      </div>
+                      {test.description && (
+                        <p className="text-sm text-gray-600 mt-2 ml-9">{test.description}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center space-x-4 ml-4">
+                      <span className="text-base font-semibold text-gray-700">
+                        {test.price ? `${test.price.toFixed(2)} ETB` : 'N/A'}
+                      </span>
+                      <label className="flex items-center cursor-pointer" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          disabled={isOrdered}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            handleTestSelect(test.id);
+                          }}
+                          className="w-6 h-6 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                        />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* No Search Results */}
+        {searchQuery && filteredTests && filteredTests.length === 0 && (
+          <div className="border-2 border-gray-300 rounded-lg p-8 bg-gray-50 text-center">
+            <Search className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <p className="text-lg text-gray-600">No lab tests found matching "{searchQuery}"</p>
+            <button
+              onClick={() => setSearchQuery('')}
+              className="mt-4 text-blue-600 hover:text-blue-700 font-semibold"
+            >
+              Clear search
+            </button>
+          </div>
+        )}
+        
+        {/* Category View (when not searching) */}
+        {!searchQuery && (
+          <div className="space-y-3 max-h-[700px] overflow-y-auto">
+            {Object.entries(filteredOrganizedTests).map(([category, data]) => (
+            <div key={category} className="mb-3">
+              {/* Category Header - Large button-style */}
+              <button
                 onClick={() => toggleCategory(category)}
-                className="w-full flex items-center justify-between py-3 px-4 bg-white hover:bg-gray-50 border border-gray-200 hover:border-gray-300 rounded-lg transition-all cursor-pointer"
+                className={`w-full flex items-center justify-between py-4 px-6 rounded-lg transition-all duration-200 shadow-md hover:shadow-lg ${
+                  expandedCategories.has(category)
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-900 border-2 border-gray-300 hover:border-blue-500'
+                }`}
               >
-                <span className="text-base font-semibold text-gray-900">{category}</span>
-                {expandedCategories.has(category) ? (
-                  <ChevronDown className="w-5 h-5 text-gray-600" />
-                ) : (
-                  <ChevronRight className="w-5 h-5 text-gray-600" />
-                )}
-              </div>
+                <div className="flex items-center space-x-4">
+                  <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+                    expandedCategories.has(category) ? 'bg-blue-500' : 'bg-gray-100'
+                  }`}>
+                    <TestTube className={`w-6 h-6 ${expandedCategories.has(category) ? 'text-white' : 'text-gray-600'}`} />
+                  </div>
+                  <span className="text-xl font-bold">{category}</span>
+                  {/* Count badge */}
+                  <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
+                    expandedCategories.has(category)
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-gray-200 text-gray-700'
+                  }`}>
+                    {(data.groups?.reduce((sum, g) => sum + (g.tests?.length || 0), 0) || 0) + 
+                     (data.standalone?.length || 0)} tests
+                  </span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  {expandedCategories.has(category) ? (
+                    <>
+                      <span className="text-sm font-medium">Hide</span>
+                      <ChevronDown className="w-6 h-6" />
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-sm font-medium">Show</span>
+                      <ChevronRight className="w-6 h-6" />
+                    </>
+                  )}
+                </div>
+              </button>
 
               {/* Category Content */}
               {expandedCategories.has(category) && (
-                <div className="mt-3 space-y-3">
+                <div className="mt-3 ml-2 space-y-3 border-l-4 border-blue-500 pl-4 bg-gray-50 rounded-r-lg p-4">
                   {/* For "Standalone Tests" category, show tests directly without groups */}
                   {category === 'Standalone Tests' && data.standalone && data.standalone.length > 0 && (
                     <div className="space-y-2">
@@ -569,7 +782,8 @@ const LabOrdering = ({ visitId, patientId, onOrdersPlaced, existingOrders = [] }
               )}
             </div>
           ))}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Selected Tests Summary */}
