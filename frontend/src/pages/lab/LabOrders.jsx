@@ -1378,20 +1378,36 @@ const LabOrders = () => {
                     )}
                   </div>
 
+                  {/* CBC: Toggle button for additional fields */}
+                  {testResults[selectedService].labTest?.code === 'CBC001' && (
+                    <div className="mb-4 flex items-center justify-between p-3 bg-gray-100 rounded-lg">
+                      <span className="text-sm font-medium text-gray-700">Additional Fields (MCV, MCH, MCHC)</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const orderId = selectedService;
+                          setShowCBCAdditionalFields(prev => ({
+                            ...prev,
+                            [orderId]: !prev[orderId]
+                          }));
+                        }}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-semibold"
+                      >
+                        {showCBCAdditionalFields[selectedService] ? 'Hide Additional Fields' : 'Show Additional Fields'}
+                      </button>
+                    </div>
+                  )}
+                  
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {testResults[selectedService].resultFields.map((field) => {
                       const result = testResults[selectedService];
                       const fieldValue = result.results?.[field.fieldName] || '';
                       const isCompleted = selectedOrder && selectedOrder.status === 'COMPLETED';
                       
-                      // CBC: Hide additional fields (MCV, MCH, MCHC) if none are filled
+                      // CBC: Hide additional fields (MCV, MCH, MCHC) unless toggle is on
                       const isCBCAdditional = result.labTest?.code === 'CBC001' && 
                         ['mcv', 'mch', 'mchc'].includes(field.fieldName);
-                      const hasCBCAdditional = isCBCAdditional && (
-                        result.results?.mcv || 
-                        result.results?.mch || 
-                        result.results?.mchc
-                      );
+                      const shouldShowCBCAdditional = !isCBCAdditional || showCBCAdditionalFields[selectedService];
                       
                       // HIV: Hide remarks field if result is not "Reactive"
                       const isHIVRemarks = result.labTest?.code === 'HIV001' && field.fieldName === 'remarks';
@@ -1399,7 +1415,7 @@ const LabOrders = () => {
                       const shouldShowHIVRemarks = !isHIVRemarks || hivResult === 'Reactive';
                       
                       // Don't render if field should be hidden
-                      if (isCBCAdditional && !hasCBCAdditional) {
+                      if (isCBCAdditional && !shouldShowCBCAdditional) {
                         return null;
                       }
                       if (isHIVRemarks && !shouldShowHIVRemarks) {
