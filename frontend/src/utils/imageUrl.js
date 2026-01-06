@@ -16,10 +16,13 @@ function getBaseUrl() {
   if (import.meta.env.VITE_API_URL) {
     apiUrl = import.meta.env.VITE_API_URL;
   } else {
-    // Otherwise, use the current hostname (works for localhost and network access)
-    // Backend runs on port 3000
+    // Use the current hostname from the browser
+    // This ensures images work whether accessed via localhost or server IP
     const protocol = window.location.protocol;
     const hostname = window.location.hostname;
+    
+    // Always use port 3000 for backend file serving
+    // The backend serves files at http://hostname:3000/uploads/...
     apiUrl = `${protocol}//${hostname}:3000/api`;
   }
   
