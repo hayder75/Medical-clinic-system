@@ -942,30 +942,14 @@ const LabOrdering = ({ visitId, patientId, onOrdersPlaced, existingOrders = [] }
                     {filteredOrganizedTests[selectedCategory]?.groups?.find(g => g.id === selectedGroupId)?.tests && (() => {
                       let tests = [...filteredOrganizedTests[selectedCategory].groups.find(g => g.id === selectedGroupId).tests];
                       
-                      // Sort Serology tests: Weil-Felix first, then VDRL, then others
-                      if (selectedCategory === 'Serology') {
-                        tests.sort((a, b) => {
-                          const aName = a.name?.toLowerCase() || '';
-                          const bName = b.name?.toLowerCase() || '';
-                          
-                          // Weil-Felix first
-                          if (aName.includes('weil') || aName.includes('weil-felix')) return -1;
-                          if (bName.includes('weil') || bName.includes('weil-felix')) return 1;
-                          
-                          // VDRL second (after Weil-Felix)
-                          if (aName.includes('vdrl')) {
-                            if (bName.includes('weil') || bName.includes('weil-felix')) return 1;
-                            return -1;
-                          }
-                          if (bName.includes('vdrl')) {
-                            if (aName.includes('weil') || aName.includes('weil-felix')) return -1;
-                            return 1;
-                          }
-                          
-                          // Other tests alphabetically
-                          return aName.localeCompare(bName);
-                        });
+                      // Tests are already sorted by backend - DO NOT SORT HERE!
+                      // Backend provides correct order: 1. Weil-Felix, 2. Widal, 3. HBsAg, 4. HCV, 5. VDRL, then rest
+                      
+                      // Console log to debug Serology ordering
+                      if (selectedCategory === 'Serology' && selectedGroupId) {
+                        console.log('🔬 [LabOrdering] Serology Panel Tests Order (from backend):', tests.map(t => ({ code: t.code, name: t.name })));
                       }
+
                       
                       return (
                         <div className={`grid gap-4 ${
