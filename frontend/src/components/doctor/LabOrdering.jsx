@@ -936,7 +936,11 @@ const LabOrdering = ({ visitId, patientId, onOrdersPlaced, existingOrders = [] }
                       }
                       
                       return (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div className={`grid gap-4 ${
+                          selectedCategory === 'Serology' && selectedGroupId 
+                            ? 'grid-cols-1 md:grid-cols-2' // 2 columns for Serology Panel (side-by-side layout)
+                            : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' // 3 columns for others
+                        }`}>
                           {tests.map((test) => {
                             const isSelected = selectedTestIds.has(test.id);
                             const isOrdered = isTestOrdered(test.id);
