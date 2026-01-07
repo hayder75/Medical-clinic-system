@@ -654,42 +654,116 @@ exports.updateService = async (req, res) => {
       }
     }
 
+    // Get the existing service to check category
+    const existingService = await prisma.service.findUnique({
+      where: { id }
+    });
+
+    if (!existingService) {
+      return res.status(404).json({ error: 'Service not found' });
+    }
+
     const service = await prisma.service.update({
       where: { id },
       data
     });
 
-    // Sync price and name changes to associated LabTest if this service is linked to a lab test
-    if (data.price !== undefined || data.name !== undefined) {
-      const linkedLabTest = await prisma.labTest.findFirst({
-        where: { serviceId: id }
-      });
-
-      if (linkedLabTest) {
-        const labTestUpdate = {};
-        if (data.price !== undefined) labTestUpdate.price = data.price;
-        if (data.name !== undefined) labTestUpdate.name = data.name;
-
-        await prisma.labTest.updateMany({
-          where: { serviceId: id },
-          data: labTestUpdate
+    // Auto-create InvestigationType if category is RADIOLOGY
+    if (service.category === 'RADIOLOGY') {
+      try {
+        const existingInvestigationType = await prisma.investigationType.findFirst({
+          where: { serviceId: service.id }
         });
+
+        if (!existingInvestigationType) {
+          await prisma.investigationType.create({
+            data: {
+              name: service.name,
+              category: 'RADIOLOGY',
+              price: service.price,
+              service: { connect: { id: service.id } }
+            }
+          });
+          console.log(`✅ Auto-created InvestigationType for updated RADIOLOGY service: ${service.name}`);
+        } else {
+          // Update existing InvestigationType if service name or price changed
+          await prisma.investigationType.updateMany({
+            where: { serviceId: service.id },
+            data: {
+              name: service.name,
+              price: service.price
+            }
+          });
+        }
+      } catch (error) {
+        console.error(`⚠️  Warning: Failed to auto-create/update InvestigationType for service ${service.name}:`, error.message);
       }
+    }
 
-      // Also sync to InvestigationType if linked (used for radiology)
-      const linkedInvestigationType = await prisma.investigationType.findFirst({
-        where: { serviceId: id }
-      });
-
-      if (linkedInvestigationType) {
-        const investigationUpdate = {};
-        if (data.price !== undefined) investigationUpdate.price = data.price;
-        if (data.name !== undefined) investigationUpdate.name = data.name;
-
-        await prisma.investigationType.updateMany({
-          where: { serviceId: id },
-          data: investigationUpdate
+    // Auto-create LabTest if category is LAB
+    if (service.category === 'LAB') {
+      try {
+        const existingLabTest = await prisma.labTest.findFirst({
+          where: { serviceId: service.id }
         });
+
+        if (!existingLabTest) {
+          const labTestCode = service.code || `LAB${String(Date.now()).slice(-6)}`;
+          const labTest = await prisma.labTest.create({
+            data: {
+              code: labTestCode,
+              name: service.name,
+              category: 'Laboratory',
+              description: service.description || `Lab test: ${service.name}`,
+              price: service.price,
+              unit: service.unit || 'UNIT',
+              isActive: service.isActive !== false,
+              serviceId: service.id,
+              groupId: null,
+              displayOrder: 0
+            }
+          });
+
+          await prisma.labTestResultField.createMany({
+            data: [
+              {
+                testId: labTest.id,
+                fieldName: 'result',
+                label: 'Result',
+                fieldType: 'textarea',
+                unit: null,
+                normalRange: null,
+                options: null,
+                isRequired: false,
+                displayOrder: 1
+              },
+              {
+                testId: labTest.id,
+                fieldName: 'remarks',
+                label: 'Remarks',
+                fieldType: 'textarea',
+                unit: null,
+                normalRange: null,
+                options: null,
+                isRequired: false,
+                displayOrder: 2
+              }
+            ]
+          });
+          console.log(`✅ Auto-created LabTest for updated LAB service: ${service.name}`);
+        } else {
+          // Update existing LabTest if service name or price changed
+          await prisma.labTest.updateMany({
+            where: { serviceId: service.id },
+            data: {
+              name: service.name,
+              price: service.price,
+              description: service.description
+            }
+          });
+        }
+      } catch (error) {
+        console.error(`⚠️  Warning: Failed to auto-create/update LabTest for service ${service.name}:`, error.message);
       }
     }
 
