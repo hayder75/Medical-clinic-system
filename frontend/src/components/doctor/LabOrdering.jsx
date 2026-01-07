@@ -552,6 +552,58 @@ const LabOrdering = ({ visitId, patientId, onOrdersPlaced, existingOrders = [] }
               <div className="space-y-4">
                 {/* Remove back button - main buttons stay visible */}
 
+                {/* Hematology - Show directly */}
+                {selectedCategory === 'Hematology' && filteredOrganizedTests[selectedCategory]?.standalone && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {filteredOrganizedTests[selectedCategory].standalone.map((test) => {
+                      const isSelected = selectedTestIds.has(test.id);
+                      const isOrdered = isTestOrdered(test.id);
+                      
+                      return (
+                        <div
+                          key={test.id}
+                          className={`p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 ${
+                            isOrdered 
+                              ? 'border-gray-300 bg-gray-100 opacity-60 cursor-not-allowed' 
+                              : isSelected 
+                                ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200' 
+                                : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50'
+                          }`}
+                          onClick={() => !isOrdered && handleTestSelect(test.id)}
+                        >
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="flex-1">
+                              <h5 className="text-base font-bold text-gray-900">{test.name}</h5>
+                              {test.description && (
+                                <p className="text-sm text-gray-600 mt-1">{test.description}</p>
+                              )}
+                            </div>
+                            {isSelected && !isOrdered && (
+                              <CheckCircle className="h-5 w-5 text-blue-600 flex-shrink-0 ml-2" />
+                            )}
+                          </div>
+                          <div className="flex items-center justify-between mt-3">
+                            <span className="text-sm font-semibold text-gray-700">
+                              {test.price ? `${test.price.toFixed(2)} ETB` : 'N/A'}
+                            </span>
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              disabled={isOrdered}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                handleTestSelect(test.id);
+                              }}
+                              className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
                 {/* Standalone Tests - Show directly */}
                 {selectedCategory === 'Standalone Tests' && filteredOrganizedTests[selectedCategory]?.standalone && (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

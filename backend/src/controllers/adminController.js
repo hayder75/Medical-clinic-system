@@ -3553,6 +3553,9 @@ exports.getLabTestsForOrdering = async (req, res) => {
           }
           return a.name.localeCompare(b.name);
         });
+        
+        // Console log to verify ordering
+        console.log('🔬 [Backend] Serology Panel Tests Order:', filteredTests.map(t => ({ code: t.code, name: t.name })));
       }
       organized[group.category].groups.push({
         id: group.id,
