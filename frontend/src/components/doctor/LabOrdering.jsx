@@ -938,7 +938,7 @@ const LabOrdering = ({ visitId, patientId, onOrdersPlaced, existingOrders = [] }
                       })}
                     </div>
 
-                    {/* Group tests as cards - Sort VDRL below Weil-Felix for Serology */}
+                    {/* Group tests as cards - Tests are already sorted by backend */}
                     {filteredOrganizedTests[selectedCategory]?.groups?.find(g => g.id === selectedGroupId)?.tests && (() => {
                       let tests = [...filteredOrganizedTests[selectedCategory].groups.find(g => g.id === selectedGroupId).tests];
                       
