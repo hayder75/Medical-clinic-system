@@ -11,7 +11,7 @@ const RadiologyOrders = () => {
   const [testResults, setTestResults] = useState({});
   const [uploadingFiles, setUploadingFiles] = useState({});
   const [expandedTests, setExpandedTests] = useState({});
-  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [statusFilter, setStatusFilter] = useState('PENDING');
 
   useEffect(() => {
     fetchOrders();
