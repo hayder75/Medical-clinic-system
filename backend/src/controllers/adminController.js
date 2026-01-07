@@ -480,9 +480,106 @@ exports.createService = async (req, res) => {
       }
     });
 
+    // Automatically create related records based on category
+    const autoCreated = {
+      investigationType: false,
+      labTest: false
+    };
+
+    try {
+      if (data.category === 'RADIOLOGY') {
+        // Check if InvestigationType already exists for this service
+        const existingInvestigationType = await prisma.investigationType.findFirst({
+          where: {
+            serviceId: service.id
+          }
+        });
+
+        if (!existingInvestigationType) {
+          // Create InvestigationType for RADIOLOGY service
+          await prisma.investigationType.create({
+            data: {
+              name: service.name,
+              category: 'RADIOLOGY',
+              price: service.price,
+              service: {
+                connect: { id: service.id }
+              }
+            }
+          });
+          autoCreated.investigationType = true;
+          console.log(`✅ Auto-created InvestigationType for RADIOLOGY service: ${service.name}`);
+        }
+      } else if (data.category === 'LAB') {
+        // Check if LabTest already exists for this service
+        const existingLabTest = await prisma.labTest.findFirst({
+          where: {
+            serviceId: service.id
+          }
+        });
+
+        if (!existingLabTest) {
+          // Generate a unique code for the LabTest (use service code or generate one)
+          const labTestCode = serviceCode || `LAB${String(Date.now()).slice(-6)}`;
+          
+          // Create LabTest for LAB service with basic template
+          const labTest = await prisma.labTest.create({
+            data: {
+              code: labTestCode,
+              name: service.name,
+              category: 'Laboratory', // Default category, admin can change later
+              description: service.description || `Lab test: ${service.name}`,
+              price: service.price,
+              unit: service.unit || 'UNIT',
+              isActive: service.isActive !== false, // Default to true
+              serviceId: service.id,
+              groupId: null, // Standalone by default
+              displayOrder: 0
+            }
+          });
+
+          // Create basic result fields: Result and Remarks
+          await prisma.labTestResultField.createMany({
+            data: [
+              {
+                testId: labTest.id,
+                fieldName: 'result',
+                label: 'Result',
+                fieldType: 'textarea',
+                unit: null,
+                normalRange: null,
+                options: null,
+                isRequired: false,
+                displayOrder: 1
+              },
+              {
+                testId: labTest.id,
+                fieldName: 'remarks',
+                label: 'Remarks',
+                fieldType: 'textarea',
+                unit: null,
+                normalRange: null,
+                options: null,
+                isRequired: false,
+                displayOrder: 2
+              }
+            ]
+          });
+
+          autoCreated.labTest = true;
+          console.log(`✅ Auto-created LabTest with basic template for LAB service: ${service.name}`);
+        }
+      }
+    } catch (autoCreateError) {
+      // Log error but don't fail the service creation
+      console.error(`⚠️  Warning: Failed to auto-create related records for service ${service.name}:`, autoCreateError.message);
+      // Continue - service was created successfully, related records can be created manually later
+    }
+
     res.status(201).json({
       message: 'Service created successfully',
-      service
+      service,
+      autoCreated
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
