@@ -62,7 +62,6 @@ const RadiologyOrders = () => {
             resultText: result.resultText || '',
             findings: result.findings || '',
             conclusion: result.conclusion || '',
-            additionalNotes: result.additionalNotes || '',
             files: result.attachments || [],
             completed: true,
             resultId: result.id
@@ -100,7 +99,6 @@ const RadiologyOrders = () => {
             resultText: '',
             findings: template?.findingsTemplate || '',
             conclusion: template?.conclusionTemplate || '',
-            additionalNotes: '',
             files: [],
             completed: false,
             resultId: null
@@ -112,7 +110,6 @@ const RadiologyOrders = () => {
             resultText: '',
             findings: '',
             conclusion: '',
-            additionalNotes: '',
             files: [],
             completed: false,
             resultId: null
@@ -135,7 +132,6 @@ const RadiologyOrders = () => {
               resultText: result.resultText || '',
               findings: result.findings || '',
               conclusion: result.conclusion || '',
-              additionalNotes: result.additionalNotes || '',
               files: result.attachments || [],
               completed: true,
               resultId: result.id
@@ -211,17 +207,6 @@ const RadiologyOrders = () => {
 
   const handleCompleteBatchOrder = async () => {
     try {
-      // Check if all tests have findings and conclusion
-      const allTestsHaveResults = Object.values(testResults).every(result => {
-        const hasFindings = result.findings && result.findings.trim();
-        const hasConclusion = result.conclusion && result.conclusion.trim();
-        return hasFindings && hasConclusion;
-      });
-      if (!allTestsHaveResults) {
-        toast.error('Please enter findings and conclusion for all tests before submitting');
-        return;
-      }
-
       // Collect already uploaded file paths
       const uploadedFiles = {};
       
@@ -249,7 +234,6 @@ const RadiologyOrders = () => {
         testTypeId: parseInt(testId),
         findings: result.findings || '',
         conclusion: result.conclusion || '',
-        additionalNotes: result.additionalNotes || '',
         attachments: uploadedFiles[testId] || []
       }));
 
@@ -527,7 +511,7 @@ const RadiologyOrders = () => {
                             {/* Findings Section */}
                             <div>
                               <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Findings *
+                                Findings
                               </label>
                               <textarea
                                 value={testResult.findings || ''}
@@ -538,14 +522,14 @@ const RadiologyOrders = () => {
                                 disabled={isCompleted}
                               />
                               <p className="text-xs text-gray-500 mt-1">
-                                Template text pre-loaded. Edit, delete, or keep as needed.
+                                Template text pre-loaded. Edit, delete, or keep as needed. This field is optional.
                               </p>
                             </div>
 
                             {/* Conclusion Section */}
                             <div>
                               <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Conclusion *
+                                Conclusion
                               </label>
                               <textarea
                                 value={testResult.conclusion || ''}
@@ -556,23 +540,8 @@ const RadiologyOrders = () => {
                                 disabled={isCompleted}
                               />
                               <p className="text-xs text-gray-500 mt-1">
-                                Template text pre-loaded. Edit, delete, or keep as needed.
+                                Template text pre-loaded. Edit, delete, or keep as needed. This field is optional.
                               </p>
-                            </div>
-
-                            {/* Additional Notes */}
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Additional Notes
-                              </label>
-                              <textarea
-                                value={testResult.additionalNotes || ''}
-                                onChange={(e) => updateTestResult(testId, 'additionalNotes', e.target.value)}
-                                className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                                rows={4}
-                                placeholder="Any additional notes or observations..."
-                                disabled={isCompleted}
-                              />
                             </div>
 
                             <div>
