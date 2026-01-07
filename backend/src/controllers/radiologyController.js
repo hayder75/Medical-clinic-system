@@ -7,7 +7,9 @@ const fillReportSchema = z.object({
   orderId: z.number(),
   testResults: z.array(z.object({
     testTypeId: z.number(),
-    resultText: z.string(),
+    resultText: z.string().optional(), // Keep for backward compatibility
+    findings: z.string().optional(),
+    conclusion: z.string().optional(),
     additionalNotes: z.string().optional(),
     attachments: z.array(z.object({
       path: z.string(),
@@ -214,14 +216,16 @@ exports.fillReport = async (req, res) => {
     // Create individual radiology results for each test
     const createdResults = [];
     for (const testResult of testResults) {
-      const { testTypeId, resultText, additionalNotes, attachments } = testResult;
+      const { testTypeId, resultText, findings, conclusion, additionalNotes, attachments } = testResult;
       
-      // Create radiology result
+      // Create radiology result with findings and conclusion
       const radiologyResult = await prisma.radiologyResult.create({
         data: {
           batchOrderId: orderId,
           testTypeId: testTypeId,
-          resultText: resultText || 'No result provided',
+          resultText: resultText || findings || conclusion || 'No result provided', // Keep for backward compatibility
+          findings: findings || null,
+          conclusion: conclusion || null,
           additionalNotes: additionalNotes || '',
           status: 'COMPLETED'
         }
@@ -397,7 +401,13 @@ exports.fillReport = async (req, res) => {
 exports.getInvestigationTypes = async (req, res) => {
   try {
     const types = await prisma.investigationType.findMany({ 
-      where: { category: 'RADIOLOGY' },
+      where: { 
+        category: 'RADIOLOGY',
+        OR: [
+          { serviceId: null },
+          { service: { isActive: true } }
+        ]
+      },
       include: {
         service: {
           select: {
@@ -405,13 +415,14 @@ exports.getInvestigationTypes = async (req, res) => {
             code: true,
             name: true,
             category: true,
-            price: true
+            price: true,
+            isActive: true
           }
         }
       },
       orderBy: { name: 'asc' }
     });
-    res.json({ types });
+    res.json({ investigationTypes: types });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -665,7 +676,7 @@ exports.getRadiologyResults = async (req, res) => {
 exports.createBatchRadiologyResult = async (req, res) => {
   try {
     const { batchOrderId } = req.params;
-    const { testTypeId, resultText, additionalNotes } = req.body;
+    const { testTypeId, resultText, findings, conclusion, additionalNotes } = req.body;
     const radiologistId = req.user.id;
 
     // Check if batch order exists and is in correct status
@@ -718,7 +729,9 @@ exports.createBatchRadiologyResult = async (req, res) => {
       data: {
         batchOrderId: parseInt(batchOrderId),
         testTypeId: testTypeId,
-        resultText: resultText,
+        resultText: resultText || findings || conclusion || null, // Keep for backward compatibility
+        findings: findings || null,
+        conclusion: conclusion || null,
         additionalNotes: additionalNotes,
         status: 'COMPLETED'
       },

@@ -20,4 +20,8 @@ router.post('/batch-orders/:batchOrderId/results/:resultId/file', fileUpload.sin
 router.get('/batch-orders/:batchOrderId/results', radiologyController.getBatchRadiologyResults);
 router.put('/batch-orders/:batchOrderId/results', radiologyController.completeBatchRadiologyOrder);
 
+// Template routes
+router.get('/templates/:investigationTypeId', radiologyController.getTemplate);
+router.get('/templates', radiologyController.getAllTemplates);
+
 module.exports = router;

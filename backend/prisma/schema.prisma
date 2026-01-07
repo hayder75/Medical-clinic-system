@@ -740,6 +740,7 @@ model InvestigationType {
   batchOrderServices BatchOrderService[]
   labResults         LabResult[]
   radiologyResults   RadiologyResult[]
+  radiologyTemplate  RadiologyTemplate?
 }
 
 model Department {
@@ -1170,13 +1171,31 @@ model RadiologyResult {
   batchOrder      BatchOrder?       @relation(fields: [batchOrderId], references: [id])
   testTypeId      Int
   testType        InvestigationType @relation(fields: [testTypeId], references: [id])
-  resultText      String?
+  resultText      String?           // Keep for backward compatibility
+  findings        String?           // NEW: Findings section (pre-filled from template)
+  conclusion      String?           // NEW: Conclusion section (pre-filled from template)
   additionalNotes String?
   status          OrderStatus       @default(UNPAID)
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 
   attachments RadiologyResultFile[]
+}
+
+model RadiologyTemplate {
+  id                String           @id @default(uuid())
+  investigationTypeId Int            @unique
+  investigationType InvestigationType @relation(fields: [investigationTypeId], references: [id], onDelete: Cascade)
+  findingsTemplate  String?          // Template text for findings section
+  conclusionTemplate String?         // Template text for conclusion section
+  isActive          Boolean          @default(true)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  createdBy         String?
+  updatedBy         String?
+
+  @@index([investigationTypeId])
+  @@index([isActive])
 }
 
 model RadiologyResultFile {

@@ -60,6 +60,8 @@ const RadiologyOrders = () => {
         response.data.radiologyResults.forEach(result => {
           existingResults[result.testTypeId] = {
             resultText: result.resultText || '',
+            findings: result.findings || '',
+            conclusion: result.conclusion || '',
             additionalNotes: result.additionalNotes || '',
             files: result.attachments || [],
             completed: true,
@@ -85,18 +87,39 @@ const RadiologyOrders = () => {
     // Handle both batch orders and walk-in orders
     const services = order.services || (order.type ? [{ investigationType: order.type, id: order.id }] : []);
     
-    services.forEach(service => {
+    // Fetch templates for each test type and pre-fill
+    for (const service of services) {
       const testType = service.investigationType || order.type;
       if (testType && testType.category === 'RADIOLOGY') {
-        initialResults[testType.id] = {
-          resultText: '',
-          additionalNotes: '',
-          files: [],
-          completed: false,
-          resultId: null
-        };
+        try {
+          // Fetch template for this test type
+          const templateRes = await api.get(`/radiologies/templates/${testType.id}`);
+          const template = templateRes.data.template;
+          
+          initialResults[testType.id] = {
+            resultText: '',
+            findings: template?.findingsTemplate || '',
+            conclusion: template?.conclusionTemplate || '',
+            additionalNotes: '',
+            files: [],
+            completed: false,
+            resultId: null
+          };
+        } catch (error) {
+          // If no template exists, start with empty fields
+          console.log(`No template found for ${testType.name}:`, error.message);
+          initialResults[testType.id] = {
+            resultText: '',
+            findings: '',
+            conclusion: '',
+            additionalNotes: '',
+            files: [],
+            completed: false,
+            resultId: null
+          };
+        }
       }
-    });
+    }
     
     // Fetch existing results and merge with initial results (only for batch orders)
     if (!order.isWalkIn) {
@@ -110,6 +133,8 @@ const RadiologyOrders = () => {
           if (result.testType) {
             initialResults[result.testType.id] = {
               resultText: result.resultText || '',
+              findings: result.findings || '',
+              conclusion: result.conclusion || '',
               additionalNotes: result.additionalNotes || '',
               files: result.attachments || [],
               completed: true,
@@ -186,10 +211,14 @@ const RadiologyOrders = () => {
 
   const handleCompleteBatchOrder = async () => {
     try {
-      // Check if all tests have result text
-      const allTestsHaveResults = Object.values(testResults).every(result => result.resultText && result.resultText.trim());
+      // Check if all tests have findings and conclusion
+      const allTestsHaveResults = Object.values(testResults).every(result => {
+        const hasFindings = result.findings && result.findings.trim();
+        const hasConclusion = result.conclusion && result.conclusion.trim();
+        return hasFindings && hasConclusion;
+      });
       if (!allTestsHaveResults) {
-        toast.error('Please enter result text for all tests before submitting');
+        toast.error('Please enter findings and conclusion for all tests before submitting');
         return;
       }
 
@@ -218,7 +247,8 @@ const RadiologyOrders = () => {
       // Prepare test results for batch submission
       const testResultsArray = Object.entries(testResults).map(([testId, result]) => ({
         testTypeId: parseInt(testId),
-        resultText: result.resultText,
+        findings: result.findings || '',
+        conclusion: result.conclusion || '',
         additionalNotes: result.additionalNotes || '',
         attachments: uploadedFiles[testId] || []
       }));
@@ -420,10 +450,10 @@ const RadiologyOrders = () => {
         </div>
       )}
 
-      {/* Report Form Modal */}
+      {/* Report Form Modal - Larger size */}
       {showReportForm && selectedOrder && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-6xl max-h-[95vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-semibold text-gray-900">
                 Radiology Results - Order #{selectedOrder.id}
@@ -493,21 +523,44 @@ const RadiologyOrders = () => {
                         </div>
 
                         {isExpanded && (
-                          <div className="mt-4 space-y-4">
+                          <div className="mt-4 space-y-6">
+                            {/* Findings Section */}
                             <div>
                               <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Test Report *
+                                Findings *
                               </label>
                               <textarea
-                                value={testResult.resultText || ''}
-                                onChange={(e) => updateTestResult(testId, 'resultText', e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                rows={4}
-                                placeholder="Enter test results and findings..."
+                                value={testResult.findings || ''}
+                                onChange={(e) => updateTestResult(testId, 'findings', e.target.value)}
+                                className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                                rows={15}
+                                placeholder="Findings will be pre-filled from template. Edit as needed..."
                                 disabled={isCompleted}
                               />
+                              <p className="text-xs text-gray-500 mt-1">
+                                Template text pre-loaded. Edit, delete, or keep as needed.
+                              </p>
                             </div>
 
+                            {/* Conclusion Section */}
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Conclusion *
+                              </label>
+                              <textarea
+                                value={testResult.conclusion || ''}
+                                onChange={(e) => updateTestResult(testId, 'conclusion', e.target.value)}
+                                className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                                rows={10}
+                                placeholder="Conclusion will be pre-filled from template. Edit as needed..."
+                                disabled={isCompleted}
+                              />
+                              <p className="text-xs text-gray-500 mt-1">
+                                Template text pre-loaded. Edit, delete, or keep as needed.
+                              </p>
+                            </div>
+
+                            {/* Additional Notes */}
                             <div>
                               <label className="block text-sm font-medium text-gray-700 mb-2">
                                 Additional Notes
@@ -515,8 +568,8 @@ const RadiologyOrders = () => {
                               <textarea
                                 value={testResult.additionalNotes || ''}
                                 onChange={(e) => updateTestResult(testId, 'additionalNotes', e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                rows={2}
+                                className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                                rows={4}
                                 placeholder="Any additional notes or observations..."
                                 disabled={isCompleted}
                               />
