@@ -3304,13 +3304,17 @@ exports.getLabTestsForOrdering = async (req, res) => {
     // Organize by category
     const organized = {};
     
-    // Define tests that should be extracted from groups and made independent
-    // These will appear in the top-level "Standalone Tests" list for doctors
-    // (e.g. CBC, ESR, Blood Group & Rh, Retic, BT/CT, PBF, HCG, RTD, BF (Blood Film), etc.)
-    const independentTestCodes = [
+    // Define tests that should be extracted from groups and organized by category
+    // Hematology tests (CBC, Blood Film, Blood Group)
+    const hematologyTestCodes = [
       'CBC001', // Complete Blood Count (CBC) - now consolidated as single test
       'ESR001',
-      'BGRH001',
+      'BGRH001', // Blood Group & Rh
+      'PICT001' // BF (Blood Film) - previously PICT – Malaria
+    ];
+    
+    // Other standalone tests
+    const independentTestCodes = [
       'RET001',
       'BT001',
       'CT001',
@@ -3319,7 +3323,7 @@ exports.getLabTestsForOrdering = async (req, res) => {
       'HCG001', // HCG (Qualitative)
       'HCG002', // HCG (Quantitative)
       'RTD001', // RTD (Rapid Test Device)
-      'PICT001' // BF (Blood Film) - previously PICT – Malaria
+      ...hematologyTestCodes // Include hematology tests in independent list for backward compatibility
     ];
     
     // Add groups, but exclude independent tests from group.tests
@@ -3335,17 +3339,20 @@ exports.getLabTestsForOrdering = async (req, res) => {
 
       // Custom ordering inside Serology Panel as requested for doctor-side UI
       if (group.category === 'Serology' && group.name === 'Serology Panel') {
-        // Desired order by test code (only applied to tests that remain in the panel)
+        // Desired order by test code:
+        // Row 1: Weil-Felix and Widal (side-by-side)
+        // Row 2: HBsAg and HCV (side-by-side)
+        // Row 3: VDRL (below)
         const serologyOrder = [
-          'WIDAL001', // Widal Test
-          'WEIL001',  // Weil-Felix Test (next to Widal)
+          'WEIL001',  // Weil-Felix Test (first, will be first in row 1)
+          'WIDAL001', // Widal Test (second, will be second in row 1)
+          'HBSAG001', // HBsAg (third, will be first in row 2)
+          'HCV001',   // HCV Antibody (fourth, will be second in row 2)
+          'VDRL001',  // VDRL (fifth, will be in row 3)
           'RPR001',
-          'HBSAG001', // HBsAg
-          'HCV001',   // HCV Antibody - directly under HBsAg
           'HIV001',   // HIV
           'RF001',
-          'ASO001',
-          'VDRL001'
+          'ASO001'
         ];
 
         const orderIndex = {};
@@ -3401,15 +3408,28 @@ exports.getLabTestsForOrdering = async (req, res) => {
       'PICT001': 'BF (Blood Film)'
     };
 
-    // Combine independent tests from both standalone and groups
-    const independentTests = [...allIndependentTestsFromGroups];
+    // Separate hematology tests from other independent tests
+    const hematologyTests = [];
+    const otherIndependentTests = [];
+    
+    allIndependentTestsFromGroups.forEach(test => {
+      if (hematologyTestCodes.includes(test.code)) {
+        hematologyTests.push(test);
+      } else {
+        otherIndependentTests.push(test);
+      }
+    });
+    
+    // Process standalone tests
     const regularStandaloneTests = [];
-
     standaloneTests.forEach(test => {
-      if (independentTestCodes.includes(test.code)) {
-        // Avoid duplicates
-        if (!independentTests.find(t => t.code === test.code)) {
-          independentTests.push(test);
+      if (hematologyTestCodes.includes(test.code)) {
+        if (!hematologyTests.find(t => t.code === test.code)) {
+          hematologyTests.push(test);
+        }
+      } else if (independentTestCodes.includes(test.code)) {
+        if (!otherIndependentTests.find(t => t.code === test.code)) {
+          otherIndependentTests.push(test);
         }
       } else {
         regularStandaloneTests.push(test);
@@ -3427,8 +3447,16 @@ exports.getLabTestsForOrdering = async (req, res) => {
       organized[test.category].standalone.push(test);
     });
 
-    // Create independent categories for each independent test
-    independentTests.forEach(test => {
+    // Create Hematology category with hematology tests
+    if (hematologyTests.length > 0) {
+      organized['Hematology'] = {
+        groups: [],
+        standalone: hematologyTests
+      };
+    }
+
+    // Create independent categories for other independent tests
+    otherIndependentTests.forEach(test => {
       const categoryName = independentTestMap[test.code] || test.name;
       organized[categoryName] = {
         groups: [],
@@ -3477,6 +3505,7 @@ exports.getLabTestsForOrdering = async (req, res) => {
     });
     
     // Define category display order for categories with groups
+    // Hematology comes first (as a standalone category), then Serology, etc.
     const categoryOrder = [
       'Hematology',
       'Serology',
@@ -3500,16 +3529,25 @@ exports.getLabTestsForOrdering = async (req, res) => {
       }
     });
     
+    // Create final reordered object - start with Hematology if it exists
+    const reordered = {};
+    if (organized['Hematology']) {
+      reordered['Hematology'] = organized['Hematology'];
+    }
+    
+    // Add categories with groups
+    Object.assign(reordered, reorderedWithGroups);
+    
     // Collect all single standalone tests into one "Standalone Tests" category
     const allStandaloneTests = [];
-    Object.values(singleItemCategories).forEach(categoryData => {
+    Object.keys(singleItemCategories).forEach(categoryName => {
+      // Skip Hematology if it's already added
+      if (categoryName === 'Hematology') return;
+      const categoryData = singleItemCategories[categoryName];
       if (categoryData.standalone) {
         allStandaloneTests.push(...categoryData.standalone);
       }
     });
-    
-    // Create final reordered object
-    const reordered = { ...reorderedWithGroups };
     
     // Add all standalone tests at the end as a single section
     if (allStandaloneTests.length > 0) {

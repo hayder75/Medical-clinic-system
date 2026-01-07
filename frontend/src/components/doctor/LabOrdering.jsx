@@ -488,9 +488,9 @@ const LabOrdering = ({ visitId, patientId, onOrdersPlaced, existingOrders = [] }
         {/* Category View (when not searching) - Button-based UI */}
         {!searchQuery && (
           <div className="space-y-4">
-            {/* Main Category Buttons - 3 rectangular buttons, always visible, side-by-side, connected */}
+            {/* Main Category Buttons - 4 rectangular buttons, always visible, side-by-side, connected */}
             <div className="flex w-full">
-              {['Serology', 'Blood Chemistry', 'Standalone Tests'].map((catName, index) => {
+              {['Hematology', 'Serology', 'Blood Chemistry', 'Standalone Tests'].map((catName, index) => {
                 const categoryData = filteredOrganizedTests[catName];
                 if (!categoryData) return null;
                 
@@ -499,6 +499,11 @@ const LabOrdering = ({ visitId, patientId, onOrdersPlaced, existingOrders = [] }
                 
                 // Different colors for each button
                 const colors = {
+                  'Hematology': {
+                    bg: selectedCategory === catName ? 'bg-purple-700' : 'bg-purple-600',
+                    hover: 'hover:bg-purple-700',
+                    badge: 'bg-purple-500'
+                  },
                   'Serology': {
                     bg: selectedCategory === catName ? 'bg-green-700' : 'bg-green-600',
                     hover: 'hover:bg-green-700',
@@ -528,7 +533,7 @@ const LabOrdering = ({ visitId, patientId, onOrdersPlaced, existingOrders = [] }
                     className={`flex-1 py-4 ${colorScheme.bg} ${colorScheme.hover} text-white text-lg font-bold transition-all shadow-md ${
                       index === 0 ? 'rounded-l-lg' : ''
                     } ${
-                      index === ['Serology', 'Blood Chemistry', 'Standalone Tests'].length - 1 ? 'rounded-r-lg' : ''
+                      index === ['Hematology', 'Serology', 'Blood Chemistry', 'Standalone Tests'].length - 1 ? 'rounded-r-lg' : ''
                     } ${
                       index > 0 ? 'border-l-2 border-white' : ''
                     } flex flex-col items-center justify-center`}

@@ -668,9 +668,9 @@ const DailyTasks = () => {
               {(selectedTask.services.every(service => service.status === 'COMPLETED') || completedOrderData) && (
                 <div className="bg-green-50 rounded-lg p-4">
                   <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center space-x-2 text-green-800">
-                      <CheckCircle className="h-5 w-5" />
-                      <span className="font-semibold">All Services Completed</span>
+                  <div className="flex items-center space-x-2 text-green-800">
+                    <CheckCircle className="h-5 w-5" />
+                    <span className="font-semibold">All Services Completed</span>
                     </div>
                     {(selectedTask.isWalkIn && completedOrderData) && (
                       <button

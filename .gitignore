@@ -4,8 +4,4 @@ dist/
 *.log
 
 
-.env
-backend/.env
-frontend/.env
-backend/uploads/
-frontend/dist/
+

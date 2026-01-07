@@ -93,3 +93,4 @@ VITE_API_URL=http://51.222.143.50:3000/api
 **Note**: The frontend will automatically use the current hostname if VITE_API_URL is not set, but it's recommended to set it explicitly for production.
 
 
+
