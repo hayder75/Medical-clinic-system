@@ -813,11 +813,36 @@ exports.deleteService = async (req, res) => {
       prisma.batchOrderService.findFirst({ where: { serviceId: id } })
     ]);
 
-    // Build list of usage locations
+    // For InvestigationType, check if it has actual orders (not just existence)
+    let hasRadiologyOrders = false;
+    let hasLabOrders = false;
+    if (investigationTypes) {
+      const [radiologyOrderCount, labOrderCount, batchOrderServiceCount] = await Promise.all([
+        prisma.radiologyOrder.count({ where: { typeId: investigationTypes.id } }),
+        prisma.labOrder.count({ where: { typeId: investigationTypes.id } }),
+        prisma.batchOrderService.count({ where: { investigationTypeId: investigationTypes.id } })
+      ]);
+      hasRadiologyOrders = radiologyOrderCount > 0 || batchOrderServiceCount > 0;
+      hasLabOrders = labOrderCount > 0;
+    }
+
+    // For LabTest, check if it has actual orders
+    let hasLabTestOrders = false;
+    if (labTests) {
+      const labTestOrderCount = await prisma.labTestOrder.count({ 
+        where: { labTestId: labTests.id } 
+      });
+      hasLabTestOrders = labTestOrderCount > 0;
+    }
+
+    // Build list of usage locations (only if actually used, not just linked)
     const usageLocations = [];
     if (billingServices) usageLocations.push('billing records');
-    if (labTests) usageLocations.push('lab tests');
-    if (investigationTypes) usageLocations.push('radiology types');
+    if (labTests && hasLabTestOrders) usageLocations.push('lab test orders');
+    if (investigationTypes && (hasRadiologyOrders || hasLabOrders)) {
+      if (hasRadiologyOrders) usageLocations.push('radiology orders');
+      if (hasLabOrders) usageLocations.push('lab orders');
+    }
     if (nurseAssignments) usageLocations.push('nurse service assignments');
     if (nurseWalkInOrders) usageLocations.push('nurse walk-in orders');
     if (emergencyDrugOrders) usageLocations.push('emergency drug orders');
