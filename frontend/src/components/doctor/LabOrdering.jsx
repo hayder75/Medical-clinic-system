@@ -41,6 +41,22 @@ const LabOrdering = ({ visitId, patientId, onOrdersPlaced, existingOrders = [] }
       
       setOrganizedTests(response.data.organized);
       console.log('✅ [Doctor] Tests loaded successfully:', Object.keys(response.data.organized).length, 'categories');
+      
+      // Debug: Log Hematology tests
+      if (response.data.organized['Hematology']) {
+        console.log('🩸 [LabOrdering] Hematology tests:', {
+          standalone: response.data.organized['Hematology'].standalone?.map(t => ({ code: t.code, name: t.name })),
+          groups: response.data.organized['Hematology'].groups?.map(g => ({ name: g.name, testCount: g.tests?.length }))
+        });
+      }
+      
+      // Debug: Log Serology tests order
+      if (response.data.organized['Serology']) {
+        const serologyPanel = response.data.organized['Serology'].groups?.find(g => g.name === 'Serology Panel');
+        if (serologyPanel) {
+          console.log('🔬 [LabOrdering] Serology Panel Tests Order (from API):', serologyPanel.tests.map(t => ({ code: t.code, name: t.name })));
+        }
+      }
     } catch (error) {
       console.error('❌ [Doctor] Error fetching lab tests:', {
         message: error.message,
