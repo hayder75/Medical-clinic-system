@@ -3323,6 +3323,7 @@ exports.getLabTestsForOrdering = async (req, res) => {
       'HCG001', // HCG (Qualitative)
       'HCG002', // HCG (Quantitative)
       'RTD001', // RTD (Rapid Test Device)
+      'HPYLORIAB001', // H. pylori Antibody (Serology) - standalone
       ...hematologyTestCodes // Include hematology tests in independent list for backward compatibility
     ];
     
@@ -3335,7 +3336,14 @@ exports.getLabTestsForOrdering = async (req, res) => {
         };
       }
       // Filter out independent tests from group tests
-      let filteredTests = group.tests.filter(test => !independentTestCodes.includes(test.code));
+      // But keep hematology tests in their groups if they're part of a group structure
+      let filteredTests = group.tests.filter(test => {
+        // Don't filter out tests that are in hematologyTestCodes if they're in a Hematology group
+        if (group.category === 'Hematology' && hematologyTestCodes.includes(test.code)) {
+          return false; // Exclude from group, they'll be in standalone Hematology
+        }
+        return !independentTestCodes.includes(test.code);
+      });
 
       // Custom ordering inside Serology Panel as requested for doctor-side UI
       if (group.category === 'Serology' && group.name === 'Serology Panel') {
@@ -3405,7 +3413,8 @@ exports.getLabTestsForOrdering = async (req, res) => {
       'HCG001': 'HCG (Qualitative)',
       'HCG002': 'HCG (Quantitative)',
       'RTD001': 'RTD (Rapid Test Device)',
-      'PICT001': 'BF (Blood Film)'
+      'PICT001': 'BF (Blood Film)',
+      'HPYLORIAB001': 'H. pylori Antibody (Serology)'
     };
 
     // Separate hematology tests from other independent tests

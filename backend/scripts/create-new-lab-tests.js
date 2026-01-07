@@ -103,18 +103,18 @@ async function createNewLabTests() {
         }
       });
 
-      // Create LabTest
+      // Create LabTest (as standalone, not in Serology group)
       hpyloriAbTest = await prisma.labTest.create({
         data: {
           code: 'HPYLORIAB001',
           name: 'H. pylori Antibody (Serology)',
-          category: 'Serology',
+          category: 'Serology', // Keep category as Serology but make it standalone
           description: 'Detection of Helicobacter pylori antibodies (IgG/IgM)',
           price: 200.00,
           unit: 'UNIT',
           isActive: true,
           serviceId: hpyloriAbService.id,
-          groupId: null, // Standalone for now, can be added to Serology Panel later
+          groupId: null, // Standalone - not in Serology Panel
           displayOrder: 0
         }
       });
