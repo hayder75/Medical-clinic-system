@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Scan, Plus, X, CheckCircle, Clock } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Scan, Plus, X, CheckCircle, Clock, Search } from 'lucide-react';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
 
@@ -9,10 +9,29 @@ const RadiologyOrdering = ({ visitId, patientId, onOrdersPlaced, existingOrders 
   const [instructions, setInstructions] = useState('');
   const [loading, setLoading] = useState(false);
   const [fetchingTests, setFetchingTests] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     fetchRadiologyTests();
   }, []);
+
+  // Filter tests based on search query
+  const filteredTests = useMemo(() => {
+    if (!searchQuery.trim()) {
+      return radiologyTests;
+    }
+
+    const query = searchQuery.toLowerCase().trim();
+    return radiologyTests.filter(test => {
+      const name = test.name?.toLowerCase() || '';
+      const description = test.description?.toLowerCase() || '';
+      const code = test.service?.code?.toLowerCase() || '';
+      
+      return name.includes(query) || 
+             description.includes(query) || 
+             code.includes(query);
+    });
+  }, [radiologyTests, searchQuery]);
 
   const fetchRadiologyTests = async () => {
     try {
@@ -137,10 +156,39 @@ const RadiologyOrdering = ({ visitId, patientId, onOrdersPlaced, existingOrders 
         )}
       </div>
 
+      {/* Search Bar */}
+      <div className="relative">
+        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+          <Search className="h-5 w-5 text-gray-400" />
+        </div>
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search radiology tests by name, description, or code..."
+          className="w-full pl-10 pr-4 py-3 text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+        />
+        {searchQuery && (
+          <button
+            onClick={() => setSearchQuery('')}
+            className="absolute inset-y-0 right-0 pr-3 flex items-center"
+          >
+            <X className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+          </button>
+        )}
+      </div>
+
       {/* Available Radiology Tests */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h4 className="text-lg font-semibold text-gray-900">Available Radiology Tests</h4>
+          <div>
+            <h4 className="text-lg font-semibold text-gray-900">Available Radiology Tests</h4>
+            {searchQuery && (
+              <p className="text-sm text-gray-600 mt-1">
+                Showing {filteredTests.length} of {radiologyTests.length} test(s)
+              </p>
+            )}
+          </div>
           <button
             onClick={handleSelectAll}
             className="px-10 py-5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center space-x-3 shadow-xl"
@@ -149,7 +197,7 @@ const RadiologyOrdering = ({ visitId, patientId, onOrdersPlaced, existingOrders 
             <CheckCircle className="w-7 h-7" />
             <span>
               {(() => {
-                const availableTests = radiologyTests.filter(test => 
+                const availableTests = filteredTests.filter(test => 
                   !existingOrders.some(order => order.type?.id === test.id)
                 );
                 const allSelected = availableTests.length > 0 && 
@@ -159,8 +207,18 @@ const RadiologyOrdering = ({ visitId, patientId, onOrdersPlaced, existingOrders 
             </span>
           </button>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {radiologyTests.map((test) => {
+        
+        {filteredTests.length === 0 ? (
+          <div className="text-center py-8 border border-gray-200 rounded-lg bg-gray-50">
+            <Search className="h-12 w-12 mx-auto mb-3 text-gray-400" />
+            <p className="text-gray-600 font-medium">No radiology tests found</p>
+            <p className="text-sm text-gray-500 mt-1">
+              {searchQuery ? `Try a different search term` : 'No radiology tests available'}
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {filteredTests.map((test) => {
             const isSelected = selectedTests.some(selected => selected.id === test.id);
             const isAlreadyOrdered = existingOrders.some(order => order.type?.id === test.id);
             return (
@@ -220,7 +278,8 @@ const RadiologyOrdering = ({ visitId, patientId, onOrdersPlaced, existingOrders 
               </div>
             );
           })}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Selected Tests Summary */}
