@@ -268,29 +268,44 @@ const RadiologyResultsDisplay = ({ batchOrder, onImageClick }) => {
 
               {/* Test Results */}
               <div className="space-y-4">
-                {/* Result Text */}
-                <div className="bg-white rounded-lg p-4 border border-gray-200">
-                  <h5 className="text-sm font-medium text-gray-700 mb-2 flex items-center">
-                    <FileText className="h-4 w-4 mr-2 text-gray-500" />
-                    Test Result
-                  </h5>
-                  <p className="text-gray-900 leading-relaxed">
-                    {result.resultText || 'No result provided'}
-                  </p>
-          </div>
-          
-                {/* Additional Notes */}
-            {result.additionalNotes && (
+                {/* Findings Section */}
+                {result.findings && (
                   <div className="bg-white rounded-lg p-4 border border-gray-200">
                     <h5 className="text-sm font-medium text-gray-700 mb-2 flex items-center">
                       <FileText className="h-4 w-4 mr-2 text-gray-500" />
-                      Additional Notes
+                      Findings
                     </h5>
-                    <p className="text-gray-700 leading-relaxed">
-                      {result.additionalNotes}
+                    <p className="text-gray-900 leading-relaxed text-base whitespace-pre-wrap">
+                      {result.findings}
                     </p>
-              </div>
-            )}
+                  </div>
+                )}
+
+                {/* Conclusion Section */}
+                {result.conclusion && (
+                  <div className="bg-white rounded-lg p-4 border border-gray-200">
+                    <h5 className="text-sm font-medium text-gray-700 mb-2 flex items-center">
+                      <FileText className="h-4 w-4 mr-2 text-gray-500" />
+                      Conclusion
+                    </h5>
+                    <p className="text-gray-900 leading-relaxed text-base whitespace-pre-wrap">
+                      {result.conclusion}
+                    </p>
+                  </div>
+                )}
+
+                {/* Result Text (for backward compatibility) */}
+                {result.resultText && (
+                  <div className="bg-white rounded-lg p-4 border border-gray-200">
+                    <h5 className="text-sm font-medium text-gray-700 mb-2 flex items-center">
+                      <FileText className="h-4 w-4 mr-2 text-gray-500" />
+                      Test Result
+                    </h5>
+                    <p className="text-gray-900 leading-relaxed text-base">
+                      {result.resultText}
+                    </p>
+                  </div>
+                )}
 
                 {/* Attached Images */}
                 {console.log('🔍 Checking attachments for result:', result.testType?.name, 'attachments:', result.attachments)}
