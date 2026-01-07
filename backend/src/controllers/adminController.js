@@ -855,6 +855,26 @@ exports.deleteService = async (req, res) => {
       });
     }
 
+    // Delete related records if they exist (InvestigationType or LabTest)
+    // These were auto-created, so we clean them up when deleting the service
+    if (investigationTypes) {
+      // Check if InvestigationType has result fields or files that need cleanup
+      await prisma.investigationType.delete({
+        where: { id: investigationTypes.id }
+      });
+    }
+
+    if (labTests) {
+      // Delete result fields first (cascade should handle this, but being explicit)
+      await prisma.labTestResultField.deleteMany({
+        where: { testId: labTests.id }
+      });
+      await prisma.labTest.delete({
+        where: { id: labTests.id }
+      });
+    }
+
+    // Now delete the service
     await prisma.service.delete({
       where: { id }
     });
