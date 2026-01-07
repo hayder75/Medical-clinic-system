@@ -94,79 +94,66 @@ async function fixRadiologyAndHematology() {
       }
     }
 
-    // ========== HEMATOLOGY: Activate Blood Group & Rh and Blood Film ==========
+    // ========== HEMATOLOGY: Keep only 4 tests (CBC, ESR, Blood Group & Rh, Blood Film) ==========
     console.log('\n📋 Step 2: Fixing hematology tests...');
-
-    // Activate Blood Group & Rh
-    const bgRh = await prisma.labTest.findFirst({
-      where: { code: 'BGRH001' },
+    
+    const keepHematologyCodes = ['CBC001', 'ESR001', 'BGRH001', 'PICT001'];
+    
+    // Get all hematology tests
+    const allHematology = await prisma.labTest.findMany({
+      where: { category: 'Hematology' },
       include: { service: true }
     });
 
-    if (bgRh) {
-      if (!bgRh.isActive) {
-        await prisma.labTest.update({
-          where: { id: bgRh.id },
-          data: { isActive: true }
-        });
-        console.log('   ✅ Activated: Blood Group & Rh (BGRH001)');
-      }
+    console.log(`   Found ${allHematology.length} hematology tests`);
 
-      if (bgRh.service && !bgRh.service.isActive) {
-        await prisma.service.update({
-          where: { id: bgRh.service.id },
-          data: { isActive: true }
-        });
-        console.log('   ✅ Activated service for: Blood Group & Rh');
-      }
-
-      // Ensure it's in Hematology category and standalone
-      await prisma.labTest.update({
-        where: { id: bgRh.id },
-        data: {
-          category: 'Hematology',
-          groupId: null
+    for (const test of allHematology) {
+      const shouldKeep = keepHematologyCodes.includes(test.code);
+      
+      if (shouldKeep) {
+        // Activate and ensure correct settings
+        if (!test.isActive) {
+          await prisma.labTest.update({
+            where: { id: test.id },
+            data: { isActive: true }
+          });
+          console.log(`   ✅ Activated: ${test.name} (${test.code})`);
         }
-      });
-      console.log('   ✅ Set Blood Group & Rh to Hematology category, standalone');
-    } else {
-      console.log('   ⚠️  Blood Group & Rh (BGRH001) not found');
-    }
 
-    // Activate Blood Film (PICT001)
-    const bloodFilm = await prisma.labTest.findFirst({
-      where: { code: 'PICT001' },
-      include: { service: true }
-    });
-
-    if (bloodFilm) {
-      if (!bloodFilm.isActive) {
-        await prisma.labTest.update({
-          where: { id: bloodFilm.id },
-          data: { isActive: true }
-        });
-        console.log('   ✅ Activated: Blood Film (PICT001)');
-      }
-
-      if (bloodFilm.service && !bloodFilm.service.isActive) {
-        await prisma.service.update({
-          where: { id: bloodFilm.service.id },
-          data: { isActive: true }
-        });
-        console.log('   ✅ Activated service for: Blood Film');
-      }
-
-      // Ensure it's in Hematology category and standalone
-      await prisma.labTest.update({
-        where: { id: bloodFilm.id },
-        data: {
-          category: 'Hematology',
-          groupId: null
+        if (test.service && !test.service.isActive) {
+          await prisma.service.update({
+            where: { id: test.service.id },
+            data: { isActive: true }
+          });
+          console.log(`   ✅ Activated service for: ${test.name}`);
         }
-      });
-      console.log('   ✅ Set Blood Film to Hematology category, standalone');
-    } else {
-      console.log('   ⚠️  Blood Film (PICT001) not found');
+
+        // Ensure it's standalone (no group)
+        if (test.groupId) {
+          await prisma.labTest.update({
+            where: { id: test.id },
+            data: { groupId: null }
+          });
+          console.log(`   ✅ Set ${test.name} to standalone`);
+        }
+      } else {
+        // Deactivate tests we don't want
+        if (test.isActive) {
+          await prisma.labTest.update({
+            where: { id: test.id },
+            data: { isActive: false }
+          });
+          console.log(`   ⚠️  Deactivated: ${test.name} (${test.code})`);
+        }
+
+        if (test.service && test.service.isActive) {
+          await prisma.service.update({
+            where: { id: test.service.id },
+            data: { isActive: false }
+          });
+          console.log(`   ⚠️  Deactivated service for: ${test.name}`);
+        }
+      }
     }
 
     // ========== VERIFY FINAL STATE ==========
@@ -192,7 +179,7 @@ async function fixRadiologyAndHematology() {
       where: {
         category: 'Hematology',
         isActive: true,
-        groupId: null
+        code: { in: keepHematologyCodes }
       },
       include: {
         service: {
