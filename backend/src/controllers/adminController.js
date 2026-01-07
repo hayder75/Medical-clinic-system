@@ -3507,10 +3507,10 @@ exports.getLabTestsForOrdering = async (req, res) => {
         };
       }
       // Filter out independent tests from group tests
-      // But keep hematology tests in their groups if they're part of a group structure
+      // Hematology tests should be extracted from groups and put in standalone Hematology category
       let filteredTests = group.tests.filter(test => {
-        // Don't filter out tests that are in hematologyTestCodes if they're in a Hematology group
-        if (group.category === 'Hematology' && hematologyTestCodes.includes(test.code)) {
+        // Always exclude hematology tests from groups - they go to standalone Hematology
+        if (hematologyTestCodes.includes(test.code)) {
           return false; // Exclude from group, they'll be in standalone Hematology
         }
         return !independentTestCodes.includes(test.code);
@@ -3555,7 +3555,7 @@ exports.getLabTestsForOrdering = async (req, res) => {
         });
         
         // Console log to verify ordering
-        console.log('🔬 [Backend] Serology Panel Tests Order:', filteredTests.map(t => ({ code: t.code, name: t.name })));
+        console.log('🔬 [Backend API] Serology Panel Tests Order:', filteredTests.map(t => ({ code: t.code, name: t.name })));
       }
       organized[group.category].groups.push({
         id: group.id,
@@ -3636,6 +3636,9 @@ exports.getLabTestsForOrdering = async (req, res) => {
         groups: [],
         standalone: hematologyTests
       };
+      console.log('🩸 [Backend API] Hematology category created with', hematologyTests.length, 'tests:', hematologyTests.map(t => ({ code: t.code, name: t.name })));
+    } else {
+      console.log('⚠️ [Backend API] No hematology tests found! Codes searched:', hematologyTestCodes);
     }
 
     // Create independent categories for other independent tests
