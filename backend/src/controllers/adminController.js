@@ -3518,20 +3518,20 @@ exports.getLabTestsForOrdering = async (req, res) => {
 
       // Custom ordering inside Serology Panel as requested for doctor-side UI
       if (group.category === 'Serology' && group.name === 'Serology Panel') {
-        // Desired order by test code:
-        // Row 1: Weil-Felix and Widal (side-by-side)
-        // Row 2: HBsAg and HCV (side-by-side)
-        // Row 3: VDRL (below)
+        // Desired order:
+        // 1. Weil-Felix Test
+        // 2. Widal Test
+        // 3. HBsAg
+        // 4. HCV Antibody
+        // 5. VDRL
+        // Then the rest in any order
         const serologyOrder = [
-          'WEIL001',  // Weil-Felix Test (first, will be first in row 1)
-          'WIDAL001', // Widal Test (second, will be second in row 1)
-          'HBSAG001', // HBsAg (third, will be first in row 2)
-          'HCV001',   // HCV Antibody (fourth, will be second in row 2)
-          'VDRL001',  // VDRL (fifth, will be in row 3)
-          'RPR001',
-          'HIV001',   // HIV
-          'RF001',
-          'ASO001'
+          'WEIL001',  // 1. Weil-Felix Test
+          'WIDAL001', // 2. Widal Test
+          'HBSAG001', // 3. HBsAg
+          'HCV001',   // 4. HCV Antibody
+          'VDRL001',  // 5. VDRL
+          // Rest in any order (will be sorted by name after the priority ones)
         ];
 
         const orderIndex = {};
