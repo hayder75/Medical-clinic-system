@@ -889,6 +889,64 @@ exports.getBatchRadiologyResults = async (req, res) => {
   }
 };
 
+// Get template for a specific radiology test type
+exports.getTemplate = async (req, res) => {
+  try {
+    const { investigationTypeId } = req.params;
+
+    const template = await prisma.radiologyTemplate.findUnique({
+      where: { investigationTypeId: parseInt(investigationTypeId) },
+      include: {
+        investigationType: {
+          select: {
+            id: true,
+            name: true,
+            category: true
+          }
+        }
+      }
+    });
+
+    if (!template) {
+      return res.json({ template: null });
+    }
+
+    res.json({ template });
+  } catch (error) {
+    console.error('Error fetching radiology template:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Get all templates (for admin)
+exports.getAllTemplates = async (req, res) => {
+  try {
+    const templates = await prisma.radiologyTemplate.findMany({
+      where: { isActive: true },
+      include: {
+        investigationType: {
+          select: {
+            id: true,
+            name: true,
+            category: true,
+            price: true
+          }
+        }
+      },
+      orderBy: {
+        investigationType: {
+          name: 'asc'
+        }
+      }
+    });
+
+    res.json({ templates });
+  } catch (error) {
+    console.error('Error fetching radiology templates:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
 exports.completeBatchRadiologyOrder = async (req, res) => {
   try {
     const { batchOrderId } = req.params;
