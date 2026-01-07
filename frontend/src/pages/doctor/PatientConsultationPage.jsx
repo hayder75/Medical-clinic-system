@@ -1683,20 +1683,31 @@ const PatientConsultationPage = () => {
                                     </span>
                                   </div>
 
-                                  {result.resultText && (
-                                    <div className="mb-2">
-                                      <p className="text-sm font-medium text-gray-700 mb-1">Result:</p>
-                                      <p className="text-sm text-gray-600 bg-gray-50 p-2 rounded">
-                                        {result.resultText}
+                                  {/* Findings / Conclusion (new system) */}
+                                  {result.findings && (
+                                    <div className="mb-3">
+                                      <p className="text-sm font-medium text-gray-700 mb-1">Findings:</p>
+                                      <p className="text-base text-gray-700 bg-gray-50 p-2 rounded whitespace-pre-wrap">
+                                        {result.findings}
                                       </p>
                                     </div>
                                   )}
 
-                                  {result.additionalNotes && (
+                                  {result.conclusion && (
+                                    <div className="mb-3">
+                                      <p className="text-sm font-medium text-gray-700 mb-1">Conclusion:</p>
+                                      <p className="text-base text-gray-700 bg-gray-50 p-2 rounded whitespace-pre-wrap">
+                                        {result.conclusion}
+                                      </p>
+                                    </div>
+                                  )}
+
+                                  {/* Backward compatibility for old results */}
+                                  {!result.findings && !result.conclusion && result.resultText && (
                                     <div className="mb-2">
-                                      <p className="text-sm font-medium text-gray-700 mb-1">Notes:</p>
-                                      <p className="text-sm text-gray-600 bg-gray-50 p-2 rounded">
-                                        {result.additionalNotes}
+                                      <p className="text-sm font-medium text-gray-700 mb-1">Result:</p>
+                                      <p className="text-base text-gray-700 bg-gray-50 p-2 rounded whitespace-pre-wrap">
+                                        {result.resultText}
                                       </p>
                                     </div>
                                   )}
