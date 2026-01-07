@@ -918,13 +918,19 @@ const ComprehensivePatientHistory = () => {
                         {result.findings && (
                           <div className="mt-3">
                             <p style={{ color: '#6B7280' }} className="text-sm">Findings:</p>
-                            <p className="text-sm" style={{ color: '#0C0E0B' }}>{result.findings}</p>
+                            <p className="text-base" style={{ color: '#0C0E0B' }}>{result.findings}</p>
+                          </div>
+                        )}
+                        {result.conclusion && (
+                          <div className="mt-3">
+                            <p style={{ color: '#6B7280' }} className="text-sm">Conclusion:</p>
+                            <p className="text-base" style={{ color: '#0C0E0B' }}>{result.conclusion}</p>
                           </div>
                         )}
                         {result.impression && (
                           <div className="mt-2">
                             <p style={{ color: '#6B7280' }} className="text-sm">Impression:</p>
-                            <p className="text-sm" style={{ color: '#0C0E0B' }}>{result.impression}</p>
+                            <p className="text-base" style={{ color: '#0C0E0B' }}>{result.impression}</p>
                           </div>
                         )}
                         {result.attachments && result.attachments.length > 0 && (
