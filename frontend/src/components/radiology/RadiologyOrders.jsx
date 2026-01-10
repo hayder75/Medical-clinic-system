@@ -299,19 +299,27 @@ const RadiologyOrders = () => {
       }));
 
       // Submit all test results at once
+      console.log(`🔄 [handleCompleteBatchOrder] Submitting order ${selectedOrder.id} with ${testResultsArray.length} test results`);
       const response = await api.post(`/radiologies/orders/${selectedOrder.id}/report`, {
         orderId: selectedOrder.id,
         testResults: testResultsArray
       });
 
+      console.log(`✅ [handleCompleteBatchOrder] Response:`, response.data);
+
       toast.success('All radiology tests completed successfully');
       
-      // Close the form and refresh orders
+      // Close the form first
       setShowReportForm(false);
       setSelectedOrder(null);
       setTestResults({});
       setExpandedTests({});
-      fetchOrders();
+      
+      // Wait a moment before refreshing to ensure backend has updated
+      setTimeout(() => {
+        console.log(`🔄 [handleCompleteBatchOrder] Refreshing orders...`);
+        fetchOrders();
+      }, 500);
     } catch (error) {
       console.error('Error completing batch order:', error);
       if (error.response?.data?.error) {
