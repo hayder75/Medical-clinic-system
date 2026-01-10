@@ -246,8 +246,14 @@ exports.fillReport = async (req, res) => {
         return res.status(404).json({ error: 'Radiology order not found' });
       }
     } else {
-      if (!['QUEUED', 'PAID'].includes(batchOrder.status)) {
-        return res.status(400).json({ error: 'Order is not in queue for processing' });
+      // Allow batch orders with QUEUED, PAID, or IN_PROGRESS status to be completed
+      if (!['QUEUED', 'PAID', 'IN_PROGRESS'].includes(batchOrder.status)) {
+        console.log(`⚠️  Batch order ${orderId} has status '${batchOrder.status}', which is not processable. Allowed: QUEUED, PAID, IN_PROGRESS`);
+        return res.status(400).json({ 
+          error: 'Order is not in queue for processing',
+          currentStatus: batchOrder.status,
+          allowedStatuses: ['QUEUED', 'PAID', 'IN_PROGRESS']
+        });
       }
     }
 
