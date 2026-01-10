@@ -26,15 +26,27 @@ const RadiologyOrders = () => {
       const response = await api.get('/radiologies/orders');
       // Combine batch orders with walk-in orders; tag each with a kind to avoid key collisions
       const batchOrders = (response.data.batchOrders || []).map(o => ({ ...o, __kind: 'batch' }));
-      const walkInOrders = (response.data.walkInOrders || []).map(o => ({ 
-        ...o, 
-        __kind: 'walkin',
-        services: [{ 
-          service: o.type, 
-          investigationType: o.type,
-          id: o.id 
-        }]
-      }));
+      
+      // For walk-in orders, the backend already groups them with services array
+      // Only create services array if it doesn't exist (for backward compatibility)
+      const walkInOrders = (response.data.walkInOrders || []).map(o => {
+        const order = { ...o, __kind: 'walkin' };
+        
+        // If backend didn't provide services array, create one from type (backward compatibility)
+        if (!order.services || !Array.isArray(order.services) || order.services.length === 0) {
+          if (order.type) {
+            order.services = [{ 
+              service: order.type, 
+              investigationType: order.type,
+              id: order.id 
+            }];
+          } else {
+            order.services = [];
+          }
+        }
+        
+        return order;
+      });
       const allOrders = [...batchOrders, ...walkInOrders];
       setOrders(allOrders);
     } catch (error) {
@@ -567,15 +579,24 @@ const RadiologyOrders = () => {
                   // Build services array - handle both batch and walk-in orders
                   let services = [];
                   
+                  // First, try to use services array (for batch orders and grouped walk-in orders)
                   if (selectedOrder.services && Array.isArray(selectedOrder.services) && selectedOrder.services.length > 0) {
-                    // Batch order or grouped walk-in order
                     services = selectedOrder.services;
-                  } else if (selectedOrder.type && selectedOrder.isWalkIn) {
-                    // Single walk-in order
-                    services = [{ investigationType: selectedOrder.type, id: selectedOrder.id }];
-                  } else if (selectedOrder.type) {
-                    // Legacy single order
-                    services = [{ investigationType: selectedOrder.type, id: selectedOrder.id }];
+                    console.log(`✅ [Modal] Using services array (${services.length} services)`);
+                  } 
+                  // If no services array, try to build from type (for single walk-in orders)
+                  else if (selectedOrder.type) {
+                    console.log(`⚠️  [Modal] No services array found, building from type:`, selectedOrder.type);
+                    services = [{ 
+                      investigationType: selectedOrder.type, 
+                      id: selectedOrder.id,
+                      type: selectedOrder.type  // Also add as 'type' for compatibility
+                    }];
+                  }
+                  // Last resort: if order has a __kind marker, try to reconstruct
+                  else if (selectedOrder.__kind === 'walkin') {
+                    console.log(`⚠️  [Modal] Walk-in order detected but no services/type found`);
+                    services = [];
                   }
                   
                   console.log(`🔍 [Modal] Rendering services for order ${selectedOrder.id}:`, {
