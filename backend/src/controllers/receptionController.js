@@ -193,6 +193,15 @@ exports.createPatient = async (req, res) => {
     const maxRetries = 5;
     const year = new Date().getFullYear();
     
+    // Get card registration service (300 Birr)
+    const cardRegService = await prisma.service.findFirst({
+      where: { code: 'CARD-REG', isActive: true }
+    });
+    
+    if (!cardRegService) {
+      return res.status(400).json({ error: 'Card registration service not found. Please contact admin.' });
+    }
+    
     let patient;
     while (retries < maxRetries) {
       try {
@@ -201,7 +210,7 @@ exports.createPatient = async (req, res) => {
         const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
         patientId = `PAT-${year}-${timestamp}-${random}`;
         
-        // Create patient without billing - billing removed from registration
+        // Create patient with INACTIVE card status (emergency patients still need to pay card fee)
         patient = await prisma.patient.create({
           data: {
             id: patientId,
@@ -215,8 +224,8 @@ exports.createPatient = async (req, res) => {
             emergencyContact: validatedData.emergencyContact || null,
             bloodType: validatedData.bloodType || null,
             maritalStatus: validatedData.maritalStatus || null,
-            insuranceId: validatedData.insuranceId || null
-            // Removed: cardStatus: 'INACTIVE' - no card status check required
+            insuranceId: validatedData.insuranceId || null,
+            cardStatus: 'INACTIVE' // All patients start with INACTIVE card until payment
           }
         });
         
@@ -238,7 +247,30 @@ exports.createPatient = async (req, res) => {
       }
     }
     
-    // Removed: Card registration billing creation - no automatic billing on registration
+    // Create billing for card registration (300 Birr) - ALL patients need to pay card fee
+    const billing = await prisma.billing.create({
+      data: {
+        patientId: patient.id,
+        totalAmount: cardRegService.price,
+        status: 'PENDING',
+        notes: 'Patient card registration fee',
+        services: {
+          create: {
+            serviceId: cardRegService.id,
+            quantity: 1,
+            unitPrice: cardRegService.price,
+            totalPrice: cardRegService.price
+          }
+        }
+      },
+      include: {
+        services: {
+          include: {
+            service: true
+          }
+        }
+      }
+    });
     
     // Log action
     await prisma.auditLog.create({
@@ -247,13 +279,14 @@ exports.createPatient = async (req, res) => {
         entity: 'Patient',
         entityId: parseInt(patient.id.split('-').pop()) || 0,
         userId: receptionistId,
-        details: `New ${validatedData.type.toLowerCase()} patient registered: ${patient.name} (${patient.id}). No billing created.`
+        details: `New ${validatedData.type.toLowerCase()} patient registered: ${patient.name} (${patient.id}). Card registration bill created: ${billing.id}`
       }
     });
     
     res.json({
       patient,
-      message: 'Patient registered successfully.'
+      billing,
+      message: 'Patient registered successfully. Please proceed to billing for card registration payment (300 Birr).'
     });
   } catch (error) {
     console.error('Error creating patient:', error);
@@ -365,7 +398,13 @@ exports.createVisit = async (req, res) => {
       return res.status(404).json({ error: 'Patient not found' });
     }
     
-    // Removed: Card status check - visits can be created regardless of card status
+    // Check if patient card is active
+    if (patient.cardStatus !== 'ACTIVE') {
+      return res.status(400).json({ 
+        error: 'Patient card is not active. Please activate the card before creating a visit.',
+        cardStatus: patient.cardStatus
+      });
+    }
     
     // Check if patient already has an active visit
     const activeVisit = await prisma.visit.findFirst({

@@ -1124,7 +1124,55 @@ exports.processPayment = async (req, res) => {
             }
           });
 
-          // Automatic visit creation removed - visits should be created manually by reception
+          // Only create visit if this is the first time (no previous visits)
+          if (existingVisits === 0) {
+            // Generate visit UID
+            const now = new Date();
+            const dateStr = now.toISOString().split('T')[0].replace(/-/g, '');
+            const visitCount = await prisma.visit.count({
+              where: {
+                createdAt: {
+                  gte: new Date(now.getFullYear(), now.getMonth(), now.getDate())
+                }
+              }
+            });
+            const visitNumber = String(visitCount + 1).padStart(4, '0');
+            const visitUid = `VISIT-${dateStr}-${visitNumber}`;
+
+            // Create visit for triage
+            const visit = await prisma.visit.create({
+              data: {
+                visitUid: visitUid,
+                patientId: billing.patientId,
+                status: 'WAITING_FOR_TRIAGE',
+                isEmergency: false,
+                notes: 'New patient - card registration completed, sent to triage automatically'
+              },
+              include: {
+                patient: {
+                  select: {
+                    id: true,
+                    name: true,
+                    type: true,
+                    mobile: true
+                  }
+                }
+              }
+            });
+
+            // Log action
+            await prisma.auditLog.create({
+              data: {
+                action: 'VISIT_CREATED_AUTOMATIC',
+                entity: 'Visit',
+                entityId: visit.id,
+                userId: req.user.id,
+                details: `Visit automatically created for new patient ${billing.patient.name} (${billing.patientId}) after card registration payment. Visit ID: ${visit.visitUid}`
+              }
+            });
+
+            console.log(`✅ Auto-created visit ${visit.visitUid} for new patient ${billing.patient.name} after card registration`);
+          }
         }
       }
 

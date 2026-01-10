@@ -273,25 +273,6 @@ const ReceptionPatientRegistration = () => {
             <p className="text-gray-600">Choose how to proceed with patient registration</p>
           </div>
 
-          {/* Important Notice */}
-          <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-8">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <AlertTriangle className="h-5 w-5 text-blue-400" />
-              </div>
-              <div className="ml-3">
-                <h3 className="text-sm font-medium text-blue-800">Reception Process</h3>
-                <div className="mt-2 text-sm text-blue-700">
-                  <ul className="list-disc list-inside space-y-1">
-                    <li><strong>New Patient:</strong> Creates 300 Birr card registration bill</li>
-                    <li><strong>Existing Patient:</strong> Creates 50 Birr consultation bill</li>
-                    <li><strong>Card Status:</strong> Only patients with ACTIVE cards can create visits</li>
-                    <li><strong>Billing:</strong> All bills are sent to billing department for payment processing</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
             {/* New Patient Registration */}
