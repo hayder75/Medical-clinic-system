@@ -893,9 +893,12 @@ exports.getBatchRadiologyResults = async (req, res) => {
 exports.getTemplate = async (req, res) => {
   try {
     const { investigationTypeId } = req.params;
+    const parsedId = parseInt(investigationTypeId);
+    
+    console.log(`🔍 [Radiology Template] Fetching template for investigationTypeId: ${parsedId} (raw: ${investigationTypeId})`);
 
     const template = await prisma.radiologyTemplate.findUnique({
-      where: { investigationTypeId: parseInt(investigationTypeId) },
+      where: { investigationTypeId: parsedId },
       include: {
         investigationType: {
           select: {
@@ -908,12 +911,20 @@ exports.getTemplate = async (req, res) => {
     });
 
     if (!template) {
+      console.log(`⚠️  [Radiology Template] Template NOT FOUND for investigationTypeId: ${parsedId}`);
       return res.json({ template: null });
     }
 
+    console.log(`✅ [Radiology Template] Template found for ${template.investigationType.name} (ID: ${template.investigationType.id}):`, {
+      hasFindings: !!template.findingsTemplate,
+      findingsLength: template.findingsTemplate?.length || 0,
+      hasConclusion: !!template.conclusionTemplate,
+      conclusionLength: template.conclusionTemplate?.length || 0
+    });
+
     res.json({ template });
   } catch (error) {
-    console.error('Error fetching radiology template:', error);
+    console.error(`❌ [Radiology Template] Error fetching template for investigationTypeId ${req.params.investigationTypeId}:`, error);
     res.status(500).json({ error: error.message });
   }
 };
