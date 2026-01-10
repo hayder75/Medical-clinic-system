@@ -1126,39 +1126,58 @@ exports.processPayment = async (req, res) => {
 
           // Only create visit if this is the first time (no previous visits)
           if (existingVisits === 0) {
-            // Generate visit UID
-            const now = new Date();
-            const dateStr = now.toISOString().split('T')[0].replace(/-/g, '');
-            const visitCount = await prisma.visit.count({
-              where: {
-                createdAt: {
-                  gte: new Date(now.getFullYear(), now.getMonth(), now.getDate())
-                }
-              }
-            });
-            const visitNumber = String(visitCount + 1).padStart(4, '0');
-            const visitUid = `VISIT-${dateStr}-${visitNumber}`;
+            // Generate unique visit UID with retry logic to prevent unique constraint errors
+            let visitUid;
+            let visit;
+            let retries = 0;
+            const maxRetries = 5;
+            
+            while (retries < maxRetries) {
+              try {
+                const now = new Date();
+                const dateStr = now.toISOString().split('T')[0].replace(/-/g, '');
+                const timestamp = Date.now().toString().slice(-6); // Last 6 digits
+                const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+                visitUid = `VISIT-${dateStr}-${timestamp}-${random}`;
 
-            // Create visit for triage
-            const visit = await prisma.visit.create({
-              data: {
-                visitUid: visitUid,
-                patientId: billing.patientId,
-                status: 'WAITING_FOR_TRIAGE',
-                isEmergency: false,
-                notes: 'New patient - card registration completed, sent to triage automatically'
-              },
-              include: {
-                patient: {
-                  select: {
-                    id: true,
-                    name: true,
-                    type: true,
-                    mobile: true
+                // Create visit for triage
+                visit = await prisma.visit.create({
+                  data: {
+                    visitUid: visitUid,
+                    patientId: billing.patientId,
+                    status: 'WAITING_FOR_TRIAGE',
+                    isEmergency: false,
+                    notes: 'New patient - card registration completed, sent to triage automatically'
+                  },
+                  include: {
+                    patient: {
+                      select: {
+                        id: true,
+                        name: true,
+                        type: true,
+                        mobile: true
+                      }
+                    }
                   }
+                });
+
+                break; // Success - visit created
+              } catch (error) {
+                // If it's a unique constraint error on visitUid, retry
+                if (error.code === 'P2002' && error.meta?.target?.includes('visitUid')) {
+                  retries++;
+                  if (retries >= maxRetries) {
+                    console.error('❌ Failed to generate unique visitUid after', maxRetries, 'attempts');
+                    throw new Error('Unable to generate unique visit ID. Please try again.');
+                  }
+                  // Wait a tiny bit before retrying (adds more randomness)
+                  await new Promise(resolve => setTimeout(resolve, 10));
+                } else {
+                  // Different error - throw it
+                  throw error;
                 }
               }
-            });
+            }
 
             // Log action
             await prisma.auditLog.create({
