@@ -290,6 +290,17 @@ const AppRoutes = () => {
         />
         
         <Route 
+          path="/billing/register" 
+          element={
+            <ProtectedRoute allowedRoles={['BILLING_OFFICER', 'RECEPTIONIST', 'ADMIN']}>
+              <Layout title="Patient Registration & Visit Creation" subtitle="Register new patients or create visits for existing patients">
+                <ReceptionPatientRegistration />
+              </Layout>
+            </ProtectedRoute>
+          } 
+        />
+        
+        <Route 
           path="/billing/*" 
           element={
             <ProtectedRoute allowedRoles={['BILLING_OFFICER']}>
