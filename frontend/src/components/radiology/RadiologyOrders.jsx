@@ -563,20 +563,95 @@ const RadiologyOrders = () => {
 
               <div className="space-y-4">
                 <h3 className="font-medium text-gray-900">Radiology Tests</h3>
-                {(selectedOrder.services || (selectedOrder.type ? [{ investigationType: selectedOrder.type, id: selectedOrder.id }] : []))
-                  .filter(service => {
-                    const testType = service.investigationType || selectedOrder.type;
-                    return testType?.category === 'RADIOLOGY';
-                  })
-                  .map((service, index) => {
-                    const testType = service.investigationType || selectedOrder.type;
-                    const testId = testType?.id;
-                    const testResult = testResults[testId] || {};
-                    const isExpanded = expandedTests[testId];
-                    const isCompleted = testResult.completed;
-
+                {(() => {
+                  // Build services array - handle both batch and walk-in orders
+                  let services = [];
+                  
+                  if (selectedOrder.services && Array.isArray(selectedOrder.services) && selectedOrder.services.length > 0) {
+                    // Batch order or grouped walk-in order
+                    services = selectedOrder.services;
+                  } else if (selectedOrder.type && selectedOrder.isWalkIn) {
+                    // Single walk-in order
+                    services = [{ investigationType: selectedOrder.type, id: selectedOrder.id }];
+                  } else if (selectedOrder.type) {
+                    // Legacy single order
+                    services = [{ investigationType: selectedOrder.type, id: selectedOrder.id }];
+                  }
+                  
+                  console.log(`🔍 [Modal] Rendering services for order ${selectedOrder.id}:`, {
+                    isWalkIn: selectedOrder.isWalkIn,
+                    hasServices: !!selectedOrder.services,
+                    servicesArrayLength: selectedOrder.services?.length || 0,
+                    servicesCount: services.length,
+                    selectedOrderStructure: {
+                      id: selectedOrder.id,
+                      services: selectedOrder.services,
+                      type: selectedOrder.type,
+                      isWalkIn: selectedOrder.isWalkIn
+                    },
+                    services: services.map(s => ({
+                      id: s.id,
+                      investigationType: s.investigationType?.name || 'N/A',
+                      testTypeId: s.investigationType?.id || s.type?.id || 'N/A',
+                      category: s.investigationType?.category || s.type?.category || 'N/A'
+                    })),
+                    testResultsKeys: Object.keys(testResults)
+                  });
+                  
+                  if (services.length === 0) {
                     return (
-                      <div key={testId} className="border rounded-lg p-4">
+                      <div className="text-center py-8 text-gray-500 border rounded-lg p-4">
+                        <AlertTriangle className="h-8 w-8 mx-auto mb-2 text-yellow-500" />
+                        <p className="font-medium">No radiology tests found in this order.</p>
+                        <p className="text-sm mt-2">Order ID: {selectedOrder.id}</p>
+                        <p className="text-sm">Is Walk-In: {selectedOrder.isWalkIn ? 'Yes' : 'No'}</p>
+                        <p className="text-sm">Has Services Array: {selectedOrder.services ? 'Yes' : 'No'}</p>
+                        <p className="text-sm">Services Count: {selectedOrder.services?.length || 0}</p>
+                        <p className="text-sm">Has Type: {selectedOrder.type ? 'Yes' : 'No'}</p>
+                        <p className="text-xs text-gray-400 mt-2">Check browser console for more details.</p>
+                      </div>
+                    );
+                  }
+                  
+                  const filteredServices = services.filter(service => {
+                    const testType = service.investigationType || service.type || selectedOrder.type;
+                    const isRadiology = testType && testType.category === 'RADIOLOGY';
+                    if (!isRadiology) {
+                      console.warn(`⚠️  Filtering out non-radiology service:`, {
+                        serviceId: service.id,
+                        testTypeName: testType?.name,
+                        category: testType?.category
+                      });
+                    }
+                    return isRadiology;
+                  });
+                  
+                  if (filteredServices.length === 0) {
+                    return (
+                      <div className="text-center py-8 text-yellow-500 border border-yellow-300 rounded-lg p-4 bg-yellow-50">
+                        <AlertTriangle className="h-8 w-8 mx-auto mb-2" />
+                        <p className="font-medium">No radiology tests found (all filtered out).</p>
+                        <p className="text-sm mt-2">Total services: {services.length}</p>
+                        <p className="text-xs text-gray-500 mt-2">Check console for details about each service.</p>
+                      </div>
+                    );
+                  }
+                  
+                  return filteredServices.map((service, index) => {
+                    const testType = service.investigationType || service.type || selectedOrder.type;
+                    const testId = testType?.id || testType?.typeId;
+                      
+                      if (!testId) {
+                        console.warn(`⚠️  No test ID found for service:`, service);
+                        return null;
+                      }
+                      
+                      const testResult = testResults[testId] || {};
+                      const isExpanded = expandedTests[testId];
+                      const isCompleted = testResult.completed;
+
+                      return (
+                        <div key={`${testId}-${index}`} className="border rounded-lg p-4">
                         <div
                           className="flex items-center justify-between cursor-pointer"
                           onClick={() => toggleTestExpansion(testId)}
@@ -698,7 +773,8 @@ const RadiologyOrders = () => {
                         )}
                       </div>
                     );
-                  })}
+                  });
+                })()}
               </div>
 
               <div className="flex justify-end space-x-3 pt-4 border-t">
