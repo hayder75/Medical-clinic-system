@@ -1,6 +1,8 @@
 const prisma = require('../config/database');
 const { z } = require('zod');
 const { checkVisitInvestigationCompletion } = require('../utils/investigationUtils');
+const { createPDFDocument, generatePDF } = require('../utils/pdfGenerator');
+const fs = require('fs');
 
 // Validation schemas
 const fillReportSchema = z.object({
@@ -1034,6 +1036,248 @@ exports.completeBatchRadiologyOrder = async (req, res) => {
 
   } catch (error) {
     console.error('Error completing radiology batch order:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Generate PDF for radiology results (both batch orders and walk-in orders)
+exports.generateRadiologyResultsPDF = async (req, res) => {
+  try {
+    const { batchOrderId } = req.params;
+    const { paperSize = 'A4' } = req.query; // Get paper size from query param (A4, A5, A6)
+    const radiologistId = req.user.id;
+    const orderId = parseInt(batchOrderId);
+
+    // Try to get batch order first
+    let batchOrder = await prisma.batchOrder.findUnique({
+      where: { id: orderId },
+      include: {
+        patient: true,
+        services: {
+          include: {
+            service: true,
+            investigationType: true
+          }
+        },
+        doctor: {
+          select: {
+            fullname: true
+          }
+        },
+        visit: {
+          select: {
+            id: true,
+            visitUid: true,
+            status: true
+          }
+        }
+      }
+    });
+
+    let isWalkIn = false;
+    let walkInOrder = null;
+    let radiologyResults = [];
+
+    // If not a batch order, check if it's a walk-in order
+    if (!batchOrder) {
+      walkInOrder = await prisma.radiologyOrder.findUnique({
+        where: { id: orderId },
+        include: {
+          patient: true,
+          type: true,
+          radiologyResults: {
+            include: {
+              testType: true,
+              attachments: true
+            }
+          }
+        }
+      });
+
+      if (!walkInOrder) {
+        return res.status(404).json({ error: 'Radiology order not found' });
+      }
+
+      if (!walkInOrder.isWalkIn) {
+        return res.status(400).json({ error: 'This endpoint only supports batch orders and walk-in orders' });
+      }
+
+      isWalkIn = true;
+      radiologyResults = walkInOrder.radiologyResults || [];
+    } else {
+      // Get radiology results for batch order
+      radiologyResults = await prisma.radiologyResult.findMany({
+        where: { batchOrderId: orderId },
+        include: {
+          testType: true,
+          attachments: true
+        }
+      });
+    }
+
+    // Get radiologist info
+    const radiologist = await prisma.user.findUnique({
+      where: { id: radiologistId },
+      select: { fullname: true, username: true }
+    });
+
+    const formatDate = (date) => {
+      return new Date(date).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    };
+
+    const formatDateTime = (date) => {
+      return new Date(date).toLocaleString('en-US');
+    };
+
+    // Get patient and order info (from either batch order or walk-in order)
+    const patient = batchOrder?.patient || walkInOrder?.patient;
+    const orderDate = batchOrder?.createdAt || walkInOrder?.createdAt;
+    const orderStatus = batchOrder?.status || walkInOrder?.status;
+
+    // Build PDF content (NOT including images - only findings and conclusion)
+    const pdfContent = [];
+
+    // Subheader
+    pdfContent.push({
+      text: 'Radiology Results',
+      style: 'subheader',
+      margin: [0, 0, 0, 20]
+    });
+
+    // Patient Information
+    pdfContent.push({
+      text: 'Patient Information',
+      style: 'sectionTitle'
+    });
+    
+    pdfContent.push({
+      columns: [
+        { text: `Name: ${patient.name}`, style: 'field' },
+        { text: `ID: ${patient.id}`, style: 'field' },
+        { text: `Gender: ${patient.gender || 'N/A'}`, style: 'field' }
+      ],
+      margin: [0, 0, 0, 5]
+    });
+    
+    pdfContent.push({
+      columns: [
+        { text: `Age: ${patient.age || 'N/A'}`, style: 'field' },
+        { text: `Blood Type: ${patient.bloodType || 'N/A'}`, style: 'field' },
+        { text: `Phone: ${patient.mobile || 'N/A'}`, style: 'field' }
+      ],
+      margin: [0, 0, 0, 15]
+    });
+    
+    pdfContent.push({
+      text: `Order ID: ${orderId} | Date: ${formatDate(orderDate)} | Status: ${orderStatus.replace(/_/g, ' ')}`,
+      style: 'field',
+      margin: [0, 0, 0, 15]
+    });
+
+    // Results Section
+    pdfContent.push({
+      text: 'Radiology Results',
+      style: 'sectionTitle'
+    });
+
+    // Add each radiology result (findings and conclusion only, NO images)
+    radiologyResults.forEach((result, index) => {
+      const testType = result.testType || result.type;
+      const testName = testType?.name || 'Radiology Test';
+      
+      pdfContent.push({
+        text: `${index + 1}. ${testName}`,
+        style: 'testTitle',
+        margin: [0, index === 0 ? 0 : 15, 0, 10]
+      });
+
+      // Add Findings
+      if (result.findings) {
+        pdfContent.push({
+          text: 'Findings:',
+          style: 'field',
+          bold: true,
+          margin: [0, 0, 0, 5]
+        });
+        pdfContent.push({
+          text: result.findings,
+          style: 'field',
+          margin: [0, 0, 0, 10]
+        });
+      }
+
+      // Add Conclusion
+      if (result.conclusion) {
+        pdfContent.push({
+          text: 'Conclusion:',
+          style: 'field',
+          bold: true,
+          margin: [0, 0, 0, 5]
+        });
+        pdfContent.push({
+          text: result.conclusion,
+          style: 'field',
+          margin: [0, 0, 0, 10]
+        });
+      }
+
+      // Note: We intentionally do NOT include images in the PDF
+      if (result.attachments && result.attachments.length > 0) {
+        pdfContent.push({
+          text: `Note: ${result.attachments.length} image(s) attached (not included in print)`,
+          style: 'notes',
+          margin: [0, 0, 0, 10]
+        });
+      }
+
+      if (index < radiologyResults.length - 1) {
+        pdfContent.push({
+          canvas: [{ type: 'line', x1: 0, y1: 0, x2: '100%', y2: 0, lineWidth: 0.5 }],
+          margin: [0, 10, 0, 10]
+        });
+      }
+    });
+
+    // Add signature section
+    pdfContent.push({
+      text: 'Radiologist:',
+      style: 'signatureLabel',
+      margin: [0, 20, 0, 5]
+    });
+    pdfContent.push({
+      text: radiologist?.fullname || 'Radiologist',
+      style: 'signatureName',
+      margin: [0, 0, 0, 10]
+    });
+
+    // Create PDF document using utility
+    const docDefinition = createPDFDocument({
+      paperSize: paperSize,
+      clinicName: 'Selihom Medical Clinic',
+      content: pdfContent,
+      includeLogo: true,
+      footerText: `Generated on: ${formatDateTime(new Date())}`
+    });
+
+    // Generate PDF
+    const fileName = `radiology-results-${orderId}-${Date.now()}.pdf`;
+    const filePath = `uploads/${fileName}`;
+    
+    await generatePDF(docDefinition, filePath);
+
+    res.json({
+      message: 'PDF generated successfully',
+      fileName,
+      filePath: `/uploads/${fileName}`,
+      order: batchOrder || walkInOrder,
+      isWalkIn
+    });
+  } catch (error) {
+    console.error('Error generating radiology results PDF:', error);
     res.status(500).json({ error: error.message });
   }
 };

@@ -1265,15 +1265,16 @@ exports.processPayment = async (req, res) => {
           console.log('   Existing orders statuses:', existingOrders);
         }
 
+        // Update radiology orders: set to PAID (they will be shown in radiology queue)
         const radOrdersUpdated = await prisma.radiologyOrder.updateMany({
           where: {
             billingId: billing.id,
             isWalkIn: true,
             status: 'UNPAID'
           },
-          data: { status: 'QUEUED' }
+          data: { status: 'PAID' }
         });
-        console.log(`   ✅ Updated ${radOrdersUpdated.count} radiology orders to QUEUED`);
+        console.log(`   ✅ Updated ${radOrdersUpdated.count} radiology orders to PAID`);
       }
 
       // Update walk-in nurse service orders

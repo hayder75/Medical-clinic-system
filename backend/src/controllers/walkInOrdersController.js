@@ -194,16 +194,50 @@ const createWalkInRadiologyOrder = async (req, res) => {
       attempt++;
     } while (true);
     
-    // Create radiology orders
+    // Get investigation types with their service data
+    const investigationTypes = await prisma.investigationType.findMany({
+      where: {
+        id: { in: testTypes },
+        category: 'RADIOLOGY'
+      },
+      include: {
+        service: true
+      }
+    });
+    
+    if (investigationTypes.length !== testTypes.length) {
+      return res.status(404).json({ 
+        message: 'One or more radiology test types not found or not RADIOLOGY category' 
+      });
+    }
+    
+    // Calculate total amount
+    const totalAmount = investigationTypes.reduce((sum, type) => sum + type.price, 0);
+    
+    // Create billing record
+    const billing = await prisma.billing.create({
+      data: {
+        patientId: outsiderId,
+        totalAmount: totalAmount,
+        status: 'PENDING',
+        notes: notes || 'Walk-in radiology order',
+        services: {
+          create: investigationTypes.map(type => ({
+            serviceId: type.serviceId || type.service?.id,
+            quantity: 1,
+            unitPrice: type.price,
+            totalPrice: type.price
+          })).filter(item => item.serviceId) // Only include if serviceId exists
+        }
+      },
+      include: { services: { include: { service: true } } }
+    });
+    
+    // Create radiology orders and link to billing
     const createdOrders = [];
     for (const testTypeId of testTypes) {
-      const investigationType = await prisma.investigationType.findUnique({
-        where: { id: testTypeId }
-      });
-      
-      if (!investigationType) {
-        return res.status(404).json({ message: `Test type ${testTypeId} not found` });
-      }
+      const investigationType = investigationTypes.find(t => t.id === testTypeId);
+      if (!investigationType) continue;
       
       const radiologyOrder = await prisma.radiologyOrder.create({
         data: {
@@ -211,7 +245,11 @@ const createWalkInRadiologyOrder = async (req, res) => {
           typeId: testTypeId,
           instructions: notes,
           isWalkIn: true,
-          status: 'UNPAID'
+          status: 'UNPAID',
+          billingId: billing.id
+        },
+        include: {
+          type: true
         }
       });
       
@@ -221,6 +259,7 @@ const createWalkInRadiologyOrder = async (req, res) => {
     res.status(201).json({
       success: true,
       outsider: patient,
+      billing,
       orders: createdOrders,
       message: 'Walk-in radiology order created successfully'
     });

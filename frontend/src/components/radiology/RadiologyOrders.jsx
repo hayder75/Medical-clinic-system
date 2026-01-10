@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Scan, Clock, CheckCircle, AlertTriangle, FileText, Upload, Image, User, Calendar, Stethoscope, X, Plus, Eye } from 'lucide-react';
+import { Scan, Clock, CheckCircle, AlertTriangle, FileText, Upload, Image, User, Calendar, Stethoscope, X, Plus, Eye, Printer } from 'lucide-react';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
 
@@ -12,6 +12,9 @@ const RadiologyOrders = () => {
   const [uploadingFiles, setUploadingFiles] = useState({});
   const [expandedTests, setExpandedTests] = useState({});
   const [statusFilter, setStatusFilter] = useState('PENDING');
+  const [showPrintDialog, setShowPrintDialog] = useState(false);
+  const [selectedOrderForPrint, setSelectedOrderForPrint] = useState(null);
+  const [selectedPaperSize, setSelectedPaperSize] = useState('A4');
 
   useEffect(() => {
     fetchOrders();
@@ -288,6 +291,42 @@ const RadiologyOrders = () => {
     }));
   };
 
+  const handlePrintResults = async (e, order) => {
+    e.stopPropagation(); // Prevent triggering the order click
+    setSelectedOrderForPrint(order);
+    setShowPrintDialog(true);
+  };
+
+  const confirmPrint = async () => {
+    if (!selectedOrderForPrint) return;
+    
+    try {
+      const orderId = selectedOrderForPrint.id;
+      const response = await api.get(`/radiologies/batch-orders/${orderId}/pdf`, {
+        params: { paperSize: selectedPaperSize },
+        responseType: 'blob'
+      });
+      
+      // Create blob URL and open in new tab for printing
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const printWindow = window.open(url, '_blank');
+      
+      if (printWindow) {
+        printWindow.onload = () => {
+          printWindow.print();
+        };
+      }
+      
+      toast.success(`Opening PDF (${selectedPaperSize}) for printing...`);
+      setShowPrintDialog(false);
+      setSelectedOrderForPrint(null);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      toast.error('Failed to generate PDF for printing');
+    }
+  };
+
   const getStatusIcon = (status) => {
     switch (status) {
       case 'QUEUED':
@@ -407,6 +446,16 @@ const RadiologyOrders = () => {
                   </div>
                 </div>
                 <div className="flex items-center space-x-2">
+                  {order.status === 'COMPLETED' && (
+                    <button
+                      onClick={(e) => handlePrintResults(e, order)}
+                      className="px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm"
+                      title="Print results (findings and conclusion only, no images)"
+                    >
+                      <Printer className="h-4 w-4" />
+                      Print
+                    </button>
+                  )}
                   <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(order.status)}`}>
                     {order.status}
                   </span>
@@ -645,6 +694,77 @@ const RadiologyOrders = () => {
                   Complete Batch Order
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Print Dialog */}
+      {showPrintDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Select Paper Size</h3>
+            <div className="space-y-3 mb-6">
+              <label className="flex items-center space-x-3 cursor-pointer">
+                <input
+                  type="radio"
+                  name="paperSize"
+                  value="A4"
+                  checked={selectedPaperSize === 'A4'}
+                  onChange={(e) => setSelectedPaperSize(e.target.value)}
+                  className="w-4 h-4 text-blue-600"
+                />
+                <div className="flex-1">
+                  <div className="font-medium text-gray-900">A4</div>
+                  <div className="text-sm text-gray-500">210 × 297 mm (Standard)</div>
+                </div>
+              </label>
+              <label className="flex items-center space-x-3 cursor-pointer">
+                <input
+                  type="radio"
+                  name="paperSize"
+                  value="A5"
+                  checked={selectedPaperSize === 'A5'}
+                  onChange={(e) => setSelectedPaperSize(e.target.value)}
+                  className="w-4 h-4 text-blue-600"
+                />
+                <div className="flex-1">
+                  <div className="font-medium text-gray-900">A5</div>
+                  <div className="text-sm text-gray-500">148 × 210 mm (Half of A4)</div>
+                </div>
+              </label>
+              <label className="flex items-center space-x-3 cursor-pointer">
+                <input
+                  type="radio"
+                  name="paperSize"
+                  value="A6"
+                  checked={selectedPaperSize === 'A6'}
+                  onChange={(e) => setSelectedPaperSize(e.target.value)}
+                  className="w-4 h-4 text-blue-600"
+                />
+                <div className="flex-1">
+                  <div className="font-medium text-gray-900">A6</div>
+                  <div className="text-sm text-gray-500">105 × 148 mm (Postcard size)</div>
+                </div>
+              </label>
+            </div>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setShowPrintDialog(false);
+                  setSelectedOrderForPrint(null);
+                }}
+                className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmPrint}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+              >
+                <Printer className="h-4 w-4" />
+                Print
+              </button>
             </div>
           </div>
         </div>
