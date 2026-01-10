@@ -2,9 +2,11 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
 // Templates extracted from the document
+// Mapping: name can be used to search, but we'll also try alternative names if exact match fails
 const templates = [
   {
     name: 'Abdominal Ultrasound',
+    alternativeNames: ['Ultrasound - Abdomen', 'Abdomen Ultrasound'], // Add alternative names for matching
     findings: `Liver is normal in size, shape, and parenchymal echogenicity with smooth contour and sharp margins. No focal lesion. Portal and hepatic veins are normal.
 Gallbladder is normal in size and wall thickness. No gallstones or mass lesion. Intrahepatic and extrahepatic bile ducts are normal.
 Pancreas is normal in size and echotexture. No focal lesion or ductal dilatation.
@@ -111,8 +113,8 @@ async function populateTemplates() {
     console.log('🔍 Populating radiology templates from document...\n');
 
     for (const template of templates) {
-      // Find the investigation type
-      const invType = await prisma.investigationType.findFirst({
+      // Find the investigation type - try main name first, then alternatives
+      let invType = await prisma.investigationType.findFirst({
         where: {
           name: {
             contains: template.name,
@@ -129,8 +131,37 @@ async function populateTemplates() {
         }
       });
 
+      // If not found, try alternative names
+      if (!invType && template.alternativeNames) {
+        for (const altName of template.alternativeNames) {
+          invType = await prisma.investigationType.findFirst({
+            where: {
+              name: {
+                contains: altName,
+                mode: 'insensitive'
+              },
+              category: 'RADIOLOGY'
+            },
+            include: {
+              service: {
+                select: {
+                  code: true
+                }
+              }
+            }
+          });
+          if (invType) {
+            console.log(`   ℹ️  Found using alternative name: "${altName}"`);
+            break;
+          }
+        }
+      }
+
       if (!invType) {
         console.log(`⚠️  InvestigationType not found: ${template.name}`);
+        if (template.alternativeNames) {
+          console.log(`    Tried alternatives: ${template.alternativeNames.join(', ')}`);
+        }
         continue;
       }
 
