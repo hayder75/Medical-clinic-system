@@ -90,10 +90,24 @@ const RadiologyOrders = () => {
     for (const service of services) {
       const testType = service.investigationType || order.type;
       if (testType && testType.category === 'RADIOLOGY') {
+        // Debug: Log what we're trying to fetch
+        console.log(`🔍 Fetching template for: ${testType.name} (ID: ${testType.id})`);
+        
         try {
           // Fetch template for this test type
           const templateRes = await api.get(`/radiologies/templates/${testType.id}`);
           const template = templateRes.data.template;
+          
+          if (template) {
+            console.log(`✅ Template found for ${testType.name}:`, {
+              hasFindings: !!template.findingsTemplate,
+              findingsLength: template.findingsTemplate?.length || 0,
+              hasConclusion: !!template.conclusionTemplate,
+              conclusionLength: template.conclusionTemplate?.length || 0
+            });
+          } else {
+            console.warn(`⚠️  Template is null for ${testType.name} (ID: ${testType.id})`);
+          }
           
           initialResults[testType.id] = {
             resultText: '',
@@ -105,7 +119,11 @@ const RadiologyOrders = () => {
           };
         } catch (error) {
           // If no template exists, start with empty fields
-          console.log(`No template found for ${testType.name}:`, error.message);
+          console.error(`❌ Error fetching template for ${testType.name} (ID: ${testType.id}):`, error.message);
+          if (error.response) {
+            console.error('   Response status:', error.response.status);
+            console.error('   Response data:', error.response.data);
+          }
           initialResults[testType.id] = {
             resultText: '',
             findings: '',
@@ -115,6 +133,8 @@ const RadiologyOrders = () => {
             resultId: null
           };
         }
+      } else {
+        console.warn(`⚠️  Skipping non-radiology test type:`, testType?.name || 'unknown');
       }
     }
     
