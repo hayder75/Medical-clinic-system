@@ -181,7 +181,7 @@ exports.fillReport = async (req, res) => {
     const radiologistId = req.user.id;
 
     // Check if batch order exists and is in correct status
-    const batchOrder = await prisma.batchOrder.findUnique({
+    let batchOrder = await prisma.batchOrder.findUnique({
       where: { id: orderId },
       include: {
         services: {
@@ -207,16 +207,117 @@ exports.fillReport = async (req, res) => {
       }
     });
 
-    if (!batchOrder) {
-      return res.status(404).json({ error: 'Radiology batch order not found' });
-    }
+    let isWalkIn = false;
+    let walkInOrders = [];
 
-    if (!['QUEUED', 'PAID'].includes(batchOrder.status)) {
-      return res.status(400).json({ error: 'Order is not in queue for processing' });
+    // If not a batch order, check if it's a walk-in order (grouped)
+    if (!batchOrder) {
+      // Check if this is a grouped walk-in order - try to get all walk-in orders with the same billingId
+      const firstWalkInOrder = await prisma.radiologyOrder.findFirst({
+        where: { id: orderId, isWalkIn: true },
+        include: {
+          patient: true,
+          type: true,
+          billing: true
+        }
+      });
+
+      if (firstWalkInOrder && firstWalkInOrder.billingId) {
+        // Get all walk-in orders in this billing group
+        walkInOrders = await prisma.radiologyOrder.findMany({
+          where: {
+            billingId: firstWalkInOrder.billingId,
+            isWalkIn: true,
+            status: { in: ['PAID', 'QUEUED'] }
+          },
+          include: {
+            patient: true,
+            type: true
+          },
+          orderBy: { createdAt: 'asc' }
+        });
+
+        if (walkInOrders.length > 0) {
+          isWalkIn = true;
+        }
+      }
+
+      if (!isWalkIn) {
+        return res.status(404).json({ error: 'Radiology order not found' });
+      }
+    } else {
+      if (!['QUEUED', 'PAID'].includes(batchOrder.status)) {
+        return res.status(400).json({ error: 'Order is not in queue for processing' });
+      }
     }
 
     // Create individual radiology results for each test
     const createdResults = [];
+    
+    if (isWalkIn) {
+      // Handle walk-in orders - create results for each radiology order
+      for (const testResult of testResults) {
+        const { testTypeId, resultText, findings, conclusion, additionalNotes, attachments } = testResult;
+        
+        // Find the corresponding walk-in order for this test type
+        const walkInOrder = walkInOrders.find(order => order.typeId === testTypeId);
+        if (!walkInOrder) {
+          console.warn(`⚠️  No walk-in order found for testTypeId: ${testTypeId}`);
+          continue;
+        }
+        
+        // Create radiology result linked to the walk-in order (using orderId, not batchOrderId)
+        const radiologyResult = await prisma.radiologyResult.create({
+          data: {
+            orderId: walkInOrder.id,  // Link to RadiologyOrder
+            testTypeId: testTypeId,
+            resultText: resultText || findings || conclusion || 'No result provided',
+            findings: findings || null,
+            conclusion: conclusion || null,
+            additionalNotes: additionalNotes || '',
+            status: 'COMPLETED'
+          }
+        });
+
+        // Handle file attachments for this specific test
+        if (attachments && attachments.length > 0) {
+          for (const attachment of attachments) {
+            await prisma.radiologyResultFile.create({
+              data: {
+                resultId: radiologyResult.id,
+                fileUrl: attachment.path || attachment.fileUrl || attachment,
+                fileName: attachment.originalName || attachment.fileName || 'uploaded_file',
+                fileType: attachment.type || attachment.fileType || 'image/png',
+                uploadedBy: radiologistId
+              }
+            });
+          }
+        }
+
+        // Update walk-in order status to COMPLETED
+        await prisma.radiologyOrder.update({
+          where: { id: walkInOrder.id },
+          data: { status: 'COMPLETED' }
+        });
+
+        createdResults.push(radiologyResult);
+      }
+      
+      // Return response for walk-in orders
+      const patient = walkInOrders[0].patient;
+      res.json({
+        message: 'Walk-in radiology report completed successfully',
+        patient: {
+          id: patient.id,
+          name: patient.name,
+          type: patient.type
+        },
+        results: createdResults
+      });
+      return;
+    }
+    
+    // Handle batch orders (existing code)
     for (const testResult of testResults) {
       const { testTypeId, resultText, findings, conclusion, additionalNotes, attachments } = testResult;
       

@@ -87,18 +87,44 @@ const RadiologyOrders = () => {
     const initialResults = {};
     
     // Handle both batch orders and walk-in orders
-    const services = order.services || (order.type ? [{ investigationType: order.type, id: order.id }] : []);
+    let services = [];
+    
+    if (order.services && Array.isArray(order.services) && order.services.length > 0) {
+      // Batch order or grouped walk-in order
+      services = order.services;
+    } else if (order.type && order.isWalkIn) {
+      // Single walk-in order
+      services = [{ investigationType: order.type, id: order.id }];
+    } else if (order.type) {
+      // Legacy single order
+      services = [{ investigationType: order.type, id: order.id }];
+    }
+    
+    console.log(`🔍 [handleOrderClick] Order type: ${order.isWalkIn ? 'WALK-IN' : 'BATCH'}, Services count: ${services.length}`);
     
     // Fetch templates for each test type and pre-fill
     for (const service of services) {
-      const testType = service.investigationType || order.type;
-      if (testType && testType.category === 'RADIOLOGY') {
+      const testType = service.investigationType || service.type || order.type;
+      
+      if (!testType) {
+        console.warn(`⚠️  No test type found for service:`, service);
+        continue;
+      }
+      
+      const testTypeId = testType.id || testType.typeId;
+      
+      if (!testTypeId) {
+        console.warn(`⚠️  No test type ID found for:`, testType);
+        continue;
+      }
+      
+      if (testType.category === 'RADIOLOGY') {
         // Debug: Log what we're trying to fetch
-        console.log(`🔍 Fetching template for: ${testType.name} (ID: ${testType.id})`);
+        console.log(`🔍 Fetching template for: ${testType.name} (ID: ${testTypeId})`);
         
         try {
           // Fetch template for this test type
-          const templateRes = await api.get(`/radiologies/templates/${testType.id}`);
+          const templateRes = await api.get(`/radiologies/templates/${testTypeId}`);
           const template = templateRes.data.template;
           
           if (template) {
@@ -109,10 +135,10 @@ const RadiologyOrders = () => {
               conclusionLength: template.conclusionTemplate?.length || 0
             });
           } else {
-            console.warn(`⚠️  Template is null for ${testType.name} (ID: ${testType.id})`);
+            console.warn(`⚠️  Template is null for ${testType.name} (ID: ${testTypeId})`);
           }
           
-          initialResults[testType.id] = {
+          initialResults[testTypeId] = {
             resultText: '',
             findings: template?.findingsTemplate || '',
             conclusion: template?.conclusionTemplate || '',
@@ -122,12 +148,12 @@ const RadiologyOrders = () => {
           };
         } catch (error) {
           // If no template exists, start with empty fields
-          console.error(`❌ Error fetching template for ${testType.name} (ID: ${testType.id}):`, error.message);
+          console.error(`❌ Error fetching template for ${testType.name} (ID: ${testTypeId}):`, error.message);
           if (error.response) {
             console.error('   Response status:', error.response.status);
             console.error('   Response data:', error.response.data);
           }
-          initialResults[testType.id] = {
+          initialResults[testTypeId] = {
             resultText: '',
             findings: '',
             conclusion: '',
