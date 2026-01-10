@@ -180,6 +180,8 @@ exports.fillReport = async (req, res) => {
     const { orderId, testResults } = req.body;
     const radiologistId = req.user.id;
 
+    console.log(`🔍 [fillReport] Processing order ${orderId}, testResults count: ${testResults?.length || 0}`);
+
     // Check if batch order exists and is in correct status
     let batchOrder = await prisma.batchOrder.findUnique({
       where: { id: orderId },
@@ -205,6 +207,13 @@ exports.fillReport = async (req, res) => {
         },
         attachments: true
       }
+    });
+
+    console.log(`🔍 [fillReport] Batch order lookup result:`, {
+      found: !!batchOrder,
+      status: batchOrder?.status,
+      type: batchOrder?.type,
+      servicesCount: batchOrder?.services?.length || 0
     });
 
     let isWalkIn = false;
@@ -239,22 +248,26 @@ exports.fillReport = async (req, res) => {
 
         if (walkInOrders.length > 0) {
           isWalkIn = true;
+          console.log(`✅ [fillReport] Found ${walkInOrders.length} walk-in orders in billing group`);
         }
       }
 
       if (!isWalkIn) {
+        console.log(`❌ [fillReport] Order ${orderId} not found as batch order or walk-in order`);
         return res.status(404).json({ error: 'Radiology order not found' });
       }
     } else {
-      // Allow batch orders with QUEUED, PAID, or IN_PROGRESS status to be completed
-      if (!['QUEUED', 'PAID', 'IN_PROGRESS'].includes(batchOrder.status)) {
-        console.log(`⚠️  Batch order ${orderId} has status '${batchOrder.status}', which is not processable. Allowed: QUEUED, PAID, IN_PROGRESS`);
+      // Allow batch orders with QUEUED, PAID, IN_PROGRESS, or COMPLETED status
+      // COMPLETED is allowed to enable editing/updating existing results
+      if (!['QUEUED', 'PAID', 'IN_PROGRESS', 'COMPLETED'].includes(batchOrder.status)) {
+        console.log(`⚠️  [fillReport] Batch order ${orderId} has status '${batchOrder.status}', which is not processable. Allowed: QUEUED, PAID, IN_PROGRESS, COMPLETED`);
         return res.status(400).json({ 
           error: 'Order is not in queue for processing',
           currentStatus: batchOrder.status,
-          allowedStatuses: ['QUEUED', 'PAID', 'IN_PROGRESS']
+          allowedStatuses: ['QUEUED', 'PAID', 'IN_PROGRESS', 'COMPLETED']
         });
       }
+      console.log(`✅ [fillReport] Batch order ${orderId} is processable with status '${batchOrder.status}'`);
     }
 
     // Create individual radiology results for each test
