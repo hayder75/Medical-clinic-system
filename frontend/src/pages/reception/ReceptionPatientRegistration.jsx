@@ -273,7 +273,6 @@ const ReceptionPatientRegistration = () => {
             <p className="text-gray-600">Choose how to proceed with patient registration</p>
           </div>
 
-
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
             {/* New Patient Registration */}
             <div 
@@ -290,12 +289,7 @@ const ReceptionPatientRegistration = () => {
               <div className="text-center">
                 <UserPlus className="h-12 w-12 text-primary-600 mx-auto mb-4" />
                 <h3 className="text-xl font-semibold text-gray-900 mb-2">New Patient</h3>
-                <p className="text-gray-600 mb-4">Register a completely new patient in the system</p>
-                <div className="text-sm text-gray-500">
-                  <p>• First time visiting</p>
-                  <p>• Complete registration required</p>
-                  <p>• 300 Birr card registration bill</p>
-                </div>
+                <p className="text-gray-600">Register a completely new patient in the system</p>
               </div>
             </div>
 
@@ -314,12 +308,7 @@ const ReceptionPatientRegistration = () => {
               <div className="text-center">
                 <Search className="h-12 w-12 text-primary-600 mx-auto mb-4" />
                 <h3 className="text-xl font-semibold text-gray-900 mb-2">Returning Patient</h3>
-                <p className="text-gray-600 mb-4">Search for an existing patient and create a new visit</p>
-                <div className="text-sm text-gray-500">
-                  <p>• Patient already in system</p>
-                  <p>• Card must be ACTIVE</p>
-                  <p>• 50 Birr consultation bill</p>
-                </div>
+                <p className="text-gray-600">Search for an existing patient and create a new visit</p>
               </div>
             </div>
           </div>
