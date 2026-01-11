@@ -1053,57 +1053,9 @@ exports.processPayment = async (req, res) => {
           }
         });
 
-        // For new patients (first time card payment), automatically create a visit and send to triage
-        if (isCardRegistration) {
-          // Check if patient already has any visits
-          const existingVisits = await prisma.visit.count({
-            where: {
-              patientId: billing.patientId
-            }
-          });
-
-          // Only create visit if this is the first time (no previous visits)
-          if (existingVisits === 0) {
-            // Generate unique visit UID with retry logic to prevent unique constraint errors
-            // Generate unique visitUid with retry logic
-            const { generateUniqueVisitUid } = require('../utils/visitUidGenerator');
-            
-            const visit = await generateUniqueVisitUid(async (visitUid) => {
-              return await prisma.visit.create({
-                data: {
-                  visitUid: visitUid,
-                  patientId: billing.patientId,
-                  status: 'WAITING_FOR_TRIAGE',
-                  isEmergency: false,
-                  notes: 'New patient - card registration completed, sent to triage automatically'
-                },
-                include: {
-                  patient: {
-                    select: {
-                      id: true,
-                      name: true,
-                      type: true,
-                      mobile: true
-                    }
-                  }
-                }
-              });
-            });
-
-            // Log action
-            await prisma.auditLog.create({
-              data: {
-                action: 'VISIT_CREATED_AUTOMATIC',
-                entity: 'Visit',
-                entityId: visit.id,
-                userId: req.user.id,
-                details: `Visit automatically created for new patient ${billing.patient.name} (${billing.patientId}) after card registration payment. Visit ID: ${visit.visitUid}`
-              }
-            });
-
-            console.log(`✅ Auto-created visit ${visit.visitUid} for new patient ${billing.patient.name} after card registration`);
-          }
-        }
+        // Note: Automatic visit creation removed for new patients
+        // New patients must have a visit created manually after card registration payment
+        // Returning patients (CARD-ACT) do not automatically get visits either
       }
 
       // Check if this is diagnostics billing (lab/radiology), nurse walk-in, emergency drugs, or material needs
