@@ -271,16 +271,18 @@ exports.processVirtualQueue = async (req, res) => {
 
     // If patient exists, create visit directly
     if (virtualQueueItem.patient) {
-      const visitUid = `VISIT-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${String(Date.now()).slice(-4)}`;
+      const { generateUniqueVisitUid } = require('../utils/visitUidGenerator');
       
-      const visit = await prisma.visit.create({
-        data: {
-          visitUid: visitUid,
-          patientId: virtualQueueItem.patient.id,
-          createdById: billingOfficerId,
-          status: 'WAITING_FOR_TRIAGE',
-          notes: `Patient processed from Pre-Registration queue. Original notes: ${virtualQueueItem.notes || 'None'}`
-        }
+      const visit = await generateUniqueVisitUid(async (visitUid) => {
+        return await prisma.visit.create({
+          data: {
+            visitUid: visitUid,
+            patientId: virtualQueueItem.patient.id,
+            createdById: billingOfficerId,
+            status: 'WAITING_FOR_TRIAGE',
+            notes: `Patient processed from Pre-Registration queue. Original notes: ${virtualQueueItem.notes || 'None'}`
+          }
+        });
       });
 
       // Mark as completed

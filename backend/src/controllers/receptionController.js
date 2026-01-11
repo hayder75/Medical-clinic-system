@@ -193,15 +193,6 @@ exports.createPatient = async (req, res) => {
     const maxRetries = 5;
     const year = new Date().getFullYear();
     
-    // Get card registration service (300 Birr)
-    const cardRegService = await prisma.service.findFirst({
-      where: { code: 'CARD-REG', isActive: true }
-    });
-    
-    if (!cardRegService) {
-      return res.status(400).json({ error: 'Card registration service not found. Please contact admin.' });
-    }
-    
     let patient;
     while (retries < maxRetries) {
       try {
@@ -210,7 +201,7 @@ exports.createPatient = async (req, res) => {
         const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
         patientId = `PAT-${year}-${timestamp}-${random}`;
         
-        // Create patient with INACTIVE card status (emergency patients still need to pay card fee)
+        // Create patient without billing - billing removed from registration
         patient = await prisma.patient.create({
           data: {
             id: patientId,
@@ -224,8 +215,8 @@ exports.createPatient = async (req, res) => {
             emergencyContact: validatedData.emergencyContact || null,
             bloodType: validatedData.bloodType || null,
             maritalStatus: validatedData.maritalStatus || null,
-            insuranceId: validatedData.insuranceId || null,
-            cardStatus: 'INACTIVE' // All patients start with INACTIVE card until payment
+            insuranceId: validatedData.insuranceId || null
+            // Removed: cardStatus: 'INACTIVE' - no card status check required
           }
         });
         
@@ -247,30 +238,7 @@ exports.createPatient = async (req, res) => {
       }
     }
     
-    // Create billing for card registration (300 Birr) - ALL patients need to pay card fee
-    const billing = await prisma.billing.create({
-      data: {
-        patientId: patient.id,
-        totalAmount: cardRegService.price,
-        status: 'PENDING',
-        notes: 'Patient card registration fee',
-        services: {
-          create: {
-            serviceId: cardRegService.id,
-            quantity: 1,
-            unitPrice: cardRegService.price,
-            totalPrice: cardRegService.price
-          }
-        }
-      },
-      include: {
-        services: {
-          include: {
-            service: true
-          }
-        }
-      }
-    });
+    // Removed: Card registration billing creation - no automatic billing on registration
     
     // Log action
     await prisma.auditLog.create({
@@ -279,14 +247,13 @@ exports.createPatient = async (req, res) => {
         entity: 'Patient',
         entityId: parseInt(patient.id.split('-').pop()) || 0,
         userId: receptionistId,
-        details: `New ${validatedData.type.toLowerCase()} patient registered: ${patient.name} (${patient.id}). Card registration bill created: ${billing.id}`
+        details: `New ${validatedData.type.toLowerCase()} patient registered: ${patient.name} (${patient.id}). No billing created.`
       }
     });
     
     res.json({
       patient,
-      billing,
-      message: 'Patient registered successfully. Please proceed to billing for card registration payment (300 Birr).'
+      message: 'Patient registered successfully.'
     });
   } catch (error) {
     console.error('Error creating patient:', error);
@@ -398,13 +365,7 @@ exports.createVisit = async (req, res) => {
       return res.status(404).json({ error: 'Patient not found' });
     }
     
-    // Check if patient card is active
-    if (patient.cardStatus !== 'ACTIVE') {
-      return res.status(400).json({ 
-        error: 'Patient card is not active. Please activate the card before creating a visit.',
-        cardStatus: patient.cardStatus
-      });
-    }
+    // Removed: Card status check - visits can be created regardless of card status
     
     // Check if patient already has an active visit
     const activeVisit = await prisma.visit.findFirst({
@@ -456,51 +417,22 @@ exports.createVisit = async (req, res) => {
     }
     
     // Generate unique visit UID with retry logic to handle race conditions
-    let visitUid;
-    let visit;
-    let retries = 0;
-    const maxRetries = 5;
+    const { generateUniqueVisitUid } = require('../utils/visitUidGenerator');
     
-    while (retries < maxRetries) {
-      try {
-        const now = new Date();
-        const dateStr = now.toISOString().split('T')[0].replace(/-/g, '');
-        const timestamp = Date.now().toString().slice(-6); // Last 6 digits of timestamp
-        const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0'); // 3 digit random
-        visitUid = `VISIT-${dateStr}-${timestamp}-${random}`;
-        
-        // Create visit
-        visit = await prisma.visit.create({
-          data: {
-            visitUid,
-            patientId: patient.id,
-            createdById: receptionistId,
-            suggestedDoctorId: validatedData.suggestedDoctorId || null,
-            notes: validatedData.notes || null,
-            queueType: validatedData.queueType,
-            isEmergency: validatedData.isEmergency,
-            status: validatedData.isEmergency ? 'WAITING_FOR_TRIAGE' : 'WAITING_FOR_TRIAGE'
-          }
-        });
-        
-        // Success - break out of retry loop
-        break;
-      } catch (error) {
-        // If it's a unique constraint error on visitUid, retry with a new ID
-        if (error.code === 'P2002' && error.meta?.target?.includes('visitUid')) {
-          retries++;
-          if (retries >= maxRetries) {
-            console.error('Failed to generate unique visitUid after', maxRetries, 'attempts');
-            throw new Error('Unable to generate unique visit ID. Please try again.');
-          }
-          // Wait a tiny bit before retrying (adds more randomness)
-          await new Promise(resolve => setTimeout(resolve, 10));
-        } else {
-          // Different error - throw it
-          throw error;
+    const visit = await generateUniqueVisitUid(async (visitUid) => {
+      return await prisma.visit.create({
+        data: {
+          visitUid,
+          patientId: patient.id,
+          createdById: receptionistId,
+          suggestedDoctorId: validatedData.suggestedDoctorId || null,
+          notes: validatedData.notes || null,
+          queueType: validatedData.queueType,
+          isEmergency: validatedData.isEmergency,
+          status: validatedData.isEmergency ? 'WAITING_FOR_TRIAGE' : 'WAITING_FOR_TRIAGE'
         }
-      }
-    }
+      });
+    });
     
     // For emergency visits, create emergency billing (no consultation fee upfront)
     let billing = null;

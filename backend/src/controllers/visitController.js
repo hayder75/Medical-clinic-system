@@ -1,5 +1,6 @@
 const prisma = require('../config/database');
 const { z } = require('zod');
+const { generateUniqueVisitUid } = require('../utils/visitUidGenerator');
 
 // Validation schemas
 const createVisitSchema = z.object({
@@ -12,14 +13,6 @@ const completeVisitSchema = z.object({
   diagnosis: z.string(),
   finalNotes: z.string().optional(),
 });
-
-// Generate unique visit UID
-const generateVisitUid = () => {
-  const now = new Date();
-  const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
-  const timeStr = now.toTimeString().slice(0, 8).replace(/:/g, '');
-  return `VISIT-${dateStr}-${timeStr}`;
-};
 
 // Create a new visit
 exports.createVisit = async (req, res) => {
@@ -36,33 +29,35 @@ exports.createVisit = async (req, res) => {
       return res.status(404).json({ error: 'Patient not found' });
     }
 
-    // Create visit
-    const visit = await prisma.visit.create({
-      data: {
-        visitUid: generateVisitUid(),
-        patientId,
-        createdById,
-        notes,
-        status: 'WAITING_FOR_TRIAGE'
-      },
-      include: {
-        patient: {
-          select: {
-            id: true,
-            name: true,
-            type: true,
-            mobile: true,
-            email: true
-          }
+    // Create visit with unique visitUid
+    const visit = await generateUniqueVisitUid(async (visitUid) => {
+      return await prisma.visit.create({
+        data: {
+          visitUid: visitUid,
+          patientId,
+          createdById,
+          notes,
+          status: 'WAITING_FOR_TRIAGE'
         },
-        createdBy: {
-          select: {
-            id: true,
-            fullname: true,
-            role: true
+        include: {
+          patient: {
+            select: {
+              id: true,
+              name: true,
+              type: true,
+              mobile: true,
+              email: true
+            }
+          },
+          createdBy: {
+            select: {
+              id: true,
+              fullname: true,
+              role: true
+            }
           }
         }
-      }
+      });
     });
 
     res.status(201).json({

@@ -1,18 +1,10 @@
 const prisma = require('../config/database');
 const { z } = require('zod');
-const PdfPrinter = require('pdfmake');
+const { createPDFDocument, generatePDF } = require('../utils/pdfGenerator');
 const fs = require('fs');
+const path = require('path');
 
-const fonts = {
-  Roboto: {
-    normal: 'node_modules/roboto-font/fonts/Roboto/roboto-regular-webfont.ttf',
-    bold: 'node_modules/roboto-font/fonts/Roboto/roboto-bold-webfont.ttf',
-    italics: 'node_modules/roboto-font/fonts/Roboto/roboto-italic-webfont.ttf',
-    bolditalics: 'node_modules/roboto-font/fonts/Roboto/roboto-bolditalic-webfont.ttf',
-  },
-};
-
-const printer = new PdfPrinter(fonts);
+// Redundant printer removed, using utility instead
 
 // Validation schemas
 const individualLabResultSchema = z.object({
@@ -41,18 +33,22 @@ exports.getTemplates = async (req, res) => {
 // Get lab orders (batch orders + walk-in orders + new lab test orders)
 exports.getOrders = async (req, res) => {
   try {
-    console.log('📋 [getOrders] Fetching lab orders...');
+    const { status } = req.query; // 'PENDING' or 'COMPLETED'
+    const statusFilter = status === 'COMPLETED'
+      ? { in: ['COMPLETED'] }
+      : { in: ['PAID', 'QUEUED', 'IN_PROGRESS'] };
+
     // Get NEW lab test orders (new system)
     const labTestOrders = await prisma.labTestOrder.findMany({
       where: {
         OR: [
           {
             visitId: { not: null },
-            status: { in: ['PAID', 'QUEUED', 'IN_PROGRESS', 'COMPLETED'] }
+            status: statusFilter
           },
           {
             isWalkIn: true,
-            status: { in: ['PAID', 'QUEUED', 'IN_PROGRESS', 'COMPLETED'] }
+            status: statusFilter
           },
           {
             visitId: { not: null },
@@ -104,12 +100,16 @@ exports.getOrders = async (req, res) => {
       orderBy: { createdAt: 'asc' }
     });
 
-    // Get batch orders (old system - for backward compatibility)
-    // BUT: Exclude batchOrders that have labTestOrders (new system) - they'll be in labTestOrders array
+    // Get ALL batchOrderIds that have labTestOrders (new system)
+    // This ensures we always exclude them from the old system fetch
+    const allLabTestOrders = await prisma.labTestOrder.findMany({
+      where: { batchOrderId: { not: null } },
+      select: { batchOrderId: true }
+    });
     const batchOrderIdsWithLabTestOrders = new Set(
-      labTestOrders.map(order => order.batchOrderId).filter(Boolean)
+      allLabTestOrders.map(order => order.batchOrderId)
     );
-    
+
     const batchOrders = await prisma.batchOrder.findMany({
       where: {
         AND: [
@@ -123,9 +123,7 @@ exports.getOrders = async (req, res) => {
             OR: [
               // Regular orders that are paid
               {
-                status: {
-                  in: ['PAID', 'QUEUED', 'IN_PROGRESS', 'COMPLETED']
-                }
+                status: statusFilter
               },
               // Emergency orders that are unpaid (treated as pre-paid)
               {
@@ -189,9 +187,7 @@ exports.getOrders = async (req, res) => {
     const walkInOrders = await prisma.labOrder.findMany({
       where: {
         isWalkIn: true,
-        status: {
-          in: ['PAID', 'QUEUED', 'IN_PROGRESS', 'COMPLETED']
-        }
+        status: statusFilter
       },
       include: {
         patient: {
@@ -231,25 +227,27 @@ exports.getOrders = async (req, res) => {
           services: [] // Array of individual orders as services
         };
       }
-      
+
       // Add this order as a service
       groupedOrders[key].services.push({
         id: order.id,
         service: order.type, // The investigation type
         investigationType: order.type,
-        labResults: order.labResults
+        labResults: order.labResults,
+        status: order.status // CRITICAL: Include status for grouping logic
       });
-      
-      // Update group status if this order has a different status
-      if (order.status !== groupedOrders[key].status) {
-        // If any order is completed, group is completed
-        if (order.status === 'COMPLETED') {
-          groupedOrders[key].status = 'COMPLETED';
-        }
-        // If any order is IN_PROGRESS but not all COMPLETED, group is IN_PROGRESS
-        else if (order.status === 'IN_PROGRESS' && groupedOrders[key].status !== 'COMPLETED') {
-          groupedOrders[key].status = 'IN_PROGRESS';
-        }
+
+      // Update group status based on ALL orders in the group
+      const groupServices = groupedOrders[key].services;
+      const allCompleted = groupServices.every(s => s.status === 'COMPLETED');
+      const anyInProgress = groupServices.some(s => s.status === 'IN_PROGRESS');
+
+      if (allCompleted) {
+        groupedOrders[key].status = 'COMPLETED';
+      } else if (anyInProgress) {
+        groupedOrders[key].status = 'IN_PROGRESS';
+      } else {
+        groupedOrders[key].status = order.status;
       }
     });
 
@@ -263,10 +261,10 @@ exports.getOrders = async (req, res) => {
       // For visit-based orders: group by visitId + billingId (or batchOrderId as fallback)
       // This ensures orders from different billings are kept separate
       // For walk-in orders: group by patientId + billingId
-      const key = order.visitId 
-        ? `visit-${order.visitId}-billing-${order.billingId || order.batchOrderId || 'no-billing'}` 
+      const key = order.visitId
+        ? `visit-${order.visitId}-billing-${order.billingId || order.batchOrderId || 'no-billing'}`
         : `walkin-${order.patientId}-billing-${order.billingId || 'no-billing'}`;
-      
+
       if (!groupedLabTestOrders[key]) {
         groupedLabTestOrders[key] = {
           id: order.id, // Use first order ID as group ID
@@ -284,7 +282,7 @@ exports.getOrders = async (req, res) => {
           orders: [] // This will contain all individual lab test orders
         };
       }
-      
+
       // Always add the order to the orders array - this is critical for frontend to display
       // Include ALL necessary fields for the frontend to display properly
       groupedLabTestOrders[key].orders.push({
@@ -310,14 +308,12 @@ exports.getOrders = async (req, res) => {
         createdAt: order.createdAt,
         updatedAt: order.updatedAt
       });
-      
+
       // Update group status based on ALL orders in the group
-      // Group is COMPLETED only if ALL orders are completed
-      // Group is IN_PROGRESS if at least one is in progress and none are completed
       const groupOrders = groupedLabTestOrders[key].orders;
       const allCompleted = groupOrders.every(o => o.status === 'COMPLETED');
       const anyInProgress = groupOrders.some(o => o.status === 'IN_PROGRESS');
-      
+
       if (allCompleted) {
         groupedLabTestOrders[key].status = 'COMPLETED';
       } else if (anyInProgress) {
@@ -330,55 +326,9 @@ exports.getOrders = async (req, res) => {
 
     // Convert grouped orders to array and log details
     const groupedOrdersArray = Object.values(groupedLabTestOrders);
-    
-    // Log detailed info about each grouped order
-    groupedOrdersArray.forEach((group, idx) => {
-      console.log(`📦 [getOrders] Group ${idx + 1}:`, {
-        id: group.id,
-        visitId: group.visitId,
-        patientName: group.patient?.name,
-        ordersCount: group.orders?.length || 0,
-        ordersWithLabTest: group.orders?.filter(o => o.labTest).length || 0,
-        status: group.status
-      });
-      
-      // Log each order in the group
-      if (group.orders && group.orders.length > 0) {
-        group.orders.forEach((o, oidx) => {
-          console.log(`   Order ${oidx + 1}:`, {
-            id: o.id,
-            labTestName: o.labTest?.name || 'MISSING',
-            hasLabTest: !!o.labTest,
-            status: o.status
-          });
-        });
-      } else {
-        console.warn(`   ⚠️ Group ${idx + 1} has NO orders in array!`);
-      }
-    });
 
-    console.log('📋 [getOrders] Summary:', {
-      batchOrders: batchOrders.length,
-      batchOrdersExcluded: batchOrderIdsWithLabTestOrders.size,
-      walkInOrders: groupedWalkInOrders.length,
-      labTestOrders: groupedOrdersArray.length,
-      totalLabTestOrders: labTestOrders.length,
-      groupsWithOrders: groupedOrdersArray.filter(g => g.orders && g.orders.length > 0).length,
-      groupsWithoutOrders: groupedOrdersArray.filter(g => !g.orders || g.orders.length === 0).length
-    });
-    
-    // Log each grouped order to verify structure
-    groupedOrdersArray.forEach((group, idx) => {
-      console.log(`📦 Group ${idx + 1}:`, {
-        id: group.id,
-        visitId: group.visitId,
-        patientName: group.patient?.name,
-        ordersCount: group.orders?.length || 0,
-        orderNames: group.orders?.map(o => o.labTest?.name).filter(Boolean).join(', ') || 'NONE'
-      });
-    });
 
-    res.json({ 
+    res.json({
       batchOrders, // Old system
       walkInOrders: groupedWalkInOrders, // Old system walk-ins
       labTestOrders: groupedOrdersArray // New system
@@ -392,10 +342,6 @@ exports.getOrders = async (req, res) => {
 // Save individual lab result
 exports.saveIndividualLabResult = async (req, res) => {
   try {
-    console.log('🔍 Individual lab result endpoint hit:', req.body);
-    console.log('🔍 Request method:', req.method);
-    console.log('🔍 Request URL:', req.url);
-    console.log('🔍 Request headers:', req.headers);
 
     const data = individualLabResultSchema.parse(req.body);
     const labTechnicianId = req.user.id;
@@ -528,7 +474,7 @@ exports.saveIndividualLabResult = async (req, res) => {
         resultsCount: Object.keys(data.results || {}).length,
         templateId: data.templateId
       });
-      
+
       const updatedResult = await prisma.detailedLabResult.update({
         where: { id: existingResult.id },
         data: {
@@ -555,7 +501,7 @@ exports.saveIndividualLabResult = async (req, res) => {
         templateId: data.templateId,
         resultsCount: Object.keys(data.results || {}).length
       });
-      
+
       const newResult = await prisma.detailedLabResult.create({
         data: {
           labOrderId: data.labOrderId,
@@ -596,9 +542,9 @@ exports.saveIndividualLabResult = async (req, res) => {
 exports.getDetailedResults = async (req, res) => {
   try {
     const { orderId } = req.params;
-    
+
     console.log('📋 Fetching detailed results for orderId:', orderId);
-    
+
     const detailedResults = await prisma.detailedLabResult.findMany({
       where: {
         labOrderId: parseInt(orderId)
@@ -644,7 +590,7 @@ exports.sendToDoctor = async (req, res) => {
     // For emergency patients, allow sending if at least one service has results
     // For regular patients, require all services to have results
     let allServicesHaveResults;
-    
+
     if (batchOrder.visit.isEmergency) {
       // Emergency patients: at least one service must have results
       allServicesHaveResults = batchOrder.services.some(service => {
@@ -658,8 +604,8 @@ exports.sendToDoctor = async (req, res) => {
     }
 
     if (!allServicesHaveResults) {
-      const errorMessage = batchOrder.visit.isEmergency 
-        ? 'At least one service must have results before sending to doctor' 
+      const errorMessage = batchOrder.visit.isEmergency
+        ? 'At least one service must have results before sending to doctor'
         : 'All services must have results before sending to doctor';
       return res.status(400).json({ error: errorMessage });
     }
@@ -667,7 +613,7 @@ exports.sendToDoctor = async (req, res) => {
     // Update batch order status to COMPLETED
     await prisma.batchOrder.update({
       where: { id: parseInt(labOrderId) },
-      data: { 
+      data: {
         status: 'COMPLETED'
       }
     });
@@ -843,77 +789,61 @@ exports.generateLabResultsPDF = async (req, res) => {
     const orderDate = batchOrder?.createdAt || walkInOrder?.createdAt;
     const orderStatus = batchOrder?.status || walkInOrder?.status;
 
-    // Build PDF content
-    const content = [
-      // Header
-      {
-        text: 'Selihom Medical Clinic',
-        style: 'clinicName',
-        alignment: 'center',
-        margin: [0, 0, 0, 5]
-      },
-      {
-        text: 'Laboratory Test Results',
-        style: 'subheader',
-        alignment: 'center',
-        margin: [0, 0, 0, 20]
-      },
-      {
-        canvas: [{ type: 'line', x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 1 }],
-        margin: [0, 0, 0, 15]
-      },
+    // Build PDF content using utility-friendly format
+    const pdfContent = [];
 
-      // Patient Information
-      {
-        text: 'Patient Information',
-        style: 'sectionTitle',
-        margin: [0, 0, 0, 10]
-      },
-      {
-        columns: [
-          { text: `Name: ${patient.name}`, style: 'field' },
-          { text: `ID: ${patient.id}`, style: 'field' },
-          { text: `Gender: ${patient.gender || 'N/A'}`, style: 'field' }
-        ],
-        margin: [0, 0, 0, 5]
-      },
-      {
-        columns: [
-          { text: `Age: ${patient.age || 'N/A'}`, style: 'field' },
-          { text: `Blood Type: ${patient.bloodType || 'N/A'}`, style: 'field' },
-          { text: `Phone: ${patient.mobile || 'N/A'}`, style: 'field' }
-        ],
-        margin: [0, 0, 0, 15]
-      },
-      {
-        text: `Order ID: ${orderId} | Date: ${formatDate(orderDate)} | Status: ${orderStatus.replace(/_/g, ' ')}`,
-        style: 'field',
-        margin: [0, 0, 0, 15]
-      },
-      {
-        canvas: [{ type: 'line', x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 1 }],
-        margin: [0, 0, 0, 15]
-      },
+    // Subheader
+    pdfContent.push({
+      text: 'Laboratory Test Results',
+      style: 'subheader',
+      margin: [0, 0, 0, 20]
+    });
 
-      // Test Results
-      {
-        text: 'Laboratory Test Results',
-        style: 'sectionTitle',
-        margin: [0, 0, 0, 10]
-      }
-    ];
+    // Patient Information
+    pdfContent.push({
+      text: 'Patient Information',
+      style: 'sectionTitle'
+    });
 
-    // Add each test result - handle both batch orders and walk-in orders
+    pdfContent.push({
+      columns: [
+        { text: `Name: ${patient.name}`, style: 'field' },
+        { text: `ID: ${patient.id}`, style: 'field' },
+        { text: `Gender: ${patient.gender || 'N/A'}`, style: 'field' }
+      ],
+      margin: [0, 0, 0, 5]
+    });
+
+    pdfContent.push({
+      columns: [
+        { text: `Age: ${patient.age || 'N/A'}`, style: 'field' },
+        { text: `Blood Type: ${patient.bloodType || 'N/A'}`, style: 'field' },
+        { text: `Phone: ${patient.mobile || 'N/A'}`, style: 'field' }
+      ],
+      margin: [0, 0, 0, 15]
+    });
+
+    pdfContent.push({
+      text: `Order ID: ${orderId} | Date: ${formatDate(orderDate)} | Status: ${orderStatus.replace(/_/g, ' ')}`,
+      style: 'field',
+      margin: [0, 0, 0, 15]
+    });
+
+    // Results Section
+    pdfContent.push({
+      text: 'Laboratory Test Results',
+      style: 'sectionTitle'
+    });
+
+    // Add each test result
     if (isWalkIn) {
-      // Walk-in order results
       walkInResults.forEach((result, index) => {
-        content.push({
+        pdfContent.push({
           text: `${index + 1}. ${result.serviceName}`,
           style: 'testTitle',
           margin: [0, 10, 0, 5]
         });
 
-        // Add template fields if template exists
         if (result.template && result.template.fields) {
           const tableBody = [];
           Object.entries(result.template.fields).forEach(([fieldName, fieldConfig]) => {
@@ -926,17 +856,15 @@ exports.generateLabResultsPDF = async (req, res) => {
             ]);
           });
 
-          content.push({
+          pdfContent.push({
             table: {
               headerRows: 0,
               widths: ['*', '*'],
               body: tableBody
             },
-            style: 'resultsTable',
             margin: [0, 0, 0, 10]
           });
         } else {
-          // No template - just show results as key-value pairs
           const tableBody = [];
           Object.entries(result.results).forEach(([key, rawValue]) => {
             const value = (rawValue === null || rawValue === undefined || rawValue === '' || String(rawValue).trim() === '') ? '-' : rawValue;
@@ -947,21 +875,19 @@ exports.generateLabResultsPDF = async (req, res) => {
           });
 
           if (tableBody.length > 0) {
-            content.push({
+            pdfContent.push({
               table: {
                 headerRows: 0,
                 widths: ['*', '*'],
                 body: tableBody
               },
-              style: 'resultsTable',
               margin: [0, 0, 0, 10]
             });
           }
         }
 
-        // Add additional notes if present
         if (result.additionalNotes) {
-          content.push({
+          pdfContent.push({
             text: `Notes: ${result.additionalNotes}`,
             style: 'notes',
             margin: [0, 0, 0, 10]
@@ -969,19 +895,16 @@ exports.generateLabResultsPDF = async (req, res) => {
         }
       });
     } else {
-      // Batch order results
       batchOrder.detailedResults.forEach((result, index) => {
-        // Find the service - serviceId in DetailedLabResult refers to BatchOrderService.id
         const service = batchOrder.services.find(s => s.id === result.serviceId);
         const serviceName = service?.service?.name || 'Unknown Test';
 
-        content.push({
+        pdfContent.push({
           text: `${index + 1}. ${serviceName}`,
           style: 'testTitle',
           margin: [0, 10, 0, 5]
         });
 
-        // Add template fields
         if (result.template && result.template.fields) {
           const tableBody = [];
           Object.entries(result.template.fields).forEach(([fieldName, fieldConfig]) => {
@@ -994,20 +917,18 @@ exports.generateLabResultsPDF = async (req, res) => {
             ]);
           });
 
-          content.push({
+          pdfContent.push({
             table: {
               headerRows: 0,
               widths: ['*', '*'],
               body: tableBody
             },
-            style: 'resultsTable',
             margin: [0, 0, 0, 10]
           });
         }
 
-        // Add additional notes if present
         if (result.additionalNotes) {
-          content.push({
+          pdfContent.push({
             text: `Notes: ${result.additionalNotes}`,
             style: 'notes',
             margin: [0, 0, 0, 10]
@@ -1016,136 +937,36 @@ exports.generateLabResultsPDF = async (req, res) => {
       });
     }
 
-    // Footer with lab technician signature
-    content.push(
-      { text: '', margin: [0, 30, 0, 0] },
-      {
-        canvas: [{ type: 'line', x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 2 }],
-        margin: [0, 0, 0, 15]
-      },
-      {
-        columns: [
-          {
-            text: [
-              { text: 'Lab Technician: ', style: 'signatureLabel' },
-              { text: labTechnician?.fullname || 'N/A', style: 'signatureName' }
-            ],
-            alignment: 'left'
-          },
-          {
-            text: [
-              { text: 'Date: ', style: 'signatureLabel' },
-              { text: formatDateTime(new Date()), style: 'signatureName' }
-            ],
-            alignment: 'right'
-          }
-        ],
-        margin: [0, 10, 0, 10]
-      },
-      {
-        text: 'Signature: _________________________',
-        style: 'signatureLabel',
-        margin: [0, 20, 0, 5]
-      },
-      {
-        text: 'Stamp:',
-        style: 'signatureLabel',
-        margin: [0, 10, 0, 0]
-      },
-      {
-        text: 'Selihom Medical Clinic',
-        style: 'footer',
-        alignment: 'center',
-        margin: [0, 20, 0, 0]
-      },
-      {
-        text: `Generated on: ${formatDateTime(new Date())}`,
-        style: 'footer',
-        alignment: 'center',
-        margin: [0, 5, 0, 0]
-      }
-    );
+    // Add signature section
+    pdfContent.push({
+      text: 'Lab Technician:',
+      style: 'signatureLabel',
+      margin: [0, 20, 0, 5]
+    });
+    pdfContent.push({
+      text: labTechnician?.fullname || 'Lab Technician',
+      style: 'signatureName',
+      margin: [0, 0, 0, 10]
+    });
 
-    const docDefinition = {
-      pageSize: 'A4',
-      pageMargins: [40, 60, 40, 60],
-      content: content,
-      styles: {
-        clinicName: {
-          fontSize: 24,
-          bold: true,
-          color: '#000'
-        },
-        subheader: {
-          fontSize: 20,
-          color: '#666'
-        },
-        sectionTitle: {
-          fontSize: 20,
-          bold: true,
-          color: '#000',
-          decoration: 'underline'
-        },
-        field: {
-          fontSize: 16,
-          color: '#000'
-        },
-        testTitle: {
-          fontSize: 18,
-          bold: true,
-          color: '#000'
-        },
-        resultsTable: {
-          fontSize: 16
-        },
-        tableHeader: {
-          fontSize: 16,
-          color: '#000',
-          fillColor: '#f0f0f0'
-        },
-        tableCell: {
-          fontSize: 16,
-          color: '#000'
-        },
-        notes: {
-          fontSize: 16,
-          color: '#000',
-          italics: true
-        },
-        signatureLabel: {
-          fontSize: 16,
-          color: '#666'
-        },
-        signatureName: {
-          fontSize: 18,
-          bold: true,
-          color: '#000'
-        },
-        footer: {
-          fontSize: 14,
-          color: '#666'
-        }
-      }
-    };
+    // Create PDF document using utility
+    const docDefinition = createPDFDocument({
+      paperSize: 'A4',
+      clinicName: 'Selihom Medical Clinic',
+      content: pdfContent,
+      includeLogo: true,
+      footerText: `Generated on: ${formatDateTime(new Date())}`
+    });
 
-    const pdfDoc = printer.createPdfKitDocument(docDefinition);
+    // Generate PDF
     const fileName = `lab-results-${orderId}-${Date.now()}.pdf`;
     const filePath = `uploads/${fileName}`;
 
-    pdfDoc.pipe(fs.createWriteStream(filePath));
-    pdfDoc.end();
+    console.log(`🧪 [Lab PDF] Generating PDF for order ${orderId}...`);
+    await generatePDF(docDefinition, filePath);
+    console.log(`✅ [Lab PDF] PDF generated successfully: ${filePath}`);
 
-    await new Promise((resolve) => {
-      pdfDoc.on('end', resolve);
-    });
-
-    res.json({
-      message: 'PDF generated successfully',
-      fileName,
-      filePath: `/uploads/${fileName}`,
-      order: batchOrder || walkInOrder,
-      isWalkIn
-    });
+    res.sendFile(path.resolve(filePath));
   } catch (error) {
     console.error('Error generating lab results PDF:', error);
     res.status(500).json({ error: error.message });
@@ -1165,7 +986,7 @@ exports.saveLabTestResult = async (req, res) => {
     if (!orderId) {
       return res.status(400).json({ error: 'orderId is required' });
     }
-    
+
     // Results can be empty object (all fields optional)
     if (results === undefined) {
       return res.status(400).json({ error: 'results object is required (can be empty)' });

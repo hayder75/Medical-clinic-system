@@ -12,39 +12,38 @@ const RadiologyOrders = () => {
   const [uploadingFiles, setUploadingFiles] = useState({});
   const [expandedTests, setExpandedTests] = useState({});
   const [statusFilter, setStatusFilter] = useState('PENDING');
-  const [showPrintDialog, setShowPrintDialog] = useState(false);
-  const [selectedOrderForPrint, setSelectedOrderForPrint] = useState(null);
-  const [selectedPaperSize, setSelectedPaperSize] = useState('A4');
 
   useEffect(() => {
     fetchOrders();
-  }, []);
+  }, [statusFilter]);
 
   const fetchOrders = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/radiologies/orders');
+      const response = await api.get('/radiologies/orders', {
+        params: { status: statusFilter }
+      });
       // Combine batch orders with walk-in orders; tag each with a kind to avoid key collisions
       const batchOrders = (response.data.batchOrders || []).map(o => ({ ...o, __kind: 'batch' }));
-      
+
       // For walk-in orders, the backend already groups them with services array
       // Only create services array if it doesn't exist (for backward compatibility)
       const walkInOrders = (response.data.walkInOrders || []).map(o => {
         const order = { ...o, __kind: 'walkin' };
-        
+
         // If backend didn't provide services array, create one from type (backward compatibility)
         if (!order.services || !Array.isArray(order.services) || order.services.length === 0) {
           if (order.type) {
-            order.services = [{ 
-              service: order.type, 
+            order.services = [{
+              service: order.type,
               investigationType: order.type,
-              id: order.id 
+              id: order.id
             }];
           } else {
             order.services = [];
           }
         }
-        
+
         return order;
       });
       const allOrders = [...batchOrders, ...walkInOrders];
@@ -58,11 +57,9 @@ const RadiologyOrders = () => {
   };
 
   const getFilteredOrders = () => {
-    if (statusFilter === 'PENDING') {
-      return orders.filter(order => order.status !== 'COMPLETED');
-    } else if (statusFilter === 'COMPLETED') {
-      return orders.filter(order => order.status === 'COMPLETED');
-    }
+    // Backend already filters by status, but we keep this for safety
+    // and to handle 'ALL' if we ever add it to the backend
+    if (statusFilter === 'ALL') return orders;
     return orders;
   };
 
@@ -70,7 +67,7 @@ const RadiologyOrders = () => {
     try {
       const response = await api.get(`/radiologies/batch-orders/${batchOrderId}/results`);
       const existingResults = {};
-      
+
       if (response.data && response.data.radiologyResults) {
         response.data.radiologyResults.forEach(result => {
           existingResults[result.testTypeId] = {
@@ -83,7 +80,7 @@ const RadiologyOrders = () => {
           };
         });
       }
-      
+
       return existingResults;
     } catch (error) {
       console.error('Error fetching existing results:', error);
@@ -94,13 +91,13 @@ const RadiologyOrders = () => {
   const handleOrderClick = async (order) => {
     setSelectedOrder(order);
     setShowReportForm(true);
-    
+
     // Initialize test results for each radiology test
     const initialResults = {};
-    
+
     // Handle both batch orders and walk-in orders
     let services = [];
-    
+
     if (order.services && Array.isArray(order.services) && order.services.length > 0) {
       // Batch order or grouped walk-in order
       services = order.services;
@@ -111,34 +108,34 @@ const RadiologyOrders = () => {
       // Legacy single order
       services = [{ investigationType: order.type, id: order.id }];
     }
-    
+
     console.log(`🔍 [handleOrderClick] Order type: ${order.isWalkIn ? 'WALK-IN' : 'BATCH'}, Services count: ${services.length}`);
-    
+
     // Fetch templates for each test type and pre-fill
     for (const service of services) {
       const testType = service.investigationType || service.type || order.type;
-      
+
       if (!testType) {
         console.warn(`⚠️  No test type found for service:`, service);
         continue;
       }
-      
+
       const testTypeId = testType.id || testType.typeId;
-      
+
       if (!testTypeId) {
         console.warn(`⚠️  No test type ID found for:`, testType);
         continue;
       }
-      
+
       if (testType.category === 'RADIOLOGY') {
         // Debug: Log what we're trying to fetch
         console.log(`🔍 Fetching template for: ${testType.name} (ID: ${testTypeId})`);
-        
+
         try {
           // Fetch template for this test type
           const templateRes = await api.get(`/radiologies/templates/${testTypeId}`);
           const template = templateRes.data.template;
-          
+
           if (template) {
             console.log(`✅ Template found for ${testType.name}:`, {
               hasFindings: !!template.findingsTemplate,
@@ -149,7 +146,7 @@ const RadiologyOrders = () => {
           } else {
             console.warn(`⚠️  Template is null for ${testType.name} (ID: ${testTypeId})`);
           }
-          
+
           initialResults[testTypeId] = {
             resultText: '',
             findings: template?.findingsTemplate || '',
@@ -178,7 +175,7 @@ const RadiologyOrders = () => {
         console.warn(`⚠️  Skipping non-radiology test type:`, testType?.name || 'unknown');
       }
     }
-    
+
     // Fetch existing results and merge with initial results (only for batch orders)
     if (!order.isWalkIn) {
       const existingResults = await fetchExistingResults(order.id);
@@ -217,7 +214,7 @@ const RadiologyOrders = () => {
   const handleFileUpload = async (testId, file) => {
     try {
       setUploadingFiles(prev => ({ ...prev, [testId]: true }));
-      
+
       const testResult = testResults[testId];
       if (!testResult) {
         toast.error('Test result not found');
@@ -232,7 +229,7 @@ const RadiologyOrders = () => {
       // Upload the file immediately
       const formData = new FormData();
       formData.append('file', file);
-      
+
       const uploadResponse = await api.post(
         `/radiologies/batch-orders/${selectedOrder.id}/attachment`,
         formData,
@@ -253,7 +250,7 @@ const RadiologyOrders = () => {
         path: uploadResponse.data.file.path,
         filePath: uploadResponse.data.file.path
       };
-      
+
       updateTestResult(testId, 'files', [...(testResult.files || []), fileData]);
       toast.success('File uploaded successfully');
     } catch (error) {
@@ -270,11 +267,11 @@ const RadiologyOrders = () => {
     try {
       // Collect already uploaded file paths
       const uploadedFiles = {};
-      
+
       for (const [testId, result] of Object.entries(testResults)) {
         if (result.files && result.files.length > 0) {
           const testUploadedFiles = [];
-          
+
           for (const fileData of result.files) {
             // Files are already uploaded, just use their paths
             if (fileData.path || fileData.filePath) {
@@ -285,7 +282,7 @@ const RadiologyOrders = () => {
               });
             }
           }
-          
+
           uploadedFiles[testId] = testUploadedFiles;
         }
       }
@@ -299,22 +296,23 @@ const RadiologyOrders = () => {
       }));
 
       // Submit all test results at once
-      console.log(`🔄 [handleCompleteBatchOrder] Submitting order ${selectedOrder.id} with ${testResultsArray.length} test results`);
+      console.log(`🔄 [handleCompleteBatchOrder] Submitting order ${selectedOrder.id} (${selectedOrder.isWalkIn ? 'WALK-IN' : 'BATCH'}) with ${testResultsArray.length} test results`);
       const response = await api.post(`/radiologies/orders/${selectedOrder.id}/report`, {
         orderId: selectedOrder.id,
+        isWalkIn: !!selectedOrder.isWalkIn,
         testResults: testResultsArray
       });
 
       console.log(`✅ [handleCompleteBatchOrder] Response:`, response.data);
 
       toast.success('All radiology tests completed successfully');
-      
+
       // Close the form first
       setShowReportForm(false);
       setSelectedOrder(null);
       setTestResults({});
       setExpandedTests({});
-      
+
       // Wait a moment before refreshing to ensure backend has updated
       setTimeout(() => {
         console.log(`🔄 [handleCompleteBatchOrder] Refreshing orders...`);
@@ -339,39 +337,362 @@ const RadiologyOrders = () => {
 
   const handlePrintResults = async (e, order) => {
     e.stopPropagation(); // Prevent triggering the order click
-    setSelectedOrderForPrint(order);
-    setShowPrintDialog(true);
-  };
 
-  const confirmPrint = async () => {
-    if (!selectedOrderForPrint) return;
-    
     try {
-      const orderId = selectedOrderForPrint.id;
-      const response = await api.get(`/radiologies/batch-orders/${orderId}/pdf`, {
-        params: { paperSize: selectedPaperSize },
-        responseType: 'blob'
-      });
-      
-      // Create blob URL and open in new tab for printing
-      const blob = new Blob([response.data], { type: 'application/pdf' });
-      const url = window.URL.createObjectURL(blob);
-      const printWindow = window.open(url, '_blank');
-      
-      if (printWindow) {
-        printWindow.onload = () => {
-          printWindow.print();
-        };
+      // Fetch results from API
+      let allResults = [];
+
+      if (order.__kind === 'batch' || !order.isWalkIn) {
+        // Batch order - fetch results from API
+        const response = await api.get(`/radiologies/batch-orders/${order.id}/results`);
+        allResults = response.data?.radiologyResults || [];
+      } else {
+        // Walk-in order - check if results are in order or fetch them
+        if (order.radiologyResults && order.radiologyResults.length > 0) {
+          allResults = order.radiologyResults;
+        } else {
+          // Try to fetch from API (walk-in orders might have results linked)
+          try {
+            const response = await api.get(`/radiologies/orders/${order.id}/results`);
+            allResults = response.data?.radiologyResults || [];
+          } catch (fetchError) {
+            // If that doesn't work, results might not be available yet
+            console.warn('Could not fetch results for walk-in order:', fetchError);
+            allResults = [];
+          }
+        }
       }
-      
-      toast.success(`Opening PDF (${selectedPaperSize}) for printing...`);
-      setShowPrintDialog(false);
-      setSelectedOrderForPrint(null);
+
+      if (allResults.length === 0) {
+        toast.error('No radiology results found for this order. Please complete the tests first.');
+        return;
+      }
+
+      const printWindow = window.open('', '_blank');
+      const currentDate = new Date().toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+      const currentTime = new Date().toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+
+      const patient = order.patient || {};
+      const doctor = order.doctor || {};
+
+      const receiptContent = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>Radiology Results Report</title>
+        <style>
+          @media print {
+            @page { 
+              size: A4;
+              margin: 10mm;
+            }
+            body { margin: 0; padding: 0; }
+            .no-print { display: none; }
+          }
+          body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            margin: 0; 
+            padding: 10px;
+            color: #333;
+            line-height: 1.4;
+            background: white;
+          }
+          .no-print {
+            text-align: center;
+            padding: 15px;
+            background: #f8f9fa;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #dee2e6;
+          }
+          .no-print button {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+          }
+          .header { 
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-bottom: 10px; 
+            margin-bottom: 15px; 
+            border-bottom: 3px solid #2563eb;
+          }
+          .header-left {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+          }
+          .logo {
+            width: 70px;
+            height: 70px;
+            object-fit: contain;
+          }
+          .clinic-info {
+            text-align: left;
+          }
+          .clinic-name { 
+            font-size: 24px; 
+            font-weight: 800; 
+            margin: 0;
+            color: #1e40af;
+            letter-spacing: -0.5px;
+          }
+          .clinic-tagline {
+            font-size: 12px;
+            color: #64748b;
+            margin: 0;
+            font-style: italic;
+          }
+          .header-right {
+            text-align: right;
+          }
+          .report-title { 
+            font-size: 20px; 
+            font-weight: 700; 
+            margin: 0;
+            color: #0f172a;
+            text-transform: uppercase;
+          }
+          .report-info {
+            font-size: 12px;
+            color: #64748b;
+            margin-top: 2px;
+          }
+          .patient-section {
+            margin: 15px 0;
+            padding: 12px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+          }
+          .section-header {
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            color: #1e293b;
+            border-bottom: 1px solid #cbd5e1;
+            padding-bottom: 5px;
+          }
+          .patient-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            font-size: 13px;
+          }
+          .info-item {
+            display: flex;
+            flex-direction: column;
+          }
+          .info-label {
+            font-weight: 600;
+            color: #64748b;
+            font-size: 11px;
+            text-transform: uppercase;
+          }
+          .info-value {
+            color: #1e293b;
+            font-weight: 500;
+          }
+          .results-section {
+            margin: 15px 0;
+          }
+          .test-result {
+            margin-bottom: 20px;
+            page-break-inside: avoid;
+          }
+          .test-title {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            padding: 8px 12px;
+            background: #f1f5f9;
+            border-left: 4px solid #2563eb;
+            color: #1e293b;
+          }
+          .findings-section, .conclusion-section {
+            margin: 10px 0;
+          }
+          .section-label {
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 5px;
+            color: #1e293b;
+          }
+          .section-content {
+            font-size: 13px;
+            line-height: 1.5;
+            color: #334155;
+            white-space: pre-wrap;
+            padding: 8px 12px;
+            background: #fff;
+            border-left: 3px solid #e2e8f0;
+            margin-left: 5px;
+          }
+          .signature-section {
+            margin-top: 30px;
+            padding-top: 15px;
+            border-top: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+          }
+          .signature-box {
+            text-align: center;
+            width: 180px;
+          }
+          .signature-line {
+            border-top: 1px solid #334155;
+            margin-top: 30px;
+            padding-top: 5px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #475569;
+          }
+          .stamp-area {
+            width: 100px;
+            height: 100px;
+            border: 2px dashed #cbd5e1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #94a3b8;
+            font-size: 11px;
+            border-radius: 50%;
+            text-transform: uppercase;
+            font-weight: 600;
+          }
+          .print-footer {
+            text-align: center;
+            font-size: 10px;
+            color: #94a3b8;
+            margin-top: 30px;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="no-print">
+          <button onclick="window.print()">Print Report</button>
+        </div>
+
+        <div class="header">
+          <div class="header-left">
+            <img src="/clinic-logo.jpg" alt="Clinic Logo" class="logo" onerror="this.style.display='none'">
+            <div class="clinic-info">
+              <h1 class="clinic-name">Selihom Medium Clinic</h1>
+              <p class="clinic-tagline">Quality Healthcare You Can Trust</p>
+            </div>
+          </div>
+          <div class="header-right">
+            <h2 class="report-title">Radiology Report</h2>
+            <div class="report-info">
+                  Date: ${currentDate}<br>
+                  Time: ${currentTime}
+                </div>
+              </div>
+            </div>
+
+            <div class="patient-section">
+              <div class="section-header">Patient Information</div>
+              <div class="patient-grid">
+                <div class="info-item">
+                  <span class="info-label">Full Name</span>
+                  <span class="info-value">${patient.name || 'N/A'}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Patient ID</span>
+                  <span class="info-value">#${patient.id || 'N/A'}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Gender</span>
+                  <span class="info-value">${patient.gender || 'N/A'}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Age</span>
+                  <span class="info-value">${patient.age || 'N/A'}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Doctor</span>
+                  <span class="info-value">${doctor.fullname || 'N/A'}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Visit ID</span>
+                  <span class="info-value">#${order.visitId || 'N/A'}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="results-section">
+              ${allResults.map(result => `
+                <div class="test-result">
+                  <div class="test-title">${result.testType?.name || 'Radiology Test'}</div>
+                  
+                  ${result.findings ? `
+                    <div class="findings-section">
+                      <div class="section-label">Findings:</div>
+                      <div class="section-content">${result.findings}</div>
+                    </div>
+                  ` : ''}
+                  
+                  ${result.conclusion ? `
+                    <div class="conclusion-section">
+                      <div class="section-label">Conclusion:</div>
+                      <div class="section-content">${result.conclusion}</div>
+                    </div>
+                  ` : ''}
+                  
+                  ${result.additionalNotes ? `
+                    <div class="findings-section">
+                      <div class="section-label">Additional Notes:</div>
+                      <div class="section-content">${result.additionalNotes}</div>
+                    </div>
+                  ` : ''}
+                </div>
+              `).join('')}
+            </div>
+
+            <div class="signature-section">
+              <div class="signature-box">
+                <div class="signature-line">Radiologist Signature</div>
+              </div>
+              <div class="stamp-area">Clinic Stamp</div>
+              <div class="signature-box">
+                <div class="signature-line">Authorized Signature</div>
+              </div>
+            </div>
+
+            <div class="print-footer">
+              This is a computer-generated report. Selihom Medium Clinic. Generated on ${currentDate} ${currentTime}
+            </div>
+          </body>
+        </html>
+        `;
+
+      printWindow.document.write(receiptContent);
+      printWindow.document.close();
+
+      setTimeout(() => {
+        printWindow.print();
+      }, 250);
+
+      toast.success('Opening print preview...');
     } catch (error) {
-      console.error('Error generating PDF:', error);
-      toast.error('Failed to generate PDF for printing');
+      console.error('Error printing radiology results:', error);
+      toast.error('Failed to load radiology results for printing');
     }
   };
+
 
   const getStatusIcon = (status) => {
     switch (status) {
@@ -400,8 +721,8 @@ const RadiologyOrders = () => {
   };
 
   const isDentalOrder = (order) => {
-    return order.services?.some(service => 
-      service.service?.code?.startsWith('DENTAL_') || 
+    return order.services?.some(service =>
+      service.service?.code?.startsWith('DENTAL_') ||
       service.investigationType?.name?.toLowerCase().includes('dental')
     );
   };
@@ -453,8 +774,8 @@ const RadiologyOrders = () => {
           <Scan className="h-12 w-12 text-gray-400 mx-auto mb-4" />
           <p className="text-gray-500">
             {statusFilter === 'PENDING' ? 'No pending radiology orders found' :
-             statusFilter === 'COMPLETED' ? 'No completed radiology orders found' :
-             'No radiology orders found'}
+              statusFilter === 'COMPLETED' ? 'No completed radiology orders found' :
+                'No radiology orders found'}
           </p>
         </div>
       ) : (
@@ -462,10 +783,9 @@ const RadiologyOrders = () => {
           {getFilteredOrders().map((order) => (
             <div
               key={`${order.__kind || (order.isWalkIn ? 'walkin' : 'batch')}-${order.id}`}
-              className={`bg-white rounded-lg shadow-md border p-6 cursor-pointer hover:shadow-lg transition-shadow duration-200 ${
-                order.status === 'QUEUED' ? 'border-yellow-200' : 
+              className={`bg-white rounded-lg shadow-md border p-6 cursor-pointer hover:shadow-lg transition-shadow duration-200 ${order.status === 'QUEUED' ? 'border-yellow-200' :
                 order.status === 'COMPLETED' ? 'border-green-200' : 'border-gray-200'
-              }`}
+                }`}
               onClick={() => handleOrderClick(order)}
             >
               <div className="flex items-center justify-between mb-4">
@@ -526,12 +846,10 @@ const RadiologyOrders = () => {
               </div>
 
               {(order.status === 'QUEUED' || order.status === 'COMPLETED') && (
-                <div className={`mt-4 p-3 rounded-lg ${
-                  order.status === 'QUEUED' ? 'bg-yellow-50' : 'bg-green-50'
-                }`}>
-                  <p className={`text-sm font-medium ${
-                    order.status === 'QUEUED' ? 'text-yellow-800' : 'text-green-800'
+                <div className={`mt-4 p-3 rounded-lg ${order.status === 'QUEUED' ? 'bg-yellow-50' : 'bg-green-50'
                   }`}>
+                  <p className={`text-sm font-medium ${order.status === 'QUEUED' ? 'text-yellow-800' : 'text-green-800'
+                    }`}>
                     {order.status === 'QUEUED' ? 'Click to process tests' : 'Click to view results'}
                   </p>
                 </div>
@@ -586,17 +904,17 @@ const RadiologyOrders = () => {
                 {(() => {
                   // Build services array - handle both batch and walk-in orders
                   let services = [];
-                  
+
                   // First, try to use services array (for batch orders and grouped walk-in orders)
                   if (selectedOrder.services && Array.isArray(selectedOrder.services) && selectedOrder.services.length > 0) {
                     services = selectedOrder.services;
                     console.log(`✅ [Modal] Using services array (${services.length} services)`);
-                  } 
+                  }
                   // If no services array, try to build from type (for single walk-in orders)
                   else if (selectedOrder.type) {
                     console.log(`⚠️  [Modal] No services array found, building from type:`, selectedOrder.type);
-                    services = [{ 
-                      investigationType: selectedOrder.type, 
+                    services = [{
+                      investigationType: selectedOrder.type,
                       id: selectedOrder.id,
                       type: selectedOrder.type  // Also add as 'type' for compatibility
                     }];
@@ -606,7 +924,7 @@ const RadiologyOrders = () => {
                     console.log(`⚠️  [Modal] Walk-in order detected but no services/type found`);
                     services = [];
                   }
-                  
+
                   console.log(`🔍 [Modal] Rendering services for order ${selectedOrder.id}:`, {
                     isWalkIn: selectedOrder.isWalkIn,
                     hasServices: !!selectedOrder.services,
@@ -626,7 +944,7 @@ const RadiologyOrders = () => {
                     })),
                     testResultsKeys: Object.keys(testResults)
                   });
-                  
+
                   if (services.length === 0) {
                     return (
                       <div className="text-center py-8 text-gray-500 border rounded-lg p-4">
@@ -641,7 +959,7 @@ const RadiologyOrders = () => {
                       </div>
                     );
                   }
-                  
+
                   const filteredServices = services.filter(service => {
                     const testType = service.investigationType || service.type || selectedOrder.type;
                     const isRadiology = testType && testType.category === 'RADIOLOGY';
@@ -654,7 +972,7 @@ const RadiologyOrders = () => {
                     }
                     return isRadiology;
                   });
-                  
+
                   if (filteredServices.length === 0) {
                     return (
                       <div className="text-center py-8 text-yellow-500 border border-yellow-300 rounded-lg p-4 bg-yellow-50">
@@ -665,22 +983,22 @@ const RadiologyOrders = () => {
                       </div>
                     );
                   }
-                  
+
                   return filteredServices.map((service, index) => {
                     const testType = service.investigationType || service.type || selectedOrder.type;
                     const testId = testType?.id || testType?.typeId;
-                      
-                      if (!testId) {
-                        console.warn(`⚠️  No test ID found for service:`, service);
-                        return null;
-                      }
-                      
-                      const testResult = testResults[testId] || {};
-                      const isExpanded = expandedTests[testId];
-                      const isCompleted = testResult.completed;
 
-                      return (
-                        <div key={`${testId}-${index}`} className="border rounded-lg p-4">
+                    if (!testId) {
+                      console.warn(`⚠️  No test ID found for service:`, service);
+                      return null;
+                    }
+
+                    const testResult = testResults[testId] || {};
+                    const isExpanded = expandedTests[testId];
+                    const isCompleted = testResult.completed;
+
+                    return (
+                      <div key={`${testId}-${index}`} className="border rounded-lg p-4">
                         <div
                           className="flex items-center justify-between cursor-pointer"
                           onClick={() => toggleTestExpansion(testId)}
@@ -762,9 +1080,8 @@ const RadiologyOrders = () => {
                                 />
                                 <label
                                   htmlFor={`file-upload-${testId}`}
-                                  className={`flex flex-col items-center justify-center py-4 cursor-pointer ${
-                                    isCompleted ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50'
-                                  }`}
+                                  className={`flex flex-col items-center justify-center py-4 cursor-pointer ${isCompleted ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50'
+                                    }`}
                                 >
                                   <Upload className="h-8 w-8 text-gray-400 mb-2" />
                                   <p className="text-sm text-gray-600">
@@ -784,11 +1101,10 @@ const RadiologyOrders = () => {
                                           {file.fileType}
                                         </span>
                                       </div>
-                                      <span className={`text-xs px-2 py-1 rounded ${
-                                        file.uploaded 
-                                          ? 'bg-green-100 text-green-800' 
-                                          : 'bg-yellow-100 text-yellow-800'
-                                      }`}>
+                                      <span className={`text-xs px-2 py-1 rounded ${file.uploaded
+                                        ? 'bg-green-100 text-green-800'
+                                        : 'bg-yellow-100 text-yellow-800'
+                                        }`}>
                                         {file.uploaded ? 'Uploaded' : 'Pending'}
                                       </span>
                                     </div>
@@ -830,76 +1146,6 @@ const RadiologyOrders = () => {
         </div>
       )}
 
-      {/* Print Dialog */}
-      {showPrintDialog && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Select Paper Size</h3>
-            <div className="space-y-3 mb-6">
-              <label className="flex items-center space-x-3 cursor-pointer">
-                <input
-                  type="radio"
-                  name="paperSize"
-                  value="A4"
-                  checked={selectedPaperSize === 'A4'}
-                  onChange={(e) => setSelectedPaperSize(e.target.value)}
-                  className="w-4 h-4 text-blue-600"
-                />
-                <div className="flex-1">
-                  <div className="font-medium text-gray-900">A4</div>
-                  <div className="text-sm text-gray-500">210 × 297 mm (Standard)</div>
-                </div>
-              </label>
-              <label className="flex items-center space-x-3 cursor-pointer">
-                <input
-                  type="radio"
-                  name="paperSize"
-                  value="A5"
-                  checked={selectedPaperSize === 'A5'}
-                  onChange={(e) => setSelectedPaperSize(e.target.value)}
-                  className="w-4 h-4 text-blue-600"
-                />
-                <div className="flex-1">
-                  <div className="font-medium text-gray-900">A5</div>
-                  <div className="text-sm text-gray-500">148 × 210 mm (Half of A4)</div>
-                </div>
-              </label>
-              <label className="flex items-center space-x-3 cursor-pointer">
-                <input
-                  type="radio"
-                  name="paperSize"
-                  value="A6"
-                  checked={selectedPaperSize === 'A6'}
-                  onChange={(e) => setSelectedPaperSize(e.target.value)}
-                  className="w-4 h-4 text-blue-600"
-                />
-                <div className="flex-1">
-                  <div className="font-medium text-gray-900">A6</div>
-                  <div className="text-sm text-gray-500">105 × 148 mm (Postcard size)</div>
-                </div>
-              </label>
-            </div>
-            <div className="flex justify-end space-x-3">
-              <button
-                onClick={() => {
-                  setShowPrintDialog(false);
-                  setSelectedOrderForPrint(null);
-                }}
-                className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmPrint}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
-              >
-                <Printer className="h-4 w-4" />
-                Print
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

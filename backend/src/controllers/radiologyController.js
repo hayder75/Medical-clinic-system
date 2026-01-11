@@ -3,6 +3,7 @@ const { z } = require('zod');
 const { checkVisitInvestigationCompletion } = require('../utils/investigationUtils');
 const { createPDFDocument, generatePDF } = require('../utils/pdfGenerator');
 const fs = require('fs');
+const path = require('path');
 
 // Validation schemas
 const fillReportSchema = z.object({
@@ -24,7 +25,12 @@ const fillReportSchema = z.object({
 exports.getOrders = async (req, res) => {
   try {
     const currentUser = req.user;
+    const { status } = req.query; // 'PENDING' or 'COMPLETED'
     const isDentalDoctor = currentUser.specialties && currentUser.specialties.includes('Dentist');
+
+    const statusFilter = status === 'COMPLETED'
+      ? { in: ['COMPLETED'] }
+      : { in: ['PAID', 'QUEUED', 'IN_PROGRESS'] };
 
     // Get batch orders instead of individual radiology orders
     const batchOrders = await prisma.batchOrder.findMany({
@@ -40,9 +46,7 @@ exports.getOrders = async (req, res) => {
             OR: [
               // Regular orders that are paid
               {
-                status: {
-                  in: ['PAID', 'QUEUED', 'IN_PROGRESS', 'COMPLETED']
-                }
+                status: statusFilter
               },
               // Emergency orders that are unpaid (treated as pre-paid)
               {
@@ -99,18 +103,18 @@ exports.getOrders = async (req, res) => {
       if (currentUser.role === 'RADIOLOGIST') {
         return true;
       }
-      
+
       // If user is a dental doctor, show all orders
       if (isDentalDoctor) {
         return true;
       }
-      
+
       // For other non-dental doctors, hide orders that contain dental services
-      const hasDentalServices = order.services.some(service => 
-        service.service?.code?.startsWith('DENTAL_') || 
+      const hasDentalServices = order.services.some(service =>
+        service.service?.code?.startsWith('DENTAL_') ||
         service.investigationType?.name?.toLowerCase().includes('dental')
       );
-      
+
       return !hasDentalServices;
     });
 
@@ -118,7 +122,7 @@ exports.getOrders = async (req, res) => {
     const walkInOrdersRaw = await prisma.radiologyOrder.findMany({
       where: {
         isWalkIn: true,
-        status: { in: ['PAID', 'QUEUED', 'IN_PROGRESS', 'COMPLETED'] }
+        status: statusFilter
       },
       include: {
         patient: { select: { id: true, name: true, mobile: true, type: true, email: true } },
@@ -145,24 +149,32 @@ exports.getOrders = async (req, res) => {
           services: [] // Array of individual orders as services
         };
       }
-      
+
       // Add this order as a service
       groupedOrders[key].services.push({
         id: order.id,
         service: order.type, // The investigation type
         investigationType: order.type,
-        radiologyResults: order.radiologyResults
+        radiologyResults: order.radiologyResults,
+        status: order.status // CRITICAL: Include status for grouping logic
       });
-      
+
       // Update group status if this order has a different status
       if (order.status !== groupedOrders[key].status) {
-        // If any order is completed, group is completed
-        if (order.status === 'COMPLETED') {
+        // Group status logic:
+        // 1. If ALL orders are COMPLETED, group is COMPLETED
+        // 2. If ANY order is IN_PROGRESS, group is IN_PROGRESS
+        // 3. Otherwise, use the status of the first order
+        const groupServices = groupedOrders[key].services;
+        const allCompleted = groupServices.every(s => s.status === 'COMPLETED');
+        const anyInProgress = groupServices.some(s => s.status === 'IN_PROGRESS');
+
+        if (allCompleted) {
           groupedOrders[key].status = 'COMPLETED';
-        }
-        // If any order is IN_PROGRESS but not all COMPLETED, group is IN_PROGRESS
-        else if (order.status === 'IN_PROGRESS' && groupedOrders[key].status !== 'COMPLETED') {
+        } else if (anyInProgress) {
           groupedOrders[key].status = 'IN_PROGRESS';
+        } else {
+          groupedOrders[key].status = order.status;
         }
       }
     });
@@ -177,67 +189,31 @@ exports.getOrders = async (req, res) => {
 
 exports.fillReport = async (req, res) => {
   try {
-    const { orderId, testResults } = req.body;
+    const { orderId, testResults, isWalkIn: isWalkInRequest } = req.body;
     const radiologistId = req.user.id;
 
-    console.log(`🔍 [fillReport] Processing order ${orderId}, testResults count: ${testResults?.length || 0}`);
+    console.log(`🔍 [fillReport] Processing order ${orderId}, isWalkInRequest: ${isWalkInRequest}, testResults count: ${testResults?.length || 0}`);
 
-    // Check if batch order exists and is in correct status
-    let batchOrder = await prisma.batchOrder.findUnique({
-      where: { id: orderId },
-      include: {
-        services: {
-          include: {
-            service: true,
-            investigationType: true
-          }
-        },
-        patient: {
-          select: {
-            id: true,
-            name: true,
-            type: true
-          }
-        },
-        visit: {
-          select: {
-            id: true,
-            visitUid: true
-          }
-        },
-        attachments: true
-      }
-    });
-
-    console.log(`🔍 [fillReport] Batch order lookup result:`, {
-      found: !!batchOrder,
-      status: batchOrder?.status,
-      type: batchOrder?.type,
-      servicesCount: batchOrder?.services?.length || 0
-    });
-
+    let batchOrder = null;
     let isWalkIn = false;
     let walkInOrders = [];
 
-    // If not a batch order, check if it's a walk-in order (grouped)
-    if (!batchOrder) {
-      // Check if this is a grouped walk-in order - try to get all walk-in orders with the same billingId
+    if (isWalkInRequest) {
+      // Explicitly handle walk-in order
       const firstWalkInOrder = await prisma.radiologyOrder.findFirst({
         where: { id: orderId, isWalkIn: true },
         include: {
           patient: true,
-          type: true,
-          billing: true
+          type: true
         }
       });
 
       if (firstWalkInOrder && firstWalkInOrder.billingId) {
-        // Get all walk-in orders in this billing group
         walkInOrders = await prisma.radiologyOrder.findMany({
           where: {
             billingId: firstWalkInOrder.billingId,
             isWalkIn: true,
-            status: { in: ['PAID', 'QUEUED'] }
+            status: { in: ['PAID', 'QUEUED', 'IN_PROGRESS', 'COMPLETED'] }
           },
           include: {
             patient: true,
@@ -251,40 +227,63 @@ exports.fillReport = async (req, res) => {
           console.log(`✅ [fillReport] Found ${walkInOrders.length} walk-in orders in billing group`);
         }
       }
-
-      if (!isWalkIn) {
-        console.log(`❌ [fillReport] Order ${orderId} not found as batch order or walk-in order`);
-        return res.status(404).json({ error: 'Radiology order not found' });
-      }
     } else {
-      // Allow batch orders with QUEUED, PAID, IN_PROGRESS, or COMPLETED status
-      // COMPLETED is allowed to enable editing/updating existing results
-      if (!['QUEUED', 'PAID', 'IN_PROGRESS', 'COMPLETED'].includes(batchOrder.status)) {
-        console.log(`⚠️  [fillReport] Batch order ${orderId} has status '${batchOrder.status}', which is not processable. Allowed: QUEUED, PAID, IN_PROGRESS, COMPLETED`);
-        return res.status(400).json({ 
-          error: 'Order is not in queue for processing',
-          currentStatus: batchOrder.status,
-          allowedStatuses: ['QUEUED', 'PAID', 'IN_PROGRESS', 'COMPLETED']
-        });
-      }
-      console.log(`✅ [fillReport] Batch order ${orderId} is processable with status '${batchOrder.status}'`);
+      // Handle batch order
+      batchOrder = await prisma.batchOrder.findUnique({
+        where: { id: orderId },
+        include: {
+          services: {
+            include: {
+              service: true,
+              investigationType: true
+            }
+          },
+          patient: {
+            select: {
+              id: true,
+              name: true,
+              type: true
+            }
+          },
+          visit: {
+            select: {
+              id: true,
+              visitUid: true
+            }
+          },
+          attachments: true
+        }
+      });
+    }
+
+    if (!batchOrder && !isWalkIn) {
+      console.log(`❌ [fillReport] Order ${orderId} not found (isWalkInRequest: ${isWalkInRequest})`);
+      return res.status(404).json({ error: 'Radiology order not found' });
+    }
+
+    if (batchOrder && !['QUEUED', 'PAID', 'IN_PROGRESS', 'COMPLETED'].includes(batchOrder.status)) {
+      console.log(`⚠️  [fillReport] Batch order ${orderId} has status '${batchOrder.status}', which is not processable.`);
+      return res.status(400).json({
+        error: 'Order is not in queue for processing',
+        currentStatus: batchOrder.status
+      });
     }
 
     // Create individual radiology results for each test
     const createdResults = [];
-    
+
     if (isWalkIn) {
       // Handle walk-in orders - create results for each radiology order
       for (const testResult of testResults) {
         const { testTypeId, resultText, findings, conclusion, additionalNotes, attachments } = testResult;
-        
+
         // Find the corresponding walk-in order for this test type
         const walkInOrder = walkInOrders.find(order => order.typeId === testTypeId);
         if (!walkInOrder) {
           console.warn(`⚠️  No walk-in order found for testTypeId: ${testTypeId}`);
           continue;
         }
-        
+
         // Create radiology result linked to the walk-in order (using orderId, not batchOrderId)
         const radiologyResult = await prisma.radiologyResult.create({
           data: {
@@ -321,7 +320,7 @@ exports.fillReport = async (req, res) => {
 
         createdResults.push(radiologyResult);
       }
-      
+
       // Return response for walk-in orders
       const patient = walkInOrders[0].patient;
       res.json({
@@ -335,11 +334,11 @@ exports.fillReport = async (req, res) => {
       });
       return;
     }
-    
+
     // Handle batch orders (existing code)
     for (const testResult of testResults) {
       const { testTypeId, resultText, findings, conclusion, additionalNotes, attachments } = testResult;
-      
+
       // Create radiology result with findings and conclusion
       const radiologyResult = await prisma.radiologyResult.create({
         data: {
@@ -372,41 +371,58 @@ exports.fillReport = async (req, res) => {
       createdResults.push(radiologyResult);
     }
 
+    console.log(`✅ [fillReport] Created ${createdResults.length} radiology results for batch order ${orderId}`);
+
     // Update batch order status to completed
-    const updatedBatchOrder = await prisma.batchOrder.update({
-      where: { id: orderId },
-      data: {
-        status: 'COMPLETED',
-        updatedAt: new Date()
-      },
-      include: {
-        services: {
-          include: {
-            service: true,
-            investigationType: true
-          }
+    console.log(`🔄 [fillReport] Updating batch order ${orderId} status from '${batchOrder.status}' to 'COMPLETED'...`);
+    let updatedBatchOrder;
+    try {
+      updatedBatchOrder = await prisma.batchOrder.update({
+        where: { id: orderId },
+        data: {
+          status: 'COMPLETED',
+          updatedAt: new Date()
         },
-        patient: {
-          select: {
-            id: true,
-            name: true,
-            type: true
-          }
-        },
-        doctor: {
-          select: {
-            id: true,
-            fullname: true
-          }
-        },
-        visit: {
-          select: {
-            id: true,
-            visitUid: true
+        include: {
+          services: {
+            include: {
+              service: true,
+              investigationType: true
+            }
+          },
+          patient: {
+            select: {
+              id: true,
+              name: true,
+              type: true
+            }
+          },
+          doctor: {
+            select: {
+              id: true,
+              fullname: true
+            }
+          },
+          visit: {
+            select: {
+              id: true,
+              visitUid: true
+            }
           }
         }
-      }
-    });
+      });
+      console.log(`✅ [fillReport] Successfully updated batch order ${orderId} status to '${updatedBatchOrder.status}'`);
+
+      // Verify the update by re-fetching
+      const verification = await prisma.batchOrder.findUnique({
+        where: { id: orderId },
+        select: { id: true, status: true }
+      });
+      console.log(`🔍 [fillReport] Verification: Batch order ${orderId} now has status '${verification?.status}'`);
+    } catch (updateError) {
+      console.error(`❌ [fillReport] Failed to update batch order ${orderId} status:`, updateError);
+      throw updateError;
+    }
 
     // Update individual service results
     for (const service of batchOrder.services) {
@@ -441,7 +457,7 @@ exports.fillReport = async (req, res) => {
     await prisma.medicalHistory.create({
       data: {
         patientId: batchOrder.patientId,
-        details: JSON.stringify({ 
+        details: JSON.stringify({
           type: 'RADIOLOGY_RESULT',
           batchOrderId: batchOrder.id,
           services: batchOrder.services.map(s => s.investigationType?.name).join(', '),
@@ -484,14 +500,14 @@ exports.fillReport = async (req, res) => {
       console.log(`📋 Visit ${batchOrder.visitId} completion check result:`, completionResult.isComplete);
     } catch (error) {
       console.error('Error checking investigation completion:', error);
-      
+
       // Fallback: manually check and update if needed
       try {
         const visit = await prisma.visit.findUnique({
           where: { id: batchOrder.visitId },
           include: { batchOrders: true }
         });
-        
+
         if (visit && visit.batchOrders.every(order => order.status === 'COMPLETED')) {
           await prisma.visit.update({
             where: { id: batchOrder.visitId },
@@ -522,8 +538,8 @@ exports.fillReport = async (req, res) => {
 
 exports.getInvestigationTypes = async (req, res) => {
   try {
-    const types = await prisma.investigationType.findMany({ 
-      where: { 
+    const types = await prisma.investigationType.findMany({
+      where: {
         category: 'RADIOLOGY',
         OR: [
           { serviceId: null },
@@ -824,9 +840,9 @@ exports.createBatchRadiologyResult = async (req, res) => {
     }
 
     // Verify the test type is part of this batch order
-    const serviceExists = batchOrder.services.some(service => 
-      service.investigationType && 
-      service.investigationType.id === testTypeId && 
+    const serviceExists = batchOrder.services.some(service =>
+      service.investigationType &&
+      service.investigationType.id === testTypeId &&
       service.investigationType.category === 'RADIOLOGY'
     );
 
@@ -864,7 +880,7 @@ exports.createBatchRadiologyResult = async (req, res) => {
     });
 
     // Check if all radiology tests in this batch order are completed
-    const radiologyServices = batchOrder.services.filter(service => 
+    const radiologyServices = batchOrder.services.filter(service =>
       service.investigationType && service.investigationType.category === 'RADIOLOGY'
     );
 
@@ -925,7 +941,7 @@ exports.uploadBatchRadiologyResultFile = async (req, res) => {
 
     // Check if radiology result exists and belongs to the batch order
     const radiologyResult = await prisma.radiologyResult.findFirst({
-      where: { 
+      where: {
         id: resultId,
         batchOrderId: parseInt(batchOrderId)
       }
@@ -1016,7 +1032,7 @@ exports.getTemplate = async (req, res) => {
   try {
     const { investigationTypeId } = req.params;
     const parsedId = parseInt(investigationTypeId);
-    
+
     console.log(`🔍 [Radiology Template] Fetching template for investigationTypeId: ${parsedId} (raw: ${investigationTypeId})`);
 
     const template = await prisma.radiologyTemplate.findUnique({
@@ -1123,6 +1139,12 @@ exports.completeBatchRadiologyOrder = async (req, res) => {
       }
     });
 
+    // Update all services to COMPLETED as well
+    await prisma.batchOrderService.updateMany({
+      where: { batchOrderId: parseInt(batchOrderId) },
+      data: { status: 'COMPLETED' }
+    });
+
     // Check if all investigations for this visit are completed
     try {
       const { checkVisitInvestigationCompletion } = require('../utils/investigationUtils');
@@ -1160,16 +1182,29 @@ exports.completeBatchRadiologyOrder = async (req, res) => {
   }
 };
 
-// Generate PDF for radiology results (both batch orders and walk-in orders)
+// Generate PDF for radiology results (works for both batch orders and walk-in orders automatically)
 exports.generateRadiologyResultsPDF = async (req, res) => {
   try {
     const { batchOrderId } = req.params;
-    const { paperSize = 'A4' } = req.query; // Get paper size from query param (A4, A5, A6)
     const radiologistId = req.user.id;
     const orderId = parseInt(batchOrderId);
 
-    // Try to get batch order first
-    let batchOrder = await prisma.batchOrder.findUnique({
+    // Always use A4 paper size
+    const selectedPaperSize = 'A4';
+
+    console.log(`\n📸 [Radiology PDF] ===== Starting PDF Generation =====`);
+    console.log(`📸 [Radiology PDF] Order ID: ${orderId}, Paper Size: A4`);
+    console.log(`📸 [Radiology PDF] User ID: ${radiologistId}`);
+
+    let batchOrder = null;
+    let walkInOrders = [];
+    let radiologyResults = [];
+    let patient = null;
+    let orderDate = null;
+    let orderStatus = null;
+
+    // First, try to get batch order
+    batchOrder = await prisma.batchOrder.findUnique({
       where: { id: orderId },
       include: {
         patient: true,
@@ -1194,17 +1229,35 @@ exports.generateRadiologyResultsPDF = async (req, res) => {
       }
     });
 
-    let isWalkIn = false;
-    let walkInOrder = null;
-    let radiologyResults = [];
+    if (batchOrder) {
+      // This is a batch order
+      console.log(`✅ [Radiology PDF] Found batch order ${orderId}`);
+      console.log(`   Patient: ${batchOrder.patient?.name || 'N/A'}`);
+      console.log(`   Status: ${batchOrder.status}`);
+      patient = batchOrder.patient;
+      orderDate = batchOrder.createdAt;
+      orderStatus = batchOrder.status;
 
-    // If not a batch order, check if it's a walk-in order
-    if (!batchOrder) {
-      walkInOrder = await prisma.radiologyOrder.findUnique({
-        where: { id: orderId },
+      // Get radiology results for batch order
+      radiologyResults = await prisma.radiologyResult.findMany({
+        where: { batchOrderId: orderId },
+        include: {
+          testType: true,
+          attachments: true
+        },
+        orderBy: { createdAt: 'asc' }
+      });
+      console.log(`📸 [Radiology PDF] Found ${radiologyResults.length} radiology results for batch order`);
+    } else {
+      console.log(`⚠️  [Radiology PDF] Batch order ${orderId} not found, checking walk-in orders...`);
+      // Try walk-in order - the orderId could be from a grouped order
+      // First try finding by ID directly
+      let firstWalkInOrder = await prisma.radiologyOrder.findFirst({
+        where: { id: orderId, isWalkIn: true },
         include: {
           patient: true,
           type: true,
+          billing: true,
           radiologyResults: {
             include: {
               testType: true,
@@ -1214,26 +1267,180 @@ exports.generateRadiologyResultsPDF = async (req, res) => {
         }
       });
 
-      if (!walkInOrder) {
-        return res.status(404).json({ error: 'Radiology order not found' });
-      }
+      // If not found by direct ID, try finding by checking all walk-in orders
+      // The frontend might be using a group ID that doesn't match the actual order ID
+      if (!firstWalkInOrder) {
+        console.log(`⚠️  [Radiology PDF] Order ${orderId} not found directly, searching all walk-in orders...`);
+        
+        // Get all walk-in orders to check if any have results
+        // This is a fallback for when the ID doesn't match directly
+        const allWalkInWithResults = await prisma.radiologyOrder.findMany({
+          where: {
+            isWalkIn: true,
+            radiologyResults: {
+              some: {}
+            }
+          },
+          include: {
+            patient: true,
+            type: true,
+            billing: true,
+            radiologyResults: {
+              include: {
+                testType: true,
+                attachments: true
+              }
+            }
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 10 // Limit to recent orders
+        });
 
-      if (!walkInOrder.isWalkIn) {
-        return res.status(400).json({ error: 'This endpoint only supports batch orders and walk-in orders' });
-      }
-
-      isWalkIn = true;
-      radiologyResults = walkInOrder.radiologyResults || [];
-    } else {
-      // Get radiology results for batch order
-      radiologyResults = await prisma.radiologyResult.findMany({
-        where: { batchOrderId: orderId },
-        include: {
-          testType: true,
-          attachments: true
+        console.log(`🔍 [Radiology PDF] Found ${allWalkInWithResults.length} walk-in orders with results`);
+        
+        // Try to find an order that might match (maybe by checking if orderId is in a billing group)
+        for (const order of allWalkInWithResults) {
+          if (order.billingId) {
+            const groupOrders = await prisma.radiologyOrder.findMany({
+              where: {
+                billingId: order.billingId,
+                isWalkIn: true
+              },
+              include: {
+                patient: true,
+                type: true,
+                radiologyResults: {
+                  include: {
+                    testType: true,
+                    attachments: true
+                  }
+                }
+              },
+              orderBy: { createdAt: 'asc' }
+            });
+            
+            // Check if any order in this group has the ID we're looking for
+            const match = groupOrders.find(o => o.id === orderId);
+            if (match || groupOrders.length > 0) {
+              // Use the first order from the group that has this billingId
+              if (order.id === orderId || groupOrders.some(o => o.id === orderId)) {
+                firstWalkInOrder = groupOrders[0] || order;
+                walkInOrders = groupOrders;
+                console.log(`✅ [Radiology PDF] Found matching walk-in order group with ${walkInOrders.length} orders`);
+                break;
+              }
+            }
+          }
         }
-      });
+      } else {
+        // Found order directly, now get all orders in the billing group
+        if (firstWalkInOrder.billingId) {
+          walkInOrders = await prisma.radiologyOrder.findMany({
+            where: {
+              billingId: firstWalkInOrder.billingId,
+              isWalkIn: true
+            },
+            include: {
+              patient: true,
+              type: true,
+              radiologyResults: {
+                include: {
+                  testType: true,
+                  attachments: true
+                }
+              }
+            },
+            orderBy: { createdAt: 'asc' }
+          });
+          console.log(`✅ [Radiology PDF] Found ${walkInOrders.length} walk-in orders in billing group ${firstWalkInOrder.billingId}`);
+        } else {
+          walkInOrders = [firstWalkInOrder];
+          console.log(`✅ [Radiology PDF] Found single walk-in order ${orderId}`);
+        }
+      }
+
+      if (!firstWalkInOrder && walkInOrders.length === 0) {
+        // Last resort: search for any completed radiology order with results
+        console.log(`⚠️  [Radiology PDF] Trying last resort: searching all radiology results...`);
+        const allResults = await prisma.radiologyResult.findMany({
+          where: {
+            OR: [
+              { batchOrderId: orderId },
+              { orderId: orderId }
+            ]
+          },
+          include: {
+            testType: true,
+            batchOrder: {
+              include: { patient: true }
+            },
+            radiologyOrder: {
+              include: { patient: true }
+            },
+            attachments: true
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 10
+        });
+
+        if (allResults.length > 0) {
+          console.log(`✅ [Radiology PDF] Found ${allResults.length} results by searching radiology results directly`);
+          radiologyResults = allResults;
+          
+          // Get patient from first result
+          if (allResults[0].batchOrder) {
+            patient = allResults[0].batchOrder.patient;
+            orderDate = allResults[0].batchOrder.createdAt;
+            orderStatus = allResults[0].batchOrder.status;
+          } else if (allResults[0].radiologyOrder) {
+            patient = allResults[0].radiologyOrder.patient;
+            orderDate = allResults[0].radiologyOrder.createdAt;
+            orderStatus = allResults[0].radiologyOrder.status;
+          }
+        } else {
+          console.log(`❌ [Radiology PDF] Order ${orderId} not found anywhere`);
+          return res.status(404).json({ 
+            error: `Radiology order ${orderId} not found`,
+            details: 'Please ensure the order has been completed and results have been saved.'
+          });
+        }
+      } else {
+        // Get patient and order info from first walk-in order
+        const sourceOrder = firstWalkInOrder || walkInOrders[0];
+        patient = sourceOrder.patient;
+        orderDate = sourceOrder.createdAt;
+        
+        // Determine group status
+        if (walkInOrders.length > 0) {
+          if (walkInOrders.every(o => o.status === 'COMPLETED')) {
+            orderStatus = 'COMPLETED';
+          } else if (walkInOrders.some(o => o.status === 'IN_PROGRESS')) {
+            orderStatus = 'IN_PROGRESS';
+          } else {
+            orderStatus = walkInOrders[0].status;
+          }
+        } else {
+          orderStatus = sourceOrder.status;
+        }
+
+        // Collect all radiology results from all walk-in orders
+        radiologyResults = walkInOrders.length > 0 
+          ? walkInOrders.flatMap(order => order.radiologyResults || [])
+          : (firstWalkInOrder.radiologyResults || []);
+      }
     }
+
+    if (radiologyResults.length === 0) {
+      console.log(`⚠️  [Radiology PDF] No radiology results found for order ${orderId}`);
+      return res.status(404).json({ error: 'No radiology results found for this order. Please complete the radiology tests first.' });
+    }
+
+    if (!patient) {
+      console.log(`❌ [Radiology PDF] Patient information not found for order ${orderId}`);
+      return res.status(404).json({ error: 'Patient information not found' });
+    }
+
+    console.log(`✅ [Radiology PDF] Successfully prepared ${radiologyResults.length} radiology results for order ${orderId}`);
 
     // Get radiologist info
     const radiologist = await prisma.user.findUnique({
@@ -1253,11 +1460,6 @@ exports.generateRadiologyResultsPDF = async (req, res) => {
       return new Date(date).toLocaleString('en-US');
     };
 
-    // Get patient and order info (from either batch order or walk-in order)
-    const patient = batchOrder?.patient || walkInOrder?.patient;
-    const orderDate = batchOrder?.createdAt || walkInOrder?.createdAt;
-    const orderStatus = batchOrder?.status || walkInOrder?.status;
-
     // Build PDF content (NOT including images - only findings and conclusion)
     const pdfContent = [];
 
@@ -1273,7 +1475,7 @@ exports.generateRadiologyResultsPDF = async (req, res) => {
       text: 'Patient Information',
       style: 'sectionTitle'
     });
-    
+
     pdfContent.push({
       columns: [
         { text: `Name: ${patient.name}`, style: 'field' },
@@ -1282,7 +1484,7 @@ exports.generateRadiologyResultsPDF = async (req, res) => {
       ],
       margin: [0, 0, 0, 5]
     });
-    
+
     pdfContent.push({
       columns: [
         { text: `Age: ${patient.age || 'N/A'}`, style: 'field' },
@@ -1291,7 +1493,7 @@ exports.generateRadiologyResultsPDF = async (req, res) => {
       ],
       margin: [0, 0, 0, 15]
     });
-    
+
     pdfContent.push({
       text: `Order ID: ${orderId} | Date: ${formatDate(orderDate)} | Status: ${orderStatus.replace(/_/g, ' ')}`,
       style: 'field',
@@ -1308,7 +1510,7 @@ exports.generateRadiologyResultsPDF = async (req, res) => {
     radiologyResults.forEach((result, index) => {
       const testType = result.testType || result.type;
       const testName = testType?.name || 'Radiology Test';
-      
+
       pdfContent.push({
         text: `${index + 1}. ${testName}`,
         style: 'testTitle',
@@ -1375,29 +1577,83 @@ exports.generateRadiologyResultsPDF = async (req, res) => {
     });
 
     // Create PDF document using utility
-    const docDefinition = createPDFDocument({
-      paperSize: paperSize,
-      clinicName: 'Selihom Medical Clinic',
-      content: pdfContent,
-      includeLogo: true,
-      footerText: `Generated on: ${formatDateTime(new Date())}`
-    });
+    try {
+      console.log(`📸 [Radiology PDF] Creating PDF document definition...`);
+      const docDefinition = createPDFDocument({
+        paperSize: selectedPaperSize,
+        clinicName: 'Selihom Medical Clinic',
+        content: pdfContent,
+        includeLogo: true,
+        footerText: `Generated on: ${formatDateTime(new Date())}`
+      });
+      console.log(`✅ [Radiology PDF] PDF document definition created successfully`);
 
-    // Generate PDF
-    const fileName = `radiology-results-${orderId}-${Date.now()}.pdf`;
-    const filePath = `uploads/${fileName}`;
-    
-    await generatePDF(docDefinition, filePath);
+      // Generate PDF - ensure uploads directory exists
+      const uploadsDir = path.join(__dirname, '../../uploads');
+      if (!fs.existsSync(uploadsDir)) {
+        console.log(`📁 [Radiology PDF] Creating uploads directory: ${uploadsDir}`);
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      }
 
-    res.json({
-      message: 'PDF generated successfully',
-      fileName,
-      filePath: `/uploads/${fileName}`,
-      order: batchOrder || walkInOrder,
-      isWalkIn
-    });
+      const fileName = `radiology-results-${orderId}-${Date.now()}.pdf`;
+      const filePath = path.join(uploadsDir, fileName);
+
+      console.log(`📸 [Radiology PDF] Generating PDF file for order ${orderId} with paper size ${selectedPaperSize}...`);
+      console.log(`   File path: ${filePath}`);
+      
+      await generatePDF(docDefinition, filePath);
+      console.log(`✅ [Radiology PDF] PDF file generated successfully: ${filePath}`);
+
+      // Check if file was created
+      if (!fs.existsSync(filePath)) {
+        console.error(`❌ [Radiology PDF] PDF file was not created: ${filePath}`);
+        return res.status(500).json({ error: 'PDF file generation failed' });
+      }
+
+      const stats = fs.statSync(filePath);
+      console.log(`📊 [Radiology PDF] PDF file size: ${stats.size} bytes`);
+
+      if (stats.size === 0) {
+        console.error(`❌ [Radiology PDF] PDF file is empty (0 bytes)`);
+        return res.status(500).json({ error: 'PDF file generation failed - empty file' });
+      }
+
+      // Read the file and send it directly as a buffer
+      // This is more reliable than sendFile for PDFs
+      try {
+        const fileBuffer = fs.readFileSync(filePath);
+        console.log(`✅ [Radiology PDF] File read successfully, buffer size: ${fileBuffer.length} bytes`);
+        
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `inline; filename="${fileName}"`);
+        res.setHeader('Content-Length', fileBuffer.length);
+        res.setHeader('Cache-Control', 'no-cache');
+        
+        res.send(fileBuffer);
+        console.log(`✅ [Radiology PDF] PDF sent successfully to client`);
+      } catch (readError) {
+        console.error(`❌ [Radiology PDF] Error reading/sending file:`, readError);
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'Error reading PDF file', details: readError.message });
+        }
+      }
+    } catch (pdfError) {
+      console.error(`❌ [Radiology PDF] Error during PDF generation:`, pdfError);
+      console.error(`   Stack:`, pdfError.stack);
+      throw pdfError; // Re-throw to be caught by outer catch
+    }
   } catch (error) {
-    console.error('Error generating radiology results PDF:', error);
-    res.status(500).json({ error: error.message });
+    console.error(`\n❌ [Radiology PDF] ===== ERROR =====`);
+    console.error(`❌ [Radiology PDF] Error generating PDF for order ${req.params.batchOrderId}:`, error);
+    console.error(`❌ [Radiology PDF] Stack:`, error.stack);
+    console.error(`❌ [Radiology PDF] ===================\n`);
+    
+    if (!res.headersSent) {
+      res.status(500).json({ 
+        error: 'Failed to generate PDF',
+        message: error.message,
+        details: 'Please check the server logs for more information.'
+      });
+    }
   }
 };

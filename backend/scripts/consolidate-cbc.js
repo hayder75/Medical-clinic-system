@@ -12,6 +12,21 @@ async function consolidateCBC() {
   console.log('🔬 Consolidating CBC tests...\n');
 
   try {
+    // Check if LabTestGroup table exists first
+    try {
+      await prisma.$queryRaw`SELECT 1 FROM "LabTestGroup" LIMIT 1`;
+    } catch (error) {
+      if (error.code === 'P2021' || error.message.includes('does not exist') || error.message.includes('relation') && error.message.includes('does not exist')) {
+        console.log('⚠️  LabTestGroup table does not exist yet. Skipping CBC consolidation.');
+        console.log('   This is OK - the table will be created when you run setup-database.bat');
+        console.log('   Or run: cd backend ^&^& npm exec prisma db push\n');
+        console.log('✅ Script completed (skipped due to missing table)\n');
+        await prisma.$disconnect();
+        process.exit(0); // Exit successfully since we're gracefully skipping
+      }
+      throw error;
+    }
+
     // Step 1: Find CBC group
     const cbcGroup = await prisma.labTestGroup.findFirst({
       where: { 
@@ -247,6 +262,39 @@ async function consolidateCBC() {
       },
       {
         testId: cbcTest.id,
+        fieldName: 'lymph_num',
+        label: 'Lymphocyte Number (Lymph#)',
+        fieldType: 'number',
+        unit: '×10³/µL',
+        normalRange: '1.0-4.8',
+        options: null,
+        isRequired: false,
+        displayOrder: 5
+      },
+      {
+        testId: cbcTest.id,
+        fieldName: 'mid_num',
+        label: 'Mid-range Cell Number (Mid#)',
+        fieldType: 'number',
+        unit: '×10³/µL',
+        normalRange: '0.1-1.0',
+        options: null,
+        isRequired: false,
+        displayOrder: 6
+      },
+      {
+        testId: cbcTest.id,
+        fieldName: 'gran_num',
+        label: 'Granulocyte Number (Gran#)',
+        fieldType: 'number',
+        unit: '×10³/µL',
+        normalRange: '1.8-7.7',
+        options: null,
+        isRequired: false,
+        displayOrder: 7
+      },
+      {
+        testId: cbcTest.id,
         fieldName: 'platelets',
         label: 'Platelets (Plt)',
         fieldType: 'number',
@@ -254,7 +302,7 @@ async function consolidateCBC() {
         normalRange: '150-450',
         options: null,
         isRequired: true,
-        displayOrder: 5
+        displayOrder: 8
       },
       {
         testId: cbcTest.id,
@@ -265,7 +313,7 @@ async function consolidateCBC() {
         normalRange: '80-100',
         options: null,
         isRequired: false,
-        displayOrder: 6
+        displayOrder: 9
       },
       {
         testId: cbcTest.id,
@@ -276,7 +324,7 @@ async function consolidateCBC() {
         normalRange: '27-33',
         options: null,
         isRequired: false,
-        displayOrder: 7
+        displayOrder: 10
       },
       {
         testId: cbcTest.id,
@@ -287,7 +335,95 @@ async function consolidateCBC() {
         normalRange: '32-36',
         options: null,
         isRequired: false,
-        displayOrder: 8
+        displayOrder: 11
+      },
+      {
+        testId: cbcTest.id,
+        fieldName: 'rdw_cv',
+        label: 'Red Cell Distribution Width - CV (RDW-CV)',
+        fieldType: 'number',
+        unit: '%',
+        normalRange: '11.5-14.5',
+        options: null,
+        isRequired: false,
+        displayOrder: 12
+      },
+      {
+        testId: cbcTest.id,
+        fieldName: 'rdw_sd',
+        label: 'Red Cell Distribution Width - SD (RDW-SD)',
+        fieldType: 'number',
+        unit: 'fL',
+        normalRange: '39-46',
+        options: null,
+        isRequired: false,
+        displayOrder: 13
+      },
+      {
+        testId: cbcTest.id,
+        fieldName: 'mpv',
+        label: 'Mean Platelet Volume (MPV)',
+        fieldType: 'number',
+        unit: 'fL',
+        normalRange: '7.5-11.5',
+        options: null,
+        isRequired: false,
+        displayOrder: 14
+      },
+      {
+        testId: cbcTest.id,
+        fieldName: 'pdw',
+        label: 'Platelet Distribution Width (PDW)',
+        fieldType: 'number',
+        unit: 'fL',
+        normalRange: '9.0-17.0',
+        options: null,
+        isRequired: false,
+        displayOrder: 15
+      },
+      {
+        testId: cbcTest.id,
+        fieldName: 'pct',
+        label: 'Plateletcrit (PCT)',
+        fieldType: 'number',
+        unit: '%',
+        normalRange: '0.15-0.35',
+        options: null,
+        isRequired: false,
+        displayOrder: 16
+      },
+      {
+        testId: cbcTest.id,
+        fieldName: 'lymphocytes',
+        label: 'Lymphocytes % (Lymph%)',
+        fieldType: 'number',
+        unit: '%',
+        normalRange: '20-45',
+        options: null,
+        isRequired: false,
+        displayOrder: 17
+      },
+      {
+        testId: cbcTest.id,
+        fieldName: 'mid_percent',
+        label: 'Mid-range Cell % (Mid%)',
+        fieldType: 'number',
+        unit: '%',
+        normalRange: '3-15',
+        options: null,
+        isRequired: false,
+        displayOrder: 18
+      },
+      {
+        testId: cbcTest.id,
+        fieldName: 'gran_percent',
+        label: 'Granulocytes % (Gran%)',
+        fieldType: 'number',
+        unit: '%',
+        normalRange: '40-70',
+        options: null,
+        isRequired: false,
+        displayOrder: 19
       },
       {
         testId: cbcTest.id,
@@ -298,18 +434,7 @@ async function consolidateCBC() {
         normalRange: '40-70',
         options: null,
         isRequired: false,
-        displayOrder: 9
-      },
-      {
-        testId: cbcTest.id,
-        fieldName: 'lymphocytes',
-        label: 'Lymphocytes (L)',
-        fieldType: 'number',
-        unit: '%',
-        normalRange: '20-45',
-        options: null,
-        isRequired: false,
-        displayOrder: 10
+        displayOrder: 20
       },
       {
         testId: cbcTest.id,
@@ -320,7 +445,7 @@ async function consolidateCBC() {
         normalRange: '2-10',
         options: null,
         isRequired: false,
-        displayOrder: 11
+        displayOrder: 21
       },
       {
         testId: cbcTest.id,
@@ -331,7 +456,7 @@ async function consolidateCBC() {
         normalRange: '0-5',
         options: null,
         isRequired: false,
-        displayOrder: 12
+        displayOrder: 22
       },
       {
         testId: cbcTest.id,
@@ -342,7 +467,7 @@ async function consolidateCBC() {
         normalRange: '0-2',
         options: null,
         isRequired: false,
-        displayOrder: 13
+        displayOrder: 23
       },
       {
         testId: cbcTest.id,
@@ -353,7 +478,7 @@ async function consolidateCBC() {
         normalRange: null,
         options: null,
         isRequired: false,
-        displayOrder: 14
+        displayOrder: 24
       }
     ];
 

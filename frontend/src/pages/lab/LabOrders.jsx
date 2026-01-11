@@ -26,18 +26,20 @@ const LabOrders = () => {
   useEffect(() => {
     fetchOrders();
     fetchTemplates();
-  }, []);
+  }, [statusFilter]);
 
   const fetchOrders = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/labs/orders');
+      const response = await api.get('/labs/orders', {
+        params: { status: statusFilter }
+      });
       console.log('📋 [fetchOrders] Raw response:', {
         batchOrders: response.data.batchOrders?.length || 0,
         walkInOrders: response.data.walkInOrders?.length || 0,
         labTestOrders: response.data.labTestOrders?.length || 0
       });
-      
+
       // Log sample lab test orders structure
       if (response.data.labTestOrders && response.data.labTestOrders.length > 0) {
         const sample = response.data.labTestOrders[0];
@@ -54,12 +56,13 @@ const LabOrders = () => {
           } : null
         });
       }
-      
+
       // Combine all order types: old batch orders, old walk-in orders, and new lab test orders
+      // Add __kind to each to avoid ID collisions in the list
       const allOrders = [
-        ...(response.data.batchOrders || []),
-        ...(response.data.walkInOrders || []),
-        ...(response.data.labTestOrders || [])
+        ...(response.data.batchOrders || []).map(o => ({ ...o, __kind: 'batch' })),
+        ...(response.data.walkInOrders || []).map(o => ({ ...o, __kind: 'walkin' })),
+        ...(response.data.labTestOrders || []).map(o => ({ ...o, __kind: 'labtest' }))
       ];
       setOrders(allOrders);
       console.log('📋 [fetchOrders] Total orders set:', allOrders.length);
@@ -82,24 +85,24 @@ const LabOrders = () => {
 
   const getFilteredOrders = () => {
     let filtered = orders;
-    
+
     // Status filter
     if (statusFilter === 'PENDING') {
       filtered = filtered.filter(order => order.status !== 'COMPLETED');
     } else if (statusFilter === 'COMPLETED') {
       filtered = filtered.filter(order => order.status === 'COMPLETED');
     }
-    
+
     // Search filter
     if (searchTerm) {
-      filtered = filtered.filter(order => 
+      filtered = filtered.filter(order =>
         order.patient?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         order.doctor?.fullname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         order.id?.toString().toLowerCase().includes(searchTerm.toLowerCase()) ||
         (order.type?.name?.toLowerCase().includes(searchTerm.toLowerCase()))
       );
     }
-    
+
     // Sort completed orders by date (recent first)
     if (statusFilter === 'COMPLETED') {
       filtered.sort((a, b) => {
@@ -108,7 +111,7 @@ const LabOrders = () => {
         return dateB - dateA; // Descending order
       });
     }
-    
+
     return filtered;
   };
 
@@ -116,7 +119,7 @@ const LabOrders = () => {
     try {
       const response = await api.get(`/labs/orders/${batchOrderId}/detailed-results`);
       const existingResults = {};
-      
+
       if (response.data && response.data.detailedResults) {
         response.data.detailedResults.forEach(result => {
           existingResults[result.templateId] = {
@@ -127,7 +130,7 @@ const LabOrders = () => {
           };
         });
       }
-      
+
       return existingResults;
     } catch (error) {
       console.error('Error fetching existing results:', error);
@@ -144,16 +147,16 @@ const LabOrders = () => {
       ordersCount: order.orders?.length,
       orders: order.orders?.map(o => ({ id: o.id, labTestName: o.labTest?.name, hasLabTest: !!o.labTest }))
     });
-    
+
     setSelectedOrder(order);
     setShowTemplateForm(true);
-    
+
     // Check if this is a new lab test order (has orders array)
     // Also check if it has visitId but no services (indicating new system)
     const hasOrdersArray = order.orders && Array.isArray(order.orders) && order.orders.length > 0;
     const hasVisitIdNoServices = order.visitId && !order.services && !order.type;
     const isNewLabTestOrder = hasOrdersArray || hasVisitIdNoServices;
-    
+
     console.log('🔍 [handleOrderClick] Order detection:', {
       hasOrdersArray,
       ordersLength: order.orders?.length,
@@ -163,27 +166,27 @@ const LabOrders = () => {
       hasType: !!order.type,
       isNewLabTestOrder
     });
-    
+
     // Make sure templates are loaded first (for old system)
     if (!isNewLabTestOrder && templates.length === 0) {
       await fetchTemplates();
     }
-    
+
     // Initialize test results for each lab service
     const initialResults = {};
-    
+
     // NEW SYSTEM: Handle lab test orders
     if (isNewLabTestOrder) {
       // If orders array is missing but we detected it as new system, we need to fetch the orders
       let ordersToProcess = order.orders || [];
-      
+
       if (ordersToProcess.length === 0 && order.visitId) {
         console.warn('⚠️ [handleOrderClick] Orders array is empty for new system order, attempting to fetch...');
         try {
           // Fetch orders for this visit
           const ordersResponse = await api.get('/labs/orders');
           const allLabTestOrders = ordersResponse.data.labTestOrders || [];
-          const matchingOrderGroup = allLabTestOrders.find(o => 
+          const matchingOrderGroup = allLabTestOrders.find(o =>
             (o.visitId === order.visitId && o.patientId === order.patientId) ||
             (o.id === order.id) ||
             (o.batchOrderId === order.batchOrderId)
@@ -204,7 +207,7 @@ const LabOrders = () => {
           console.error('❌ [handleOrderClick] Error fetching orders:', err);
         }
       }
-      
+
       if (ordersToProcess.length === 0) {
         console.error('❌ [handleOrderClick] No orders found to process for new lab test order!');
         console.error('   Order object:', {
@@ -218,26 +221,26 @@ const LabOrders = () => {
         toast.error('No lab test orders found. The order may not be properly loaded. Please refresh the page and try again.');
         return;
       }
-      
+
       console.log('🔍 [handleOrderClick] Processing new lab test orders, count:', ordersToProcess.length);
-      
+
       // Fetch existing results for each order
       for (const labOrder of ordersToProcess) {
         const orderId = labOrder.id;
         const labTest = labOrder.labTest;
-        
+
         console.log('🔍 [handleOrderClick] Processing order:', {
           orderId,
           hasLabTest: !!labTest,
           labTestName: labTest?.name,
           resultFieldsCount: labTest?.resultFields?.length
         });
-        
+
         if (!labTest) {
           console.warn('⚠️ [handleOrderClick] Order missing labTest, skipping:', orderId);
           continue;
         }
-        
+
         // Fetch existing result if any
         let existingResult = null;
         try {
@@ -257,7 +260,7 @@ const LabOrders = () => {
         } catch (err) {
           console.error('Error fetching existing result:', err);
         }
-        
+
         // Parse results if it's stored as JSON string
         let parsedResults = {};
         if (existingResult && existingResult.results) {
@@ -276,10 +279,10 @@ const LabOrders = () => {
           const defaultResults = generateDefaultResults(labTest.resultFields || [], labTest.code);
           parsedResults = defaultResults;
         }
-        
+
         // Mark as completed if result exists or if order status is COMPLETED
         const isCompleted = existingResult ? true : (labOrder.status === 'COMPLETED');
-        
+
         // Initialize with resultFields from labTest
         initialResults[orderId] = {
           orderId: orderId,
@@ -292,7 +295,7 @@ const LabOrders = () => {
           resultId: existingResult?.id || null,
           serviceName: labTest.name
         };
-        
+
         console.log('✅ [handleOrderClick] Result data:', {
           orderId,
           serviceName: labTest.name,
@@ -300,24 +303,24 @@ const LabOrders = () => {
           isCompleted,
           hasExistingResult: !!existingResult
         });
-        
+
         console.log('✅ [handleOrderClick] Added to initialResults:', {
           orderId,
           serviceName: labTest.name,
           resultFieldsCount: (labTest.resultFields || []).length
         });
       }
-      
+
       console.log('✅ [handleOrderClick] Total initialResults:', Object.keys(initialResults).length);
       setTestResults(initialResults);
       return;
     }
-    
+
     console.log('⚠️ [handleOrderClick] Not a new lab test order, using old system');
-    
+
     // OLD SYSTEM: Handle batch orders and walk-in orders
     const services = order.services || (order.type ? [{ service: order.type, id: order.id }] : []);
-    
+
     // Always try to fetch existing results first (regardless of order status)
     let existingResults = {};
     try {
@@ -328,10 +331,10 @@ const LabOrders = () => {
             const orderId = service.id || order.id;
             service.labResults.forEach(labResult => {
               if (labResult.testType && labResult.resultText) {
-                const matchingTemplate = templates.find(t => 
+                const matchingTemplate = templates.find(t =>
                   labResult.testType.id === service.service.id
                 );
-                
+
                 if (matchingTemplate) {
                   existingResults[orderId] = {
                     serviceId: service.id,
@@ -362,12 +365,12 @@ const LabOrders = () => {
                 hasResults: !!result.results,
                 resultsKeys: result.results ? Object.keys(result.results) : []
               });
-              
+
               // Find the service that matches this result by serviceId
               const matchingService = services.find(s => s.id === result.serviceId);
               if (matchingService && matchingService.service) {
                 const serviceId = matchingService.id;
-                
+
                 // Find matching template - try by ID first, then from result, then by name
                 let matchingTemplate = templates.find(t => t.id === result.templateId);
                 if (!matchingTemplate && result.template) {
@@ -382,12 +385,12 @@ const LabOrders = () => {
                   const serviceName = matchingService.service.name.toLowerCase();
                   matchingTemplate = templates.find(t => {
                     const templateName = t.name.toLowerCase();
-                    return serviceName === templateName || 
-                           serviceName.includes(templateName) || 
-                           templateName.includes(serviceName);
+                    return serviceName === templateName ||
+                      serviceName.includes(templateName) ||
+                      templateName.includes(serviceName);
                   });
                 }
-                
+
                 // Parse results if it's a string, otherwise use as-is
                 let parsedResults = result.results || {};
                 if (typeof parsedResults === 'string') {
@@ -398,9 +401,9 @@ const LabOrders = () => {
                     parsedResults = {};
                   }
                 }
-                
+
                 console.log('✅ Creating existing result for serviceId:', serviceId, 'with', Object.keys(parsedResults).length, 'fields');
-                
+
                 existingResults[serviceId] = {
                   serviceId: serviceId,
                   labOrderId: order.id,
@@ -425,9 +428,9 @@ const LabOrders = () => {
       console.error('Error fetching existing results:', err);
       // Continue with empty forms if fetch fails
     }
-    
+
     console.log('📋 Existing results found:', Object.keys(existingResults).length);
-    
+
     // Now prepare forms for all services, using existing results if available
     services.forEach(service => {
       if (service.service) {
@@ -435,7 +438,7 @@ const LabOrders = () => {
         // For walk-in orders, service.id is the LabOrder.id
         const serviceId = service.id; // This is the key we'll use in testResults
         const orderId = order.isWalkIn ? service.id : order.id;
-        
+
         // Check if we already have existing results for this service
         if (existingResults[serviceId]) {
           // Use existing results - make sure template is loaded
@@ -446,7 +449,7 @@ const LabOrders = () => {
             resultsCount: Object.keys(existingResult.results || {}).length,
             serviceName: existingResult.serviceName
           });
-          
+
           if (!existingResult.template && existingResult.templateId) {
             // Try to find template if not loaded
             let matchingTemplate = templates.find(t => t.id === existingResult.templateId);
@@ -454,12 +457,12 @@ const LabOrders = () => {
               existingResult.template = matchingTemplate;
             }
           }
-          
+
           // Ensure results is an object, not empty
           if (!existingResult.results || Object.keys(existingResult.results).length === 0) {
             console.warn('⚠️ Existing result has empty results object for serviceId:', serviceId);
           }
-          
+
           initialResults[serviceId] = existingResult;
         } else {
           // No existing results - prepare empty form
@@ -467,20 +470,20 @@ const LabOrders = () => {
           const matchingTemplate = templates.find(template => {
             const serviceName = service.service.name.toLowerCase();
             const templateName = template.name.toLowerCase();
-            
+
             if (serviceName === templateName) return true;
             if (serviceName.includes(templateName) || templateName.includes(serviceName)) return true;
-            
+
             const serviceWords = serviceName.split(' ');
             const templateWords = templateName.split(' ');
-            
-            return serviceWords.some(word => 
-              templateWords.some(tWord => 
+
+            return serviceWords.some(word =>
+              templateWords.some(tWord =>
                 word.includes(tWord) || tWord.includes(word)
               )
             );
           });
-          
+
           if (matchingTemplate) {
             initialResults[serviceId] = {
               serviceId: service.id,
@@ -511,7 +514,7 @@ const LabOrders = () => {
         }
       }
     });
-    
+
     console.log('Initial results prepared:', Object.keys(initialResults).length, 'services');
     setTestResults(initialResults);
   };
@@ -521,190 +524,433 @@ const LabOrders = () => {
     setSelectedService(serviceId);
     setShowServiceTemplate(true);
   };
-  
-  const handlePrintResults = () => {
-    if (!selectedOrder) return;
-    
-    const printWindow = window.open('', '_blank');
-    const currentDate = new Date();
-    const formatDate = (date) => {
-      return date.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
-    };
-    const formatDateTime = (date) => {
-      return date.toLocaleString('en-US');
-    };
-    
-    // Get lab technician name from current user
-    const labTechnicianName = user?.fullname || 'Lab Technician';
-    
-    printWindow.document.write(`
+
+  const handlePrintResults = async (e, order = null) => {
+    const orderToPrint = order || selectedOrder;
+    if (!orderToPrint) return;
+
+    // Stop event propagation if called from button click
+    if (e) {
+      e.stopPropagation();
+    }
+
+    try {
+      // Fetch results from API for the order
+      let resultsToPrint = testResults;
+      let orderData = orderToPrint;
+
+      // If we don't have results in state, fetch from API
+      if (Object.keys(resultsToPrint).length === 0 || order) {
+        try {
+          // Try to fetch results from API - use detailed-results endpoint
+          const response = await api.get(`/labs/orders/${orderToPrint.id}/detailed-results`);
+          const apiResults = response.data?.detailedResults || response.data?.results || [];
+
+          // Convert API results to the format expected by print function
+          if (Array.isArray(apiResults) && apiResults.length > 0) {
+            resultsToPrint = {};
+            apiResults.forEach((result) => {
+              const serviceId = result.serviceId || result.labTestId || result.id;
+              if (serviceId) {
+                // Convert resultFields to results object if needed
+                let resultsObj = result.results || {};
+                if (result.resultFields && Array.isArray(result.resultFields)) {
+                  // If resultFields is an array, convert to object
+                  resultsObj = {};
+                  result.resultFields.forEach(field => {
+                    if (field.fieldName) {
+                      resultsObj[field.fieldName] = field.value || '';
+                    }
+                  });
+                } else if (typeof result.resultFields === 'object') {
+                  resultsObj = result.resultFields;
+                }
+
+                resultsToPrint[serviceId] = {
+                  results: resultsObj,
+                  additionalNotes: result.additionalNotes || '',
+                  serviceName: result.service?.name || result.labTest?.name || 'Lab Test',
+                  template: result.template || {}
+                };
+              }
+            });
+          }
+
+          // Update order data if API provides more info
+          if (response.data?.order) {
+            orderData = response.data.order;
+          }
+        } catch (fetchError) {
+          console.warn('Could not fetch results from API, using existing state:', fetchError);
+          // Continue with existing testResults if API fetch fails
+        }
+      }
+
+      // If still no results, show error
+      if (Object.keys(resultsToPrint).length === 0) {
+        toast.error('No lab results found for this order. Please complete the tests first.');
+        return;
+      }
+
+      const printWindow = window.open('', '_blank');
+      const currentDate = new Date();
+      const formatDate = (date) => {
+        return date.toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        });
+      };
+      const formatDateTime = (date) => {
+        return date.toLocaleString('en-US');
+      };
+
+      // Get lab technician name from current user
+      const labTechnicianName = user?.fullname || 'Lab Technician';
+      const patient = orderData.patient || {};
+
+      printWindow.document.write(`
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Lab Results - ${selectedOrder.patient.name}</title>
+          <title>Lab Results - ${patient.name || 'Patient'}</title>
           <style>
             @media print {
-              @page { margin: 40px 60px; }
-              body { margin: 0; }
+              @page { 
+                size: A4;
+                margin: 10mm;
+              }
+              body { margin: 0; padding: 0; }
+              .no-print { display: none; }
             }
             body { 
-              font-family: Arial, sans-serif; 
-              padding: 40px 60px; 
-              font-size: 17px;
-              color: #000;
+              font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+              margin: 0; 
+              padding: 10px;
+              color: #333;
+              line-height: 1.4;
             }
-            .clinic-header {
+            .no-print {
               text-align: center;
-              margin-bottom: 20px;
+              padding: 15px;
+              background: #f8f9fa;
+              margin-bottom: 15px;
+              border-bottom: 1px solid #dee2e6;
             }
-            .clinic-name {
-              font-size: 23px;
-              font-weight: bold;
-              margin-bottom: 5px;
+            .no-print button {
+              background: #2563eb;
+              color: white;
+              border: none;
+              padding: 8px 20px;
+              border-radius: 5px;
+              cursor: pointer;
+              font-size: 14px;
+              font-weight: 600;
             }
-            .subheader {
-              font-size: 18px;
-              color: #666;
-              margin-bottom: 20px;
+            .header { 
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              padding-bottom: 10px; 
+              margin-bottom: 15px; 
+              border-bottom: 3px solid #2563eb;
             }
-            .divider {
-              border-top: 1px solid #000;
+            .header-left {
+              display: flex;
+              align-items: center;
+              gap: 15px;
+            }
+            .logo {
+              width: 70px;
+              height: 70px;
+              object-fit: contain;
+            }
+            .clinic-info {
+              text-align: left;
+            }
+            .clinic-name { 
+              font-size: 24px; 
+              font-weight: 800; 
+              margin: 0;
+              color: #1e40af;
+              letter-spacing: -0.5px;
+            }
+            .clinic-tagline {
+              font-size: 12px;
+              color: #64748b;
+              margin: 0;
+              font-style: italic;
+            }
+            .header-right {
+              text-align: right;
+            }
+            .report-title { 
+              font-size: 20px; 
+              font-weight: 700; 
+              margin: 0;
+              color: #0f172a;
+              text-transform: uppercase;
+            }
+            .report-info {
+              font-size: 12px;
+              color: #64748b;
+              margin-top: 2px;
+            }
+            .patient-section {
+              margin: 15px 0;
+              padding: 12px;
+              background: #f8fafc;
+              border: 1px solid #e2e8f0;
+              border-radius: 6px;
+            }
+            .section-header {
+              font-size: 14px;
+              font-weight: 700;
+              margin-bottom: 10px;
+              color: #1e293b;
+              border-bottom: 1px solid #cbd5e1;
+              padding-bottom: 5px;
+            }
+            .patient-grid {
+              display: grid;
+              grid-template-columns: repeat(4, 1fr);
+              gap: 10px;
+              font-size: 13px;
+            }
+            .info-item {
+              display: flex;
+              flex-direction: column;
+            }
+            .info-label {
+              font-weight: 600;
+              color: #64748b;
+              font-size: 11px;
+              text-transform: uppercase;
+            }
+            .info-value {
+              color: #1e293b;
+              font-weight: 500;
+            }
+            .results-section {
               margin: 15px 0;
             }
-            .section-title {
-              font-size: 18px;
-              font-weight: bold;
-              text-decoration: underline;
-              margin: 15px 0 10px 0;
-            }
-            .patient-info {
-              display: flex;
-              flex-wrap: wrap;
-              gap: 20px;
-              margin-bottom: 15px;
-              font-size: 17px;
-            }
-            .test-section {
+            .test-card {
+              margin-bottom: 20px;
               page-break-inside: avoid;
-              margin: 30px 0;
             }
-            .test-title {
-              font-size: 18px;
-              font-weight: bold;
-              margin: 10px 0 5px 0;
+            .test-header {
+              font-size: 16px;
+              font-weight: 700;
+              margin-bottom: 10px;
+              padding: 8px 12px;
+              background: #f1f5f9;
+              border-left: 4px solid #2563eb;
+              color: #1e293b;
             }
             table {
               width: 100%;
               border-collapse: collapse;
-              margin: 10px 0;
-              font-size: 16px;
+              margin: 5px 0;
             }
-            table td {
-              padding: 12px;
-              border: 1px solid #ddd;
+            th {
+              text-align: left;
+              padding: 8px 12px;
+              background: #f8fafc;
+              color: #475569;
+              font-size: 12px;
+              font-weight: 600;
+              text-transform: uppercase;
+              border-bottom: 2px solid #e2e8f0;
+            }
+            td {
+              padding: 8px 12px;
+              border-bottom: 1px solid #f1f5f9;
+              font-size: 13px;
+              color: #334155;
             }
             .field-name {
-              font-weight: bold;
-              background: #f0f0f0;
+              font-weight: 600;
+              color: #1e293b;
+              width: 40%;
             }
-            .notes {
-              margin-top: 15px;
-              padding: 10px;
-              background: #f9f9f9;
-              font-style: italic;
-              font-size: 16px;
+            .field-value {
+              font-weight: 500;
             }
-            .footer-section {
+            .notes-box {
+              margin-top: 10px;
+              padding: 8px 12px;
+              background: #fffbeb;
+              border-left: 4px solid #f59e0b;
+              font-size: 13px;
+              color: #92400e;
+            }
+            .footer {
               margin-top: 30px;
-              border-top: 2px solid #000;
               padding-top: 15px;
+              border-top: 1px solid #e2e8f0;
+              display: flex;
+              justify-content: space-between;
+              align-items: flex-start;
+            }
+            .signature-area {
+              text-align: center;
+              width: 180px;
             }
             .signature-line {
-              margin: 20px 0 5px 0;
-              font-size: 16px;
-              color: #666;
+              border-top: 1px solid #334155;
+              margin-top: 30px;
+              padding-top: 5px;
+              font-size: 12px;
+              font-weight: 600;
+              color: #475569;
             }
-            .footer-text {
+            .stamp-area {
+              width: 100px;
+              height: 100px;
+              border: 2px dashed #cbd5e1;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              color: #94a3b8;
+              font-size: 11px;
+              border-radius: 50%;
+              text-transform: uppercase;
+              font-weight: 600;
+            }
+            .print-footer {
               text-align: center;
-              font-size: 15px;
-              color: #666;
-              margin: 20px 0 5px 0;
+              font-size: 10px;
+              color: #94a3b8;
+              margin-top: 30px;
             }
           </style>
         </head>
         <body>
-          <!-- Header -->
-          <div class="clinic-header">
-            <div class="clinic-name">Selihom Medical Clinic</div>
-            <div class="subheader">Laboratory Test Results</div>
+          <div class="no-print">
+            <button onclick="window.print()">Print Report</button>
           </div>
-          <div class="divider"></div>
-          
-          <!-- Patient Information -->
-          <div class="section-title">Patient Information</div>
-          <div class="patient-info">
-            <span><strong>Name:</strong> ${selectedOrder.patient.name}</span>
-            <span><strong>ID:</strong> ${selectedOrder.patient.id}</span>
-            <span><strong>Gender:</strong> ${selectedOrder.patient.gender || 'N/A'}</span>
-            <span><strong>Age:</strong> ${selectedOrder.patient.age || 'N/A'}</span>
-            <span><strong>Blood Type:</strong> ${selectedOrder.patient.bloodType || 'N/A'}</span>
-            <span><strong>Phone:</strong> ${selectedOrder.patient.mobile || 'N/A'}</span>
-          </div>
-          <div style="font-size: 21px; margin-bottom: 15px;">
-            <strong>Order ID:</strong> ${selectedOrder.id} | 
-            <strong>Date:</strong> ${formatDate(new Date(selectedOrder.createdAt))} | 
-            <strong>Status:</strong> ${selectedOrder.status.replace(/_/g, ' ')}
-          </div>
-          <div class="divider"></div>
-          
-          <!-- Test Results -->
-          <div class="section-title">Laboratory Test Results</div>
-          ${Object.entries(testResults).map(([serviceId, result], index) => {
-            const resultRows = Object.entries(result.results || {}).map(([field, value]) => {
-              const fieldConfig = result.template?.fields?.[field] || {};
-              const unit = fieldConfig.unit ? ' (' + fieldConfig.unit + ')' : '';
-              const displayValue = (value === null || value === undefined || value === '' || String(value).trim() === '') ? '-' : value;
-              return '<tr><td class="field-name">' + field + unit + '</td><td>' + displayValue + '</td></tr>';
-            }).join('');
-            
-            const notesHtml = result.additionalNotes ? '<div class="notes"><strong>Notes:</strong> ' + result.additionalNotes + '</div>' : '';
-            
-            return '<div class="test-section"><div class="test-title">' + (index + 1) + '. ' + result.serviceName + '</div><table>' + resultRows + '</table>' + notesHtml + '</div>';
-          }).join('')}
-          
-          <!-- Footer with Signature -->
-          <div class="footer-section">
-            <div style="display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 20px;">
-              <div>
-                <span style="color: #666;">Lab Technician: </span>
-                <strong>${labTechnicianName}</strong>
-              </div>
-              <div>
-                <span style="color: #666;">Date: </span>
-                <strong>${formatDateTime(currentDate)}</strong>
+
+          <div class="header">
+            <div class="header-left">
+              <img src="/clinic-logo.jpg" alt="Clinic Logo" class="logo" onerror="this.style.display='none'">
+              <div class="clinic-info">
+                <h1 class="clinic-name">Selihom Medium Clinic</h1>
+                <p class="clinic-tagline">Quality Healthcare You Can Trust</p>
               </div>
             </div>
-            <div class="signature-line">Signature: _________________________</div>
-            <div class="signature-line">Stamp:</div>
-            <div class="footer-text">Selihom Medical Clinic</div>
-            <div class="footer-text">Generated on: ${formatDateTime(currentDate)}</div>
+            <div class="header-right">
+              <h2 class="report-title">Laboratory Report</h2>
+              <div class="report-info">
+                Date: ${formatDate(currentDate)}<br>
+                Time: ${currentDate.toLocaleTimeString()}
+              </div>
+            </div>
+          </div>
+
+          <div class="patient-section">
+            <div class="section-header">Patient Information</div>
+            <div class="patient-grid">
+              <div class="info-item">
+                <span class="info-label">Full Name</span>
+                <span class="info-value">${patient.name || 'N/A'}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Patient ID</span>
+                <span class="info-value">#${patient.id || 'N/A'}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Gender</span>
+                <span class="info-value">${patient.gender || 'N/A'}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Age</span>
+                <span class="info-value">${patient.age || 'N/A'}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Blood Type</span>
+                <span class="info-value">${patient.bloodType || 'N/A'}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Contact</span>
+                <span class="info-value">${patient.mobile || 'N/A'}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Order ID</span>
+                <span class="info-value">#${orderData.id || 'N/A'}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="results-section">
+            ${Object.entries(resultsToPrint).map(([serviceId, result], index) => {
+        const resultRows = Object.entries(result.results || {}).map(([field, value]) => {
+          const fieldConfig = result.template?.fields?.[field] || {};
+          const unit = fieldConfig.unit ? ` (${fieldConfig.unit})` : '';
+          const displayValue = (value === null || value === undefined || value === '' || String(value).trim() === '') ? '-' : value;
+          return `
+                  <tr>
+                    <td class="field-name">${field}${unit}</td>
+                    <td class="field-value">${displayValue}</td>
+                  </tr>
+                `;
+        }).join('');
+
+        return `
+                <div class="test-card">
+                  <div class="test-header">${index + 1}. ${result.serviceName}</div>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Investigation</th>
+                        <th>Result</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${resultRows}
+                    </tbody>
+                  </table>
+                  ${result.additionalNotes ? `
+                    <div class="notes-box">
+                      <strong>Notes:</strong> ${result.additionalNotes}
+                    </div>
+                  ` : ''}
+                </div>
+              `;
+      }).join('')}
+          </div>
+
+          <div class="footer">
+            <div class="signature-area">
+              <div class="signature-line">Lab Technician</div>
+              <div style="font-size: 13px; margin-top: 3px; font-weight: 600;">${labTechnicianName}</div>
+            </div>
+            <div class="stamp-area">Clinic Stamp</div>
+            <div class="signature-area">
+              <div class="signature-line">Authorized Signature</div>
+            </div>
+          </div>
+
+          <div class="print-footer">
+            This is a computer-generated report. Selihom Medium Clinic. Generated on ${formatDateTime(currentDate)}
           </div>
         </body>
       </html>
     `);
-    printWindow.document.close();
-    setTimeout(() => {
-      printWindow.print();
-    }, 250);
+      printWindow.document.close();
+      setTimeout(() => {
+        printWindow.print();
+      }, 250);
+
+      toast.success('Opening print preview...');
+    } catch (error) {
+      console.error('Error printing lab results:', error);
+      toast.error('Failed to load lab results for printing');
+    }
   };
-  
+
   const handleDownloadPDF = async () => {
     if (!selectedOrder) return;
-    
+
     try {
       const response = await api.get(`/labs/orders/${selectedOrder.id}/pdf`);
       const link = document.createElement('a');
@@ -724,14 +970,14 @@ const LabOrders = () => {
     // Auto-save the current form data to database if it has results
     if (selectedService && testResults[selectedService] && selectedOrder) {
       const result = testResults[selectedService];
-      const hasResults = Object.values(result.results || {}).some(value => value && value.toString().trim() !== '') || 
-                        (result.additionalNotes && result.additionalNotes.trim() !== '');
-      
+      const hasResults = Object.values(result.results || {}).some(value => value && value.toString().trim() !== '') ||
+        (result.additionalNotes && result.additionalNotes.trim() !== '');
+
       if (hasResults) {
         try {
           // Check if this is new lab test order system
           const isNewSystem = result.labTestId && result.orderId;
-          
+
           if (isNewSystem) {
             // NEW SYSTEM: Save using lab test result endpoint
             await api.post('/labs/results/lab-test', {
@@ -740,18 +986,18 @@ const LabOrders = () => {
               results: result.results || {},
               additionalNotes: result.additionalNotes || ''
             });
-            
+
             toast.success('Lab test result saved successfully');
           } else {
             // OLD SYSTEM: Save using individual result endpoint
-            const labOrderId = selectedOrder.isWalkIn 
-              ? parseInt(result.labOrderId || selectedService) 
+            const labOrderId = selectedOrder.isWalkIn
+              ? parseInt(result.labOrderId || selectedService)
               : parseInt(selectedOrder.id);
-            
+
             const serviceId = selectedOrder.isWalkIn
               ? parseInt(result.labOrderId || selectedService)
               : parseInt(result.serviceId || selectedService);
-            
+
             await api.post('/labs/results/individual', {
               labOrderId: labOrderId,
               serviceId: serviceId,
@@ -759,10 +1005,10 @@ const LabOrders = () => {
               results: result.results || {},
               additionalNotes: result.additionalNotes || ''
             });
-            
+
             toast.success('Results saved successfully');
           }
-          
+
           // Update the result in state to mark it as saved
           setTestResults(prev => ({
             ...prev,
@@ -771,7 +1017,7 @@ const LabOrders = () => {
               completed: true
             }
           }));
-          
+
         } catch (error) {
           console.error('Error saving result:', error);
           if (error.response?.status === 404) {
@@ -782,7 +1028,7 @@ const LabOrders = () => {
         }
       }
     }
-    
+
     setShowServiceTemplate(false);
     setSelectedService(null);
   };
@@ -802,7 +1048,7 @@ const LabOrders = () => {
     const value = testResults[serviceId]?.results?.[fieldName] || '';
     const isCompleted = selectedOrder && selectedOrder.status === 'COMPLETED';
     const baseClassName = `w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${isCompleted ? 'bg-gray-100 cursor-not-allowed' : ''}`;
-    
+
     switch (fieldConfig.type) {
       case 'number':
         return (
@@ -820,7 +1066,7 @@ const LabOrders = () => {
             placeholder={fieldConfig.unit ? `Enter value (${fieldConfig.unit}) - Optional` : 'Enter value (Optional)'}
           />
         );
-      
+
       case 'select':
         return (
           <select
@@ -840,7 +1086,7 @@ const LabOrders = () => {
             ))}
           </select>
         );
-      
+
       case 'textarea':
         return (
           <textarea
@@ -857,7 +1103,7 @@ const LabOrders = () => {
             placeholder="Enter details... (Optional)"
           />
         );
-      
+
       default:
         return (
           <input
@@ -894,7 +1140,7 @@ const LabOrders = () => {
                 results: result.results || {},
                 additionalNotes: result.additionalNotes || ''
               });
-              
+
               // Mark as completed in state
               setTestResults(prev => ({
                 ...prev,
@@ -906,7 +1152,7 @@ const LabOrders = () => {
             }
           }
         }
-        
+
         // Update all orders to completed and send to doctor if not walk-in
         if (!isWalkIn && selectedOrder.visitId) {
           // For doctor orders, they're automatically sent when all are completed
@@ -917,14 +1163,14 @@ const LabOrders = () => {
       } else {
         // OLD SYSTEM: Handle batch orders and walk-in orders
         const testResultsArray = Object.entries(testResults).map(([serviceIdKey, result]) => {
-          const labOrderId = isWalkIn 
-            ? parseInt(result.labOrderId || serviceIdKey) 
+          const labOrderId = isWalkIn
+            ? parseInt(result.labOrderId || serviceIdKey)
             : parseInt(selectedOrder.id);
-          
+
           const serviceId = isWalkIn
             ? parseInt(result.labOrderId || serviceIdKey)
             : parseInt(result.serviceId || serviceIdKey);
-          
+
           return {
             labOrderId: labOrderId,
             serviceId: serviceId,
@@ -937,11 +1183,11 @@ const LabOrders = () => {
         // Send each result individually (only if not already completed)
         for (const testResult of testResultsArray) {
           try {
-            const resultEntry = Object.values(testResults).find(r => 
+            const resultEntry = Object.values(testResults).find(r =>
               (r.serviceId === testResult.serviceId || r.labOrderId === testResult.labOrderId) &&
               r.labOrderId === testResult.labOrderId
             );
-            
+
             if (!resultEntry || !resultEntry.completed) {
               await api.post('/labs/results/individual', testResult);
             }
@@ -966,7 +1212,7 @@ const LabOrders = () => {
           toast.success('Walk-in lab tests completed successfully! Results ready for printing.');
         }
       }
-      
+
       // Refresh orders but keep the form open if there are more services to complete
       // Only close if all services are completed
       const allCompleted = Object.values(testResults).every(r => r.completed);
@@ -1068,19 +1314,18 @@ const LabOrders = () => {
           <TestTube className="h-12 w-12 text-gray-400 mx-auto mb-4" />
           <p className="text-gray-500">
             {statusFilter === 'PENDING' ? 'No pending lab orders found' :
-             statusFilter === 'COMPLETED' ? 'No completed lab orders found' :
-             'No lab orders found'}
+              statusFilter === 'COMPLETED' ? 'No completed lab orders found' :
+                'No lab orders found'}
           </p>
         </div>
       ) : (
         <div className="grid gap-4">
           {getFilteredOrders().map((order) => (
             <div
-              key={order.id}
-              className={`bg-white rounded-lg shadow-md border p-6 cursor-pointer hover:shadow-lg transition-shadow duration-200 ${
-                order.status === 'QUEUED' ? 'border-yellow-200' : 
+              key={`${order.__kind}-${order.id}`}
+              className={`bg-white rounded-lg shadow-md border p-6 cursor-pointer hover:shadow-lg transition-shadow duration-200 ${order.status === 'QUEUED' ? 'border-yellow-200' :
                 order.status === 'COMPLETED' ? 'border-green-200' : 'border-gray-200'
-              }`}
+                }`}
               onClick={() => handleOrderClick(order)}
             >
               <div className="flex items-center justify-between mb-4">
@@ -1102,7 +1347,7 @@ const LabOrders = () => {
                           ? order.services.map(service => service.service?.name).filter(name => name).join(', ')
                           : order.type?.name || 'Lab Test'}
                       {order.isWalkIn && <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded">WALK-IN</span>}
-                      {order.visitId && (!order.orders || order.orders.length === 0) && (
+                      {order.__kind === 'labtest' && (!order.orders || order.orders.length === 0) && (
                         <span className="ml-2 px-2 py-0.5 bg-yellow-100 text-yellow-800 text-xs rounded">Loading tests...</span>
                       )}
                     </p>
@@ -1133,12 +1378,10 @@ const LabOrders = () => {
               </div>
 
               {(order.status === 'QUEUED' || order.status === 'COMPLETED') && (
-                <div className={`mt-4 p-3 rounded-lg ${
-                  order.status === 'QUEUED' ? 'bg-yellow-50' : 'bg-green-50'
-                }`}>
-                  <p className={`text-sm font-medium ${
-                    order.status === 'QUEUED' ? 'text-yellow-800' : 'text-green-800'
+                <div className={`mt-4 p-3 rounded-lg ${order.status === 'QUEUED' ? 'bg-yellow-50' : 'bg-green-50'
                   }`}>
+                  <p className={`text-sm font-medium ${order.status === 'QUEUED' ? 'text-yellow-800' : 'text-green-800'
+                    }`}>
                     {order.status === 'QUEUED' ? 'Click to process tests' : 'Click to view results'}
                   </p>
                 </div>
@@ -1214,11 +1457,11 @@ const LabOrders = () => {
 
             <div className="space-y-4">
               {Object.entries(testResults).map(([orderId, result]) => {
-                const hasResults = Object.values(result.results || {}).some(value => value && value.toString().trim() !== '') || 
-                                  (result.additionalNotes && result.additionalNotes.trim() !== '');
+                const hasResults = Object.values(result.results || {}).some(value => value && value.toString().trim() !== '') ||
+                  (result.additionalNotes && result.additionalNotes.trim() !== '');
                 const isCompleted = result.completed || selectedOrder.status === 'COMPLETED';
                 const isNewSystem = !!result.labTest; // New system has labTest
-                
+
                 return (
                   <div key={orderId} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50">
                     {/* Results Display Section for Completed Orders */}
@@ -1232,7 +1475,7 @@ const LabOrders = () => {
                           {result.resultFields && result.resultFields.length > 0 && result.resultFields.map((field) => {
                             const fieldValue = result.results?.[field.fieldName];
                             if (!fieldValue && fieldValue !== 0) return null;
-                            
+
                             return (
                               <div key={field.id} className="bg-white p-3 rounded border">
                                 <div className="flex justify-between items-start">
@@ -1240,7 +1483,7 @@ const LabOrders = () => {
                                     <p className="text-sm font-medium text-gray-700">{field.label}</p>
                                     {field.unit && <p className="text-xs text-gray-500">({field.unit})</p>}
                                   </div>
-                                  <p 
+                                  <p
                                     className="text-sm font-semibold ml-2"
                                     style={(() => {
                                       const rangeCheck = checkValueInNormalRange(fieldValue, field.normalRange);
@@ -1279,7 +1522,7 @@ const LabOrders = () => {
                         )}
                       </div>
                     )}
-                    
+
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-3">
                         <TestTube className="h-5 w-5 text-blue-500" />
@@ -1298,9 +1541,8 @@ const LabOrders = () => {
                       </div>
                       <div className="flex items-center space-x-3">
                         {(hasResults || isCompleted) && <CheckCircle className="h-4 w-4 text-green-500" />}
-                        <span className={`px-2 py-1 rounded text-xs ${
-                          (hasResults || isCompleted) ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                        }`}>
+                        <span className={`px-2 py-1 rounded text-xs ${(hasResults || isCompleted) ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                          }`}>
                           {isCompleted ? 'Completed' : hasResults ? 'Filled' : 'Empty'}
                         </span>
                         {!isCompleted && (
@@ -1399,23 +1641,23 @@ const LabOrders = () => {
                       </button>
                     </div>
                   )}
-                  
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {testResults[selectedService].resultFields.map((field) => {
                       const result = testResults[selectedService];
                       const fieldValue = result.results?.[field.fieldName] || '';
                       const isCompleted = selectedOrder && selectedOrder.status === 'COMPLETED';
-                      
+
                       // CBC: Hide additional fields (MCV, MCH, MCHC) unless toggle is on
-                      const isCBCAdditional = result.labTest?.code === 'CBC001' && 
+                      const isCBCAdditional = result.labTest?.code === 'CBC001' &&
                         ['mcv', 'mch', 'mchc'].includes(field.fieldName);
                       const shouldShowCBCAdditional = !isCBCAdditional || showCBCAdditionalFields[selectedService];
-                      
+
                       // HIV: Hide remarks field if result is not "Reactive"
                       const isHIVRemarks = result.labTest?.code === 'HIV001' && field.fieldName === 'remarks';
                       const hivResult = result.results?.result;
                       const shouldShowHIVRemarks = !isHIVRemarks || hivResult === 'Reactive';
-                      
+
                       // Don't render if field should be hidden
                       if (isCBCAdditional && !shouldShowCBCAdditional) {
                         return null;
@@ -1423,7 +1665,7 @@ const LabOrders = () => {
                       if (isHIVRemarks && !shouldShowHIVRemarks) {
                         return null;
                       }
-                      
+
                       return (
                         <div key={field.id} className="space-y-1">
                           <label className="block text-sm font-medium text-gray-700">
@@ -1444,7 +1686,7 @@ const LabOrders = () => {
                             }
                             return null;
                           })()}
-                          
+
                           {/* Render field based on fieldType */}
                           {field.fieldType === 'number' ? (
                             <input
@@ -1458,13 +1700,12 @@ const LabOrders = () => {
                                 newResults[field.fieldName] = e.target.value;
                                 updateTestResult(selectedService, 'results', newResults);
                               }}
-                              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                                isCompleted ? 'bg-gray-100 cursor-not-allowed border-gray-300' : 
+                              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${isCompleted ? 'bg-gray-100 cursor-not-allowed border-gray-300' :
                                 (() => {
                                   const rangeCheck = checkValueInNormalRange(fieldValue, field.normalRange);
                                   return rangeCheck.inRange || !fieldValue ? 'border-gray-300' : 'border-red-500';
                                 })()
-                              }`}
+                                }`}
                               style={(() => {
                                 const rangeCheck = checkValueInNormalRange(fieldValue, field.normalRange);
                                 if (!rangeCheck.inRange && fieldValue !== '' && fieldValue !== null && fieldValue !== undefined) {
@@ -1490,20 +1731,20 @@ const LabOrders = () => {
                                   optionsList = field.options;
                                 }
                               }
-                              
+
                               // Check if this is VDRL titer field - enable only when result is "Reactive"
-                              const isVDRLTiter = field.fieldName === 'titer' && 
+                              const isVDRLTiter = field.fieldName === 'titer' &&
                                 testResults[selectedService]?.labTest?.code === 'VDRL001';
                               const vdrlResult = testResults[selectedService]?.results?.result;
                               const isTiterEnabled = !isVDRLTiter || vdrlResult === 'Reactive';
-                              
+
                               // Check if this is Stool parasite_type field - enable only when parasite is "Seen"
-                              const isStoolParasiteType = field.fieldName === 'parasite_type' && 
+                              const isStoolParasiteType = field.fieldName === 'parasite_type' &&
                                 (testResults[selectedService]?.labTest?.code === 'STOOL001' ||
-                                 testResults[selectedService]?.labTest?.name?.toLowerCase().includes('stool'));
+                                  testResults[selectedService]?.labTest?.name?.toLowerCase().includes('stool'));
                               const stoolParasite = testResults[selectedService]?.results?.parasite;
                               const isParasiteTypeEnabled = !isStoolParasiteType || stoolParasite === 'Seen';
-                              
+
                               return (
                                 <select
                                   value={fieldValue}
@@ -1512,32 +1753,31 @@ const LabOrders = () => {
                                     if (isCompleted) return;
                                     const newResults = { ...result.results };
                                     newResults[field.fieldName] = e.target.value;
-                                    
+
                                     // Special handling for VDRL: Clear titer if result becomes Non-reactive
                                     if (isVDRLTiter && vdrlResult !== 'Reactive') {
                                       newResults.titer = '';
                                     }
-                                    
+
                                     // Special handling for Stool: Clear parasite_type if parasite is not "Seen"
-                                    const isStoolParasite = field.fieldName === 'parasite' && 
+                                    const isStoolParasite = field.fieldName === 'parasite' &&
                                       (testResults[selectedService]?.labTest?.code === 'STOOL001' ||
-                                       testResults[selectedService]?.labTest?.name?.toLowerCase().includes('stool'));
+                                        testResults[selectedService]?.labTest?.name?.toLowerCase().includes('stool'));
                                     if (isStoolParasite && e.target.value !== 'Seen') {
                                       newResults.parasite_type = '';
                                     }
-                                    
+
                                     // Special handling for HIV: Clear remarks if result is not "Reactive"
-                                    const isHIVResult = field.fieldName === 'result' && 
+                                    const isHIVResult = field.fieldName === 'result' &&
                                       testResults[selectedService]?.labTest?.code === 'HIV001';
                                     if (isHIVResult && e.target.value !== 'Reactive') {
                                       newResults.remarks = '';
                                     }
-                                    
+
                                     updateTestResult(selectedService, 'results', newResults);
                                   }}
-                                  className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                                    isCompleted || !isTiterEnabled || !isParasiteTypeEnabled ? 'bg-gray-100 cursor-not-allowed' : ''
-                                  }`}
+                                  className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${isCompleted || !isTiterEnabled || !isParasiteTypeEnabled ? 'bg-gray-100 cursor-not-allowed' : ''
+                                    }`}
                                 >
                                   <option value="">-- Select --</option>
                                   {optionsList.map(option => (
@@ -1561,7 +1801,7 @@ const LabOrders = () => {
                                   optionsList = field.options;
                                 }
                               }
-                              
+
                               return (
                                 <select
                                   value={fieldValue}
@@ -1570,12 +1810,12 @@ const LabOrders = () => {
                                     if (isCompleted) return;
                                     const newResults = { ...result.results };
                                     newResults[field.fieldName] = e.target.value;
-                                    
+
                                     // Special handling for Malaria: Auto-fill remarks when Negative is selected
                                     // Special handling for Malaria: Auto-fill remarks when Negative/Positive
-                                    const isMalariaResult = field.fieldName === 'result' && 
+                                    const isMalariaResult = field.fieldName === 'result' &&
                                       testResults[selectedService]?.labTest?.code === 'PICT001';
-                                    
+
                                     if (isMalariaResult && e.target.value === 'Negative') {
                                       // Auto-fill remarks with default negative message
                                       newResults.remarks = 'No malaria parasite seen.';
@@ -1583,24 +1823,24 @@ const LabOrders = () => {
                                       // Auto-fill remarks with default positive message
                                       newResults.remarks = 'Malaria parasite seen.';
                                     }
-                                    
+
                                     // Special handling for Stool: Clear parasite_type if parasite is not "Seen"
-                                    const isStoolParasite = field.fieldName === 'parasite' && 
+                                    const isStoolParasite = field.fieldName === 'parasite' &&
                                       (testResults[selectedService]?.labTest?.code === 'STOOL001' ||
-                                       testResults[selectedService]?.labTest?.name?.toLowerCase().includes('stool'));
-                                    
+                                        testResults[selectedService]?.labTest?.name?.toLowerCase().includes('stool'));
+
                                     if (isStoolParasite && e.target.value !== 'Seen') {
                                       newResults.parasite_type = '';
                                     }
-                                    
+
                                     // Special handling for HIV: Clear remarks if result is not "Reactive"
-                                    const isHIVResult = field.fieldName === 'result' && 
+                                    const isHIVResult = field.fieldName === 'result' &&
                                       testResults[selectedService]?.labTest?.code === 'HIV001';
-                                    
+
                                     if (isHIVResult && e.target.value !== 'Reactive') {
                                       newResults.remarks = '';
                                     }
-                                    
+
                                     updateTestResult(selectedService, 'results', newResults);
                                   }}
                                   className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${isCompleted ? 'bg-gray-100 cursor-not-allowed' : ''}`}
@@ -1619,7 +1859,7 @@ const LabOrders = () => {
                                 readOnly={isCompleted}
                                 disabled={(() => {
                                   // HIV: Disable remarks if result is not "Reactive"
-                                  const isHIVRemarks = field.fieldName === 'remarks' && 
+                                  const isHIVRemarks = field.fieldName === 'remarks' &&
                                     testResults[selectedService]?.labTest?.code === 'HIV001';
                                   const hivResult = testResults[selectedService]?.results?.result;
                                   return isHIVRemarks && hivResult !== 'Reactive';
@@ -1628,12 +1868,12 @@ const LabOrders = () => {
                                   if (isCompleted) return;
                                   const newResults = { ...result.results };
                                   newResults[field.fieldName] = e.target.value;
-                                  
+
                                   // Special handling for Malaria: Auto-fill remarks
-                                  const isMalariaRemarks = field.fieldName === 'remarks' && 
+                                  const isMalariaRemarks = field.fieldName === 'remarks' &&
                                     testResults[selectedService]?.labTest?.code === 'PICT001';
                                   const malariaResult = testResults[selectedService]?.results?.result;
-                                  
+
                                   if (isMalariaRemarks && !e.target.value) {
                                     // Auto-fill if empty based on result
                                     if (malariaResult === 'Negative') {
@@ -1642,15 +1882,15 @@ const LabOrders = () => {
                                       newResults[field.fieldName] = 'Malaria parasite seen.';
                                     }
                                   }
-                                  
+
                                   updateTestResult(selectedService, 'results', newResults);
                                 }}
                                 onFocus={(e) => {
                                   // Auto-fill Malaria remarks when field is focused
-                                  const isMalariaRemarks = field.fieldName === 'remarks' && 
+                                  const isMalariaRemarks = field.fieldName === 'remarks' &&
                                     testResults[selectedService]?.labTest?.code === 'PICT001';
                                   const malariaResult = testResults[selectedService]?.results?.result;
-                                  
+
                                   if (isMalariaRemarks && !e.target.value) {
                                     const newResults = { ...result.results };
                                     if (malariaResult === 'Negative') {
@@ -1663,12 +1903,11 @@ const LabOrders = () => {
                                     }
                                   }
                                 }}
-                                className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                                  isCompleted || (field.fieldName === 'remarks' && 
-                                    testResults[selectedService]?.labTest?.code === 'HIV001' &&
-                                    testResults[selectedService]?.results?.result !== 'Reactive') 
-                                    ? 'bg-gray-100 cursor-not-allowed' : ''
-                                }`}
+                                className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${isCompleted || (field.fieldName === 'remarks' &&
+                                  testResults[selectedService]?.labTest?.code === 'HIV001' &&
+                                  testResults[selectedService]?.results?.result !== 'Reactive')
+                                  ? 'bg-gray-100 cursor-not-allowed' : ''
+                                  }`}
                                 rows={3}
                                 placeholder="Enter details..."
                                 required={field.isRequired}
@@ -1708,7 +1947,7 @@ const LabOrders = () => {
                       );
                     })}
                   </div>
-                  
+
                   <div className="mt-4">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Additional Notes
@@ -1739,7 +1978,7 @@ const LabOrders = () => {
                       const result = testResults[selectedService];
                       const fieldValue = result.results?.[fieldName];
                       const fieldCheck = checkLabFieldStandard(fieldName, fieldValue, fieldConfig.unit);
-                      
+
                       return (
                         <div key={fieldName} className="space-y-1">
                           <label className="block text-sm font-medium text-gray-700">
@@ -1750,15 +1989,13 @@ const LabOrders = () => {
                           {renderFormField(fieldName, fieldConfig, selectedService)}
                           {/* Individual Field Warning */}
                           {fieldCheck.message && (
-                            <div className={`mt-1 p-2 rounded text-xs ${
-                              fieldCheck.status === 'critical' 
-                                ? 'bg-red-50 border border-red-200 text-red-800' 
-                                : 'bg-yellow-50 border border-yellow-200 text-yellow-800'
-                            }`}>
+                            <div className={`mt-1 p-2 rounded text-xs ${fieldCheck.status === 'critical'
+                              ? 'bg-red-50 border border-red-200 text-red-800'
+                              : 'bg-yellow-50 border border-yellow-200 text-yellow-800'
+                              }`}>
                               <div className="flex items-start">
-                                <AlertTriangle className={`h-3 w-3 mt-0.5 mr-1 flex-shrink-0 ${
-                                  fieldCheck.status === 'critical' ? 'text-red-600' : 'text-yellow-600'
-                                }`} />
+                                <AlertTriangle className={`h-3 w-3 mt-0.5 mr-1 flex-shrink-0 ${fieldCheck.status === 'critical' ? 'text-red-600' : 'text-yellow-600'
+                                  }`} />
                                 <span className="font-medium">{fieldCheck.message}</span>
                               </div>
                             </div>
@@ -1767,7 +2004,7 @@ const LabOrders = () => {
                       );
                     })}
                   </div>
-                  
+
                   {/* Overall Template Warning (if needed) */}
                   {(() => {
                     const result = testResults[selectedService];
@@ -1780,7 +2017,7 @@ const LabOrders = () => {
                             <div className="flex-1">
                               <p className="text-sm font-medium text-red-800">{standardCheck.warning}</p>
                               <p className="text-xs text-red-600 mt-1">
-                                Fields filled: {standardCheck.filledCount} / {standardCheck.totalFields} | 
+                                Fields filled: {standardCheck.filledCount} / {standardCheck.totalFields} |
                                 Standard: Min {standardCheck.standard.minFields}, Recommended {standardCheck.standard.recommendedFields}
                               </p>
                             </div>
@@ -1802,9 +2039,8 @@ const LabOrders = () => {
                         if (selectedOrder && selectedOrder.status === 'COMPLETED') return;
                         updateTestResult(selectedService, 'additionalNotes', e.target.value);
                       }}
-                      className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                        selectedOrder && selectedOrder.status === 'COMPLETED' ? 'bg-gray-100 cursor-not-allowed' : ''
-                      }`}
+                      className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${selectedOrder && selectedOrder.status === 'COMPLETED' ? 'bg-gray-100 cursor-not-allowed' : ''
+                        }`}
                       rows={3}
                       placeholder="Enter any additional notes..."
                     />
@@ -1829,9 +2065,8 @@ const LabOrders = () => {
                         if (selectedOrder && selectedOrder.status === 'COMPLETED') return;
                         updateTestResult(selectedService, 'additionalNotes', e.target.value);
                       }}
-                      className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                        selectedOrder && selectedOrder.status === 'COMPLETED' ? 'bg-gray-100 cursor-not-allowed' : ''
-                      }`}
+                      className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${selectedOrder && selectedOrder.status === 'COMPLETED' ? 'bg-gray-100 cursor-not-allowed' : ''
+                        }`}
                       rows={10}
                       placeholder="Enter test results and findings here. This will be sent to the doctor... (Optional)"
                     />

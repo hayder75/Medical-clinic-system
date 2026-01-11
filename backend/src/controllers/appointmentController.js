@@ -667,33 +667,22 @@ const sendAppointmentToDoctor = async (req, res) => {
       });
     }
 
-    // 3. Generate visit UID
-    const today = new Date();
-    const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
-    const todayStart = new Date(today);
-    todayStart.setHours(0, 0, 0, 0);
-    const todayEnd = new Date(today);
-    todayEnd.setHours(23, 59, 59, 999);
-
-    const todaysVisitsCount = await prisma.visit.count({
-      where: {
-        createdAt: { gte: todayStart, lte: todayEnd }
-      }
-    });
-
-    const visitUid = `VISIT-${dateStr}-${String(todaysVisitsCount + 1).padStart(4, '0')}`;
+    // 3. Generate visit UID with unique generator
+    const { generateUniqueVisitUid } = require('../utils/visitUidGenerator');
 
     // 4. Create visit with IN_DOCTOR_QUEUE status (skip triage)
-    const visit = await prisma.visit.create({
-      data: {
-        visitUid,
-        patientId: appointment.patientId,
-        createdById: processedBy,
-        suggestedDoctorId: appointment.doctorId,
-        status: 'IN_DOCTOR_QUEUE', // Skip triage completely
-        notes: `Appointment visit - ${appointment.reason || appointment.notes || 'Follow-up'}`,
-        isEmergency: false
-      }
+    const visit = await generateUniqueVisitUid(async (visitUid) => {
+      return await prisma.visit.create({
+        data: {
+          visitUid,
+          patientId: appointment.patientId,
+          createdById: processedBy,
+          suggestedDoctorId: appointment.doctorId,
+          status: 'IN_DOCTOR_QUEUE', // Skip triage completely
+          notes: `Appointment visit - ${appointment.reason || appointment.notes || 'Follow-up'}`,
+          isEmergency: false
+        }
+      });
     });
 
     // 5. Create consultation billing ONLY for CONSULTATION type appointments
