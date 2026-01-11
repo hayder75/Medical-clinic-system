@@ -1053,9 +1053,43 @@ exports.processPayment = async (req, res) => {
           }
         });
 
-        // Note: Automatic visit creation removed for new patients
-        // New patients must have a visit created manually after card registration payment
-        // Returning patients (CARD-ACT) do not automatically get visits either
+        // Automatically create visit and send to triage after CARD-REG payment (new patients only)
+        if (isCardRegistration && !billing.visitId) {
+          const { generateUniqueVisitUid } = require('../utils/visitUidGenerator');
+          
+          const visit = await generateUniqueVisitUid(async (visitUid) => {
+            return await prisma.visit.create({
+              data: {
+                visitUid,
+                patientId: billing.patientId,
+                createdById: req.user.id,
+                status: 'WAITING_FOR_TRIAGE',
+                queueType: 'CONSULTATION',
+                isEmergency: false,
+                notes: 'Automatic visit creation after card registration payment'
+              }
+            });
+          });
+
+          // Update billing to link the visit
+          await prisma.billing.update({
+            where: { id: billing.id },
+            data: { visitId: visit.id }
+          });
+
+          // Log action
+          await prisma.auditLog.create({
+            data: {
+              action: 'VISIT_CREATED_AUTOMATIC',
+              entity: 'Visit',
+              entityId: visit.id,
+              userId: req.user.id,
+              details: `Visit automatically created after CARD-REG payment for patient ${billing.patient.name} (${billing.patientId}). Status: WAITING_FOR_TRIAGE`
+            }
+          });
+        }
+        
+        // Note: CARD-ACT (returning patients) do not automatically get visits
       }
 
       // Check if this is diagnostics billing (lab/radiology), nurse walk-in, emergency drugs, or material needs
