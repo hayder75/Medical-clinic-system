@@ -238,7 +238,46 @@ exports.createPatient = async (req, res) => {
       }
     }
     
-    // Removed: Card registration billing creation - no automatic billing on registration
+    // Create card registration billing for non-emergency patients
+    // Note: Visit is NOT created automatically - must be created manually after payment
+    let billing = null;
+    if (validatedData.type !== 'EMERGENCY') {
+      try {
+        // Find card registration service
+        const cardRegService = await prisma.service.findFirst({
+          where: {
+            code: 'CARD-REG',
+            isActive: true
+          }
+        });
+
+        if (cardRegService) {
+          billing = await prisma.billing.create({
+            data: {
+              patientId: patient.id,
+              visitId: null, // Visit will be created after payment
+              insuranceId: validatedData.insuranceId || null,
+              totalAmount: cardRegService.price,
+              status: 'PENDING',
+              billingType: 'REGULAR',
+              notes: `${validatedData.type} patient card registration`
+            }
+          });
+
+          await prisma.billingService.create({
+            data: {
+              billingId: billing.id,
+              serviceId: cardRegService.id,
+              quantity: 1,
+              unitPrice: cardRegService.price,
+              totalPrice: cardRegService.price
+            }
+          });
+        }
+      } catch (error) {
+        console.error('Error creating billing:', error);
+      }
+    }
     
     // Log action
     await prisma.auditLog.create({
@@ -247,13 +286,14 @@ exports.createPatient = async (req, res) => {
         entity: 'Patient',
         entityId: parseInt(patient.id.split('-').pop()) || 0,
         userId: receptionistId,
-        details: `New ${validatedData.type.toLowerCase()} patient registered: ${patient.name} (${patient.id}). No billing created.`
+        details: `New ${validatedData.type.toLowerCase()} patient registered: ${patient.name} (${patient.id}). CARD-REG billing created.`
       }
     });
     
     res.json({
       patient,
-      message: 'Patient registered successfully.'
+      billing,
+      message: 'Patient registered successfully. Card registration billing created.'
     });
   } catch (error) {
     console.error('Error creating patient:', error);
