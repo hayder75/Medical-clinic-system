@@ -204,7 +204,7 @@ exports.registerPatient = async (req, res) => {
         if (entryService) {
           billing = await prisma.billing.create({
             data: {
-              patientId: id,
+              patientId: patient.id,
               visitId: visit.id,
               insuranceId,
               totalAmount: entryService.price,
