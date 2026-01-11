@@ -175,7 +175,7 @@ exports.registerPatient = async (req, res) => {
     }
 
     // Create card registration billing for non-emergency patients
-    // Visit will be created automatically after payment (see processPayment function)
+    // Note: Visit is NOT created automatically - must be created manually after payment
     let billing = null;
     if (type !== 'EMERGENCY') {
       try {
