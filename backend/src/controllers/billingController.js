@@ -209,6 +209,7 @@ exports.registerPatient = async (req, res) => {
               insuranceId,
               totalAmount: entryService.price,
               status: 'PENDING',
+              billingType: 'REGULAR',
               notes: `${type} patient entry fee`
             }
           });
