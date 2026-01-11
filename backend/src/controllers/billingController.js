@@ -174,53 +174,39 @@ exports.registerPatient = async (req, res) => {
       }
     }
 
-    // Create a visit record for tracking through the system with unique visitUid
-    const { generateUniqueVisitUid } = require('../utils/visitUidGenerator');
-    
-    const visit = await generateUniqueVisitUid(async (visitUid) => {
-      return await prisma.visit.create({
-        data: {
-          visitUid: visitUid,
-          patientId: patient.id,
-          status: 'WAITING_FOR_TRIAGE',
-          isEmergency: type === 'EMERGENCY',
-          notes: `Patient registered via ${type === 'EMERGENCY' ? 'emergency' : 'regular'} registration`
-        }
-      });
-    });
-
-    // Create entry fee billing for non-emergency patients
+    // Create card registration billing for non-emergency patients
+    // Visit will be created automatically after payment (see processPayment function)
     let billing = null;
     if (type !== 'EMERGENCY') {
       try {
-        // Find entry fee service
-        const entryService = await prisma.service.findFirst({
+        // Find card registration service
+        const cardRegService = await prisma.service.findFirst({
           where: {
-            code: 'ENTRY001',
-            category: 'OTHER'
+            code: 'CARD-REG',
+            isActive: true
           }
         });
 
-        if (entryService) {
+        if (cardRegService) {
           billing = await prisma.billing.create({
             data: {
               patientId: patient.id,
-              visitId: visit.id,
+              visitId: null, // Visit will be created after payment
               insuranceId,
-              totalAmount: entryService.price,
+              totalAmount: cardRegService.price,
               status: 'PENDING',
               billingType: 'REGULAR',
-              notes: `${type} patient entry fee`
+              notes: `${type} patient card registration`
             }
           });
 
           await prisma.billingService.create({
             data: {
               billingId: billing.id,
-              serviceId: entryService.id,
+              serviceId: cardRegService.id,
               quantity: 1,
-              unitPrice: entryService.price,
-              totalPrice: entryService.price
+              unitPrice: cardRegService.price,
+              totalPrice: cardRegService.price
             }
           });
         }
@@ -232,7 +218,6 @@ exports.registerPatient = async (req, res) => {
     res.json({
       message: 'Patient registered successfully',
       patient,
-      visit,
       billing
     });
   } catch (error) {
