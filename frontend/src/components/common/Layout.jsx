@@ -31,7 +31,8 @@ import {
   UserPlus,
   UserCheck,
   Package,
-  Trash2
+  Trash2,
+  Printer
 } from 'lucide-react';
 
 const Layout = ({ children, title, subtitle }) => {
@@ -130,6 +131,7 @@ const Layout = ({ children, title, subtitle }) => {
           { name: 'Doctor Queue Management', href: '/doctor-queue', icon: Stethoscope },
           { name: 'Patient Gallery', href: '/billing/gallery', icon: Image },
           { name: 'Cash Management', href: '/cash-management', icon: BarChart3 },
+          { name: 'Prints', href: '/billing/prints', icon: Printer },
           { name: 'Loans', href: '/loans', icon: DollarSign },
         ];
       

@@ -96,8 +96,20 @@ const AppRoutes = () => {
     }
   };
 
+  // Detect if we're running under /d path
+  // Only return /d if pathname starts with /d/ (with trailing slash) or is exactly /d
+  // This prevents matching paths like /doctor/dashboard
+  const getBasename = () => {
+    const pathname = window.location.pathname;
+    // Check for /d/ or exactly /d (but not /doctor, /dashboard, etc.)
+    if (pathname === '/d' || pathname.startsWith('/d/')) {
+      return '/d';
+    }
+    return '/';
+  };
+
   return (
-    <Router>
+    <Router basename={getBasename()}>
       <Routes>
         {/* Public Routes */}
         <Route path="/login" element={<LoginPage />} />

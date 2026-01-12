@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate } from 'react-router-dom';
 import RadiologyOrders from '../../components/radiology/RadiologyOrders';
+import api from '../../services/api';
 import { 
   Scan, 
   Clock, 
@@ -18,16 +19,51 @@ const RadiologyDashboard = () => {
     totalScans: 0,
     urgentOrders: 0
   });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Simulate loading stats
-    setStats({
-      pendingOrders: 5,
-      completedToday: 8,
-      totalScans: 13,
-      urgentOrders: 1
-    });
+    fetchStats();
   }, []);
+
+  const fetchStats = async () => {
+    try {
+      setLoading(true);
+      // Fetch pending orders
+      const pendingResponse = await api.get('/radiologies/orders?status=PENDING');
+      const pendingOrders = pendingResponse.data.batchOrders?.length || 0;
+      
+      // Fetch completed orders
+      const completedResponse = await api.get('/radiologies/orders?status=COMPLETED');
+      const completedOrders = completedResponse.data.batchOrders || [];
+      
+      // Count completed today
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const completedToday = completedOrders.filter(order => {
+        const orderDate = new Date(order.createdAt);
+        return orderDate >= today;
+      }).length;
+      
+      // Count urgent orders (emergency visits)
+      const urgentOrders = pendingResponse.data.batchOrders?.filter(order => 
+        order.visit?.isEmergency === true
+      ).length || 0;
+      
+      // Total scans (all orders)
+      const totalScans = pendingOrders + completedOrders.length;
+      
+      setStats({
+        pendingOrders,
+        completedToday,
+        totalScans,
+        urgentOrders
+      });
+    } catch (error) {
+      console.error('Error fetching radiology stats:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const statCards = [
     {

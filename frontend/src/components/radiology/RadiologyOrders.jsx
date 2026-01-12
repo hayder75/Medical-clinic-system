@@ -380,7 +380,26 @@ const RadiologyOrders = () => {
       });
 
       const patient = order.patient || {};
-      const doctor = order.doctor || {};
+      
+      // Get radiologist from first result's radiologistUser
+      const firstResult = allResults[0];
+      const radiologistName = firstResult?.radiologistUser?.fullname || firstResult?.radiologistUser || 'Radiologist';
+      
+      // Calculate age from date of birth
+      const calculateAge = (dob) => {
+        if (!dob) return 'N/A';
+        const birthDate = new Date(dob);
+        const today = new Date();
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const monthDiff = today.getMonth() - birthDate.getMonth();
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+          age--;
+        }
+        return age;
+      };
+      
+      const patientAge = patient.dob ? calculateAge(patient.dob) : (patient.age || 'N/A');
+      const patientBloodType = patient.bloodType || 'N/A';
 
       const receiptContent = `
     <!DOCTYPE html>
@@ -443,14 +462,14 @@ const RadiologyOrders = () => {
             text-align: left;
           }
           .clinic-name { 
-            font-size: 24px; 
+            font-size: 26px; 
             font-weight: 800; 
             margin: 0;
             color: #1e40af;
             letter-spacing: -0.5px;
           }
           .clinic-tagline {
-            font-size: 12px;
+            font-size: 13px;
             color: #64748b;
             margin: 0;
             font-style: italic;
@@ -459,14 +478,14 @@ const RadiologyOrders = () => {
             text-align: right;
           }
           .report-title { 
-            font-size: 20px; 
+            font-size: 22px; 
             font-weight: 700; 
             margin: 0;
             color: #0f172a;
             text-transform: uppercase;
           }
           .report-info {
-            font-size: 12px;
+            font-size: 13px;
             color: #64748b;
             margin-top: 2px;
           }
@@ -478,7 +497,7 @@ const RadiologyOrders = () => {
             border-radius: 6px;
           }
           .section-header {
-            font-size: 14px;
+            font-size: 15px;
             font-weight: 700;
             margin-bottom: 10px;
             color: #1e293b;
@@ -489,7 +508,7 @@ const RadiologyOrders = () => {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
             gap: 10px;
-            font-size: 13px;
+            font-size: 14px;
           }
           .info-item {
             display: flex;
@@ -498,12 +517,13 @@ const RadiologyOrders = () => {
           .info-label {
             font-weight: 600;
             color: #64748b;
-            font-size: 11px;
+            font-size: 12px;
             text-transform: uppercase;
           }
           .info-value {
             color: #1e293b;
             font-weight: 500;
+            font-size: 14px;
           }
           .results-section {
             margin: 15px 0;
@@ -513,7 +533,7 @@ const RadiologyOrders = () => {
             page-break-inside: avoid;
           }
           .test-title {
-            font-size: 16px;
+            font-size: 17px;
             font-weight: 700;
             margin-bottom: 10px;
             padding: 8px 12px;
@@ -525,14 +545,14 @@ const RadiologyOrders = () => {
             margin: 10px 0;
           }
           .section-label {
-            font-size: 14px;
+            font-size: 15px;
             font-weight: 700;
             margin-bottom: 5px;
             color: #1e293b;
           }
           .section-content {
-            font-size: 13px;
-            line-height: 1.5;
+            font-size: 14px;
+            line-height: 1.6;
             color: #334155;
             white-space: pre-wrap;
             padding: 8px 12px;
@@ -620,7 +640,11 @@ const RadiologyOrders = () => {
                 </div>
                 <div class="info-item">
                   <span class="info-label">Age</span>
-                  <span class="info-value">${patient.age || 'N/A'}</span>
+                  <span class="info-value">${patientAge}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Blood Type</span>
+                  <span class="info-value">${patientBloodType}</span>
                 </div>
                 <div class="info-item">
                   <span class="info-label">Doctor</span>
@@ -665,6 +689,7 @@ const RadiologyOrders = () => {
             <div class="signature-section">
               <div class="signature-box">
                 <div class="signature-line">Radiologist Signature</div>
+                <div style="font-size: 13px; margin-top: 3px; font-weight: 600;">${radiologistName}</div>
               </div>
               <div class="stamp-area">Clinic Stamp</div>
               <div class="signature-box">

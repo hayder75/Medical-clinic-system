@@ -9,6 +9,7 @@ import ReceptionDoctorQueueManagement from '../../pages/reception/DoctorQueueMan
 import PatientGallery from '../../pages/shared/PatientGallery';
 import LoanDisbursement from '../../components/billing/LoanDisbursement';
 import AdvanceDeposits from '../../components/billing/AdvanceDeposits';
+import BillingPatientHistory from '../../components/billing/BillingPatientHistory';
 import { 
   CreditCard, 
   Users, 
@@ -22,7 +23,8 @@ import {
   RefreshCw,
   Wallet,
   Stethoscope,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Printer
 } from 'lucide-react';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
@@ -345,6 +347,17 @@ const BillingDashboard = () => {
           <h3 className="text-lg font-semibold text-gray-900 mb-2">Advance Deposits</h3>
           <p className="text-sm text-gray-600">Accept deposits from advance users</p>
         </div>
+        
+        <div
+          onClick={() => navigate('/billing/prints')}
+          className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow cursor-pointer border border-gray-200"
+        >
+          <div className="bg-indigo-500 w-12 h-12 rounded-lg flex items-center justify-center mb-4">
+            <Printer className="h-6 w-6 text-white" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Prints</h3>
+          <p className="text-sm text-gray-600">Print lab results, radiology reports, and prescriptions</p>
+        </div>
       </div>
     </div>
   );
@@ -361,6 +374,7 @@ const BillingDashboard = () => {
       <Route path="/gallery" element={<PatientGallery />} />
       <Route path="/loan-disbursement" element={<LoanDisbursement />} />
       <Route path="/advance-deposits" element={<AdvanceDeposits />} />
+      <Route path="/prints" element={<BillingPatientHistory />} />
       {/* Redirect old patient-accounts route to advance-deposits */}
       <Route path="/patient-accounts" element={<Navigate to="/billing/advance-deposits" replace />} />
     </Routes>

@@ -11,7 +11,8 @@ import {
   RefreshCw,
   Calendar,
   Stethoscope,
-  Clock
+  Clock,
+  Edit
 } from 'lucide-react';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
@@ -23,15 +24,30 @@ const PatientManagement = () => {
   const [cardStatusFilter, setCardStatusFilter] = useState('ALL');
   const [showActivateModal, setShowActivateModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [patientHistory, setPatientHistory] = useState(null);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [stats, setStats] = useState({ total: 0, active: 0, inactive: 0, expired: 0 });
   const [activatingCard, setActivatingCard] = useState(false);
+  const [updatingPatient, setUpdatingPatient] = useState(false);
 
   // Card activation form
   const [activateForm, setActivateForm] = useState({
     notes: ''
+  });
+
+  // Patient edit form
+  const [editForm, setEditForm] = useState({
+    name: '',
+    mobile: '',
+    email: '',
+    address: '',
+    emergencyContact: '',
+    dob: '',
+    gender: '',
+    bloodType: '',
+    maritalStatus: ''
   });
 
   useEffect(() => {
@@ -115,6 +131,59 @@ const PatientManagement = () => {
     setSelectedPatient(patient);
     setShowHistoryModal(true);
     await fetchPatientHistory(patient.id);
+  };
+
+  const handleEditPatient = (patient) => {
+    setSelectedPatient(patient);
+    setEditForm({
+      name: patient.name || '',
+      mobile: patient.mobile || '',
+      email: patient.email || '',
+      address: patient.address || '',
+      emergencyContact: patient.emergencyContact || '',
+      dob: patient.dob ? new Date(patient.dob).toISOString().split('T')[0] : '',
+      gender: patient.gender || '',
+      bloodType: patient.bloodType || '',
+      maritalStatus: patient.maritalStatus || ''
+    });
+    setShowEditModal(true);
+  };
+
+  const handleUpdatePatient = async () => {
+    if (!selectedPatient) return;
+    
+    try {
+      setUpdatingPatient(true);
+      
+      // Prepare data: convert empty strings to null for optional fields
+      const updateData = {
+        name: editForm.name.trim() || undefined,
+        mobile: editForm.mobile?.trim() || null,
+        email: editForm.email?.trim() || null,
+        address: editForm.address?.trim() || null,
+        emergencyContact: editForm.emergencyContact?.trim() || null,
+        dob: editForm.dob || null,
+        gender: editForm.gender || null,
+        bloodType: editForm.bloodType || null,
+        maritalStatus: editForm.maritalStatus || null
+      };
+      
+      const response = await api.put(`/reception/patients/${selectedPatient.id}`, updateData);
+      
+      if (response.data.success) {
+        toast.success('Patient updated successfully');
+        setShowEditModal(false);
+        setSelectedPatient(null);
+        fetchPatients(); // Refresh the list
+      } else {
+        toast.error('Failed to update patient');
+      }
+    } catch (error) {
+      console.error('Error updating patient:', error);
+      toast.error('Failed to update patient: ' + (error.response?.data?.error || error.message));
+    } finally {
+      setUpdatingPatient(false);
+    }
   };
 
   const getCardStatusColor = (status) => {
@@ -314,6 +383,13 @@ const PatientManagement = () => {
                         )}
                         {/* Manual deactivation removed - cards now deactivate automatically based on expiry date */}
                         <button 
+                          onClick={() => handleEditPatient(patient)}
+                          className="text-green-600 hover:text-green-900 flex items-center gap-1"
+                        >
+                          <Edit className="h-4 w-4" />
+                          Edit
+                        </button>
+                        <button 
                           onClick={() => handleViewHistory(patient)}
                           className="text-blue-600 hover:text-blue-900"
                         >
@@ -510,6 +586,242 @@ const PatientManagement = () => {
                 <p>No history data available.</p>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Edit Patient Modal */}
+      {showEditModal && selectedPatient && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold">Edit Patient Details</h2>
+              <button
+                onClick={() => {
+                  setShowEditModal(false);
+                  setSelectedPatient(null);
+                }}
+                disabled={updatingPatient}
+                className={`text-gray-400 hover:text-gray-600 ${
+                  updatingPatient ? 'cursor-not-allowed opacity-50' : ''
+                }`}
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            <div className="mb-4">
+              <p className="text-sm text-gray-600 mb-2">Patient ID: <span className="font-medium">{selectedPatient.id}</span></p>
+            </div>
+
+            <div className="space-y-4">
+              {/* Name */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={editForm.name}
+                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                  disabled={updatingPatient}
+                  className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
+                    updatingPatient ? 'bg-gray-100 cursor-not-allowed' : ''
+                  }`}
+                  required
+                />
+              </div>
+
+              {/* Mobile */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Mobile
+                </label>
+                <input
+                  type="text"
+                  value={editForm.mobile}
+                  onChange={(e) => setEditForm({ ...editForm, mobile: e.target.value })}
+                  disabled={updatingPatient}
+                  className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
+                    updatingPatient ? 'bg-gray-100 cursor-not-allowed' : ''
+                  }`}
+                  placeholder="e.g., 0912345678"
+                />
+              </div>
+
+              {/* Email */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  value={editForm.email}
+                  onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                  disabled={updatingPatient}
+                  className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
+                    updatingPatient ? 'bg-gray-100 cursor-not-allowed' : ''
+                  }`}
+                  placeholder="patient@example.com"
+                />
+              </div>
+
+              {/* Address */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Address
+                </label>
+                <textarea
+                  value={editForm.address}
+                  onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
+                  disabled={updatingPatient}
+                  rows={2}
+                  className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
+                    updatingPatient ? 'bg-gray-100 cursor-not-allowed' : ''
+                  }`}
+                  placeholder="Patient address"
+                />
+              </div>
+
+              {/* Emergency Contact */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Emergency Contact
+                </label>
+                <input
+                  type="text"
+                  value={editForm.emergencyContact}
+                  onChange={(e) => setEditForm({ ...editForm, emergencyContact: e.target.value })}
+                  disabled={updatingPatient}
+                  className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
+                    updatingPatient ? 'bg-gray-100 cursor-not-allowed' : ''
+                  }`}
+                  placeholder="Emergency contact name or phone"
+                />
+              </div>
+
+              {/* Date of Birth */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Date of Birth
+                </label>
+                <input
+                  type="date"
+                  value={editForm.dob}
+                  onChange={(e) => setEditForm({ ...editForm, dob: e.target.value })}
+                  disabled={updatingPatient}
+                  className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
+                    updatingPatient ? 'bg-gray-100 cursor-not-allowed' : ''
+                  }`}
+                />
+              </div>
+
+              {/* Gender */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Gender
+                </label>
+                <select
+                  value={editForm.gender}
+                  onChange={(e) => setEditForm({ ...editForm, gender: e.target.value })}
+                  disabled={updatingPatient}
+                  className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
+                    updatingPatient ? 'bg-gray-100 cursor-not-allowed' : ''
+                  }`}
+                >
+                  <option value="">Select Gender</option>
+                  <option value="MALE">Male</option>
+                  <option value="FEMALE">Female</option>
+                  <option value="OTHER">Other</option>
+                </select>
+              </div>
+
+              {/* Blood Type */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Blood Type
+                </label>
+                <select
+                  value={editForm.bloodType}
+                  onChange={(e) => setEditForm({ ...editForm, bloodType: e.target.value })}
+                  disabled={updatingPatient}
+                  className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
+                    updatingPatient ? 'bg-gray-100 cursor-not-allowed' : ''
+                  }`}
+                >
+                  <option value="">Select Blood Type</option>
+                  <option value="A_PLUS">A+</option>
+                  <option value="A_MINUS">A-</option>
+                  <option value="B_PLUS">B+</option>
+                  <option value="B_MINUS">B-</option>
+                  <option value="AB_PLUS">AB+</option>
+                  <option value="AB_MINUS">AB-</option>
+                  <option value="O_PLUS">O+</option>
+                  <option value="O_MINUS">O-</option>
+                  <option value="UNKNOWN">Unknown</option>
+                </select>
+              </div>
+
+              {/* Marital Status */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Marital Status
+                </label>
+                <select
+                  value={editForm.maritalStatus}
+                  onChange={(e) => setEditForm({ ...editForm, maritalStatus: e.target.value })}
+                  disabled={updatingPatient}
+                  className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
+                    updatingPatient ? 'bg-gray-100 cursor-not-allowed' : ''
+                  }`}
+                >
+                  <option value="">Select Marital Status</option>
+                  <option value="SINGLE">Single</option>
+                  <option value="MARRIED">Married</option>
+                  <option value="DIVORCED">Divorced</option>
+                  <option value="WIDOWED">Widowed</option>
+                  <option value="UNKNOWN">Unknown</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowEditModal(false);
+                  setSelectedPatient(null);
+                }}
+                disabled={updatingPatient}
+                className={`px-4 py-2 text-gray-700 rounded-lg ${
+                  updatingPatient 
+                    ? 'bg-gray-100 cursor-not-allowed' 
+                    : 'bg-gray-200 hover:bg-gray-300'
+                }`}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleUpdatePatient}
+                disabled={updatingPatient || !editForm.name.trim()}
+                className={`px-4 py-2 text-white rounded-lg flex items-center gap-2 ${
+                  updatingPatient || !editForm.name.trim()
+                    ? 'bg-gray-400 cursor-not-allowed' 
+                    : 'bg-blue-500 hover:bg-blue-600'
+                }`}
+              >
+                {updatingPatient ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Updating...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="h-4 w-4" />
+                    Update Patient
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

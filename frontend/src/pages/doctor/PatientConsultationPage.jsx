@@ -54,6 +54,7 @@ const PatientConsultationPage = () => {
   const [imageViewerIndex, setImageViewerIndex] = useState(0);
 
   // Complete Visit state
+  const [showCompleteConfirmModal, setShowCompleteConfirmModal] = useState(false);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [completingVisit, setCompletingVisit] = useState(false);
   const [completeForm, setCompleteForm] = useState({
@@ -379,6 +380,12 @@ const PatientConsultationPage = () => {
 
   // Complete Visit Functions
   const handleCompleteVisit = () => {
+    // Show custom confirmation modal
+    setShowCompleteConfirmModal(true);
+  };
+
+  const handleConfirmCompleteVisit = () => {
+    setShowCompleteConfirmModal(false);
     setShowCompleteModal(true);
   };
 
@@ -1549,7 +1556,15 @@ const PatientConsultationPage = () => {
                       ⏳ Lab Orders Pending Results
                     </h4>
                     <div className="space-y-3">
-                      {labBatchOrders.map((batchOrder) => (
+                      {/* Show old system BatchOrders (only if they don't have LabTestOrders linked) */}
+                      {labBatchOrders
+                        .filter(batchOrder => {
+                          // Only show BatchOrder if it doesn't have LabTestOrders linked to it
+                          // (LabTestOrders are shown separately below)
+                          const hasLabTestOrders = labTestOrders.some(ltOrder => ltOrder.batchOrderId === batchOrder.id);
+                          return !hasLabTestOrders;
+                        })
+                        .map((batchOrder) => (
                         <div key={batchOrder.id} className="p-4 border rounded-lg border-gray-200 bg-gray-50">
                           <div className="flex justify-between items-start">
                             <div>
@@ -1586,7 +1601,7 @@ const PatientConsultationPage = () => {
                         </div>
                       ))}
 
-                      {/* Show pending new lab test orders */}
+                      {/* Show pending new lab test orders (these replace BatchOrder display when using new system) */}
                       {labTestOrders
                         .filter(order => !order.results || order.results.length === 0)
                         .map((order) => (
@@ -2100,6 +2115,66 @@ const PatientConsultationPage = () => {
           images={imageViewerImages}
           currentIndex={imageViewerIndex}
         />
+
+        {/* Complete Visit Confirmation Modal */}
+        {showCompleteConfirmModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setShowCompleteConfirmModal(false)}>
+            <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+              <div className="p-6">
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="flex-shrink-0">
+                    <div className="h-12 w-12 rounded-full flex items-center justify-center" style={{ backgroundColor: '#FEF3C7' }}>
+                      <AlertTriangle className="h-6 w-6" style={{ color: '#F59E0B' }} />
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-xl font-semibold" style={{ color: '#0C0E0B' }}>Complete Visit</h3>
+                    <p className="text-sm mt-1" style={{ color: '#6B7280' }}>
+                      Are you sure you want to complete this visit, <span className="font-semibold" style={{ color: '#2e13d1' }}>Dr. {currentUser?.fullname || currentUser?.username || 'Doctor'}</span>?
+                    </p>
+                  </div>
+                </div>
+                
+                {visit?.patient && (
+                  <div className="bg-gray-50 border rounded-lg p-4 mb-4" style={{ borderColor: '#E5E7EB' }}>
+                    <p className="text-sm font-medium mb-2" style={{ color: '#0C0E0B' }}>Patient Information:</p>
+                    <div className="space-y-1 text-sm">
+                      <p style={{ color: '#6B7280' }}>
+                        <span className="font-medium">Name:</span> <span style={{ color: '#0C0E0B' }}>{visit.patient.name}</span>
+                      </p>
+                      <p style={{ color: '#6B7280' }}>
+                        <span className="font-medium">Visit ID:</span> <span style={{ color: '#0C0E0B' }}>{visit.visitUid}</span>
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+                  <p className="text-sm font-medium" style={{ color: '#92400E' }}>
+                    ⚠️ This action cannot be undone. Once completed, the visit will be finalized.
+                  </p>
+                </div>
+
+                <div className="flex justify-end gap-3">
+                  <button
+                    onClick={() => setShowCompleteConfirmModal(false)}
+                    className="px-4 py-2 border rounded-lg font-medium transition-colors hover:bg-gray-50"
+                    style={{ borderColor: '#E5E7EB', color: '#6B7280' }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleConfirmCompleteVisit}
+                    className="px-4 py-2 rounded-lg font-medium text-white transition-colors hover:opacity-90"
+                    style={{ backgroundColor: '#2e13d1' }}
+                  >
+                    Yes, Complete Visit
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Complete Visit Modal */}
         {showCompleteModal && (

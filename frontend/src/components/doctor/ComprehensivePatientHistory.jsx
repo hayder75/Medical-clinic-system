@@ -1,17 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  User, Search, FileText, Calendar, TestTube, Scan, Pill, Heart, Clock, 
-  CheckCircle, AlertTriangle, Download, Eye, Circle, Stethoscope, 
-  Activity, Image, Receipt, Users, ChevronDown, ChevronRight, 
-  MapPin, Phone, Mail, Calendar as CalendarIcon, UserCheck, X, ArrowLeft, Printer, Smile, UserCog
+import {
+  User, Search, FileText, Calendar, TestTube, Scan, Pill, Heart, Clock,
+  CheckCircle, AlertTriangle, Download, Eye, Circle, Stethoscope,
+  Activity, Image, Receipt, Users, ChevronDown, ChevronRight,
+  MapPin, Phone, Mail, Calendar as CalendarIcon, UserCheck, X, ArrowLeft, Printer, Smile, UserCog, Package
 } from 'lucide-react';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
+import { useAuth } from '../../contexts/AuthContext';
 import DentalChartDisplay from '../common/DentalChartDisplay';
 import ImageViewer from '../common/ImageViewer';
 import { getImageUrl } from '../../utils/imageUrl';
 
 const ComprehensivePatientHistory = () => {
+  const { user: currentUser } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [patients, setPatients] = useState([]);
   const [selectedPatient, setSelectedPatient] = useState(null);
@@ -27,7 +29,7 @@ const ComprehensivePatientHistory = () => {
 
   const searchPatients = async () => {
     if (!searchTerm.trim()) return;
-    
+
     try {
       setLoading(true);
       console.log('🔍 Frontend: Searching for:', searchTerm);
@@ -128,13 +130,13 @@ const ComprehensivePatientHistory = () => {
 
   const handlePrintVisit = () => {
     if (!selectedVisit || !patientHistory) return;
-    
+
     const printWindow = window.open('', '_blank');
     const printContent = generatePrintHTML(selectedVisit, patientHistory);
-    
+
     printWindow.document.write(printContent);
     printWindow.document.close();
-    
+
     setTimeout(() => {
       printWindow.print();
     }, 250);
@@ -142,7 +144,7 @@ const ComprehensivePatientHistory = () => {
 
   const handleDownloadPDF = async () => {
     if (!selectedVisit || !patientHistory) return;
-    
+
     try {
       const response = await api.get(`/doctors/patient-history/${patientHistory.patient.id}/visit/${selectedVisit.id}/pdf`);
       const link = document.createElement('a');
@@ -158,9 +160,1130 @@ const ComprehensivePatientHistory = () => {
     }
   };
 
+  // Calculate patient age from date of birth
+  const calculateAge = (dob) => {
+    if (!dob) return 'N/A';
+    const birthDate = new Date(dob);
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age;
+  };
+
+  // Print medications from patient history
+  const handlePrintMedications = () => {
+    // Check both medications and medicationOrders
+    const medications = selectedVisit?.medications || selectedVisit?.medicationOrders || [];
+    if (!selectedVisit || !patientHistory || medications.length === 0) {
+      toast.error('No medications to print');
+      return;
+    }
+
+    try {
+      const patient = patientHistory.patient;
+      const medicationsToPrint = medications;
+
+      const patientAge = patient?.dob ? calculateAge(patient.dob) : 'N/A';
+      const patientGender = patient?.gender || 'N/A';
+      const patientCardNumber = patient?.id || 'N/A';
+      const patientName = patient?.name || 'N/A';
+      const patientAddress = patient?.address || 'N/A';
+      const patientPhone = patient?.mobile || patient?.phone || 'N/A';
+
+      // Get doctor from first medication order (all should be from same doctor)
+      const firstMed = medicationsToPrint[0];
+      const prescribingDoctor = firstMed?.doctor || firstMed?.medicationOrder?.doctor || selectedVisit.doctor || currentUser;
+      const doctorName = prescribingDoctor?.fullname || currentUser?.fullname || 'Dr. Unknown';
+      const doctorSpecialty = prescribingDoctor?.specialties?.join(', ') || currentUser?.specialties?.join(', ') || 'General Practitioner';
+      const doctorLicense = prescribingDoctor?.licenseNumber || currentUser?.licenseNumber || 'N/A';
+
+      const currentDate = new Date().toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+      const currentTime = new Date().toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+
+      const medCount = medicationsToPrint.length;
+      let numColumns = 1;
+      if (medCount >= 7) {
+        numColumns = 3;
+      } else if (medCount >= 4) {
+        numColumns = 2;
+      } else if (medCount >= 3) {
+        numColumns = 2;
+      } else {
+        numColumns = 1;
+      }
+
+      const printWindow = window.open('', '_blank');
+      const prescriptionContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Prescription - ${patientName}</title>
+          <style>
+            @media print {
+              @page { 
+                size: A6;
+                margin: 0;
+              }
+              body { 
+                margin: 0; 
+                padding: 0;
+                display: flex;
+                justify-content: center;
+                align-items: flex-start;
+              }
+              .no-print { display: none; }
+              .prescription-container {
+                width: 105mm;
+                height: 148mm;
+                margin: 0;
+                padding: 8mm;
+                border: none;
+                box-shadow: none;
+              }
+            }
+            body { 
+              font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+              margin: 0; 
+              padding: 20px;
+              color: #333;
+              line-height: 1.4;
+              background: #f3f4f6;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+            }
+            .no-print {
+              text-align: center;
+              padding: 15px;
+              background: #fff;
+              margin-bottom: 20px;
+              border-radius: 8px;
+              box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+              width: 100%;
+              max-width: 400px;
+            }
+            .no-print button {
+              background: #2563eb;
+              color: white;
+              border: none;
+              padding: 10px 24px;
+              border-radius: 6px;
+              cursor: pointer;
+              font-size: 16px;
+              font-weight: 600;
+              transition: background 0.2s;
+            }
+            .no-print button:hover {
+              background: #1d4ed8;
+            }
+            .prescription-container {
+              width: 105mm;
+              min-height: 148mm;
+              background: white;
+              padding: 8mm;
+              box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+              border-radius: 2px;
+              position: relative;
+              box-sizing: border-box;
+            }
+            .header { 
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              padding-bottom: 8px; 
+              margin-bottom: 12px; 
+              border-bottom: 2px solid #2563eb;
+            }
+            .header-left {
+              display: flex;
+              align-items: center;
+              gap: 10px;
+            }
+            .logo {
+              width: 45px;
+              height: 45px;
+              object-fit: contain;
+            }
+            .clinic-info {
+              text-align: left;
+            }
+            .clinic-name { 
+              font-size: 18px; 
+              font-weight: 800; 
+              margin: 0;
+              color: #1e40af;
+              letter-spacing: -0.3px;
+            }
+            .clinic-tagline {
+              font-size: 10px;
+              color: #64748b;
+              margin: 0;
+              font-style: italic;
+            }
+            .header-right {
+              text-align: right;
+            }
+            .report-title { 
+              font-size: 16px; 
+              font-weight: 700; 
+              margin: 0;
+              color: #0f172a;
+              text-transform: uppercase;
+            }
+            .report-info {
+              font-size: 10px;
+              color: #64748b;
+              margin-top: 1px;
+            }
+            .patient-section {
+              margin: 8px 0;
+              padding: 6px;
+              background: #f8fafc;
+              border: 1px solid #e2e8f0;
+              border-radius: 4px;
+            }
+            .patient-grid {
+              display: grid;
+              grid-template-columns: repeat(2, 1fr);
+              gap: 4px 8px;
+              font-size: 12px;
+            }
+            .info-item {
+              display: flex;
+              gap: 4px;
+            }
+            .info-label {
+              font-weight: 700;
+              color: #64748b;
+              min-width: 60px;
+              font-size: 11px;
+            }
+            .info-value {
+              color: #1e293b;
+              font-weight: 500;
+              font-size: 12px;
+            }
+            .medications-section {
+              margin: 5px 0;
+            }
+            .medication-item {
+              margin-bottom: 8px;
+              padding-bottom: 4px;
+              border-bottom: 1px dashed #e2e8f0;
+              page-break-inside: avoid;
+            }
+            .medication-item:last-child {
+              border-bottom: none;
+            }
+            .medication-name {
+              font-weight: 700;
+              font-size: 13px;
+              color: #0f172a;
+            }
+            .medication-details {
+              font-size: 12px;
+              color: #475569;
+              margin-top: 1px;
+              font-style: italic;
+            }
+            .footer {
+              margin-top: 15px;
+              padding-top: 8px;
+              border-top: 1px solid #e2e8f0;
+              display: flex;
+              justify-content: space-between;
+              align-items: flex-end;
+            }
+            .doctor-info {
+              font-size: 11px;
+              color: #475569;
+            }
+            .doctor-name {
+              font-weight: 700;
+              color: #1e293b;
+              font-size: 12px;
+            }
+            .signature-area {
+              text-align: center;
+              width: 120px;
+            }
+            .signature-line {
+              border-top: 1px solid #334155;
+              margin-top: 25px;
+              padding-top: 3px;
+              font-size: 10px;
+              font-weight: 600;
+              color: #64748b;
+            }
+            .print-footer {
+              text-align: center;
+              font-size: 9px;
+              color: #94a3b8;
+              margin-top: 10px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="no-print">
+            <button onclick="window.print()">Print Prescription</button>
+          </div>
+
+          <div class="prescription-container">
+            <div class="header">
+              <div class="header-left">
+                <img src="/clinic-logo.jpg" alt="Clinic Logo" class="logo" onerror="this.style.display='none'">
+                <div class="clinic-info">
+                  <h1 class="clinic-name">Selihom Medium Clinic</h1>
+                  <p class="clinic-tagline">Quality Healthcare You Can Trust</p>
+                </div>
+              </div>
+              <div class="header-right">
+                <h2 class="report-title">Prescription</h2>
+                <div class="report-info">
+                  Date: ${currentDate}<br>
+                  Time: ${currentTime}
+                </div>
+              </div>
+            </div>
+
+            <div class="patient-section">
+              <div class="patient-grid">
+                <div class="info-item">
+                  <span class="info-label">Patient:</span>
+                  <span class="info-value">${patientName}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">ID:</span>
+                  <span class="info-value">#${patientCardNumber}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Age/Sex:</span>
+                  <span class="info-value">${patientAge}Y / ${patientGender}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Phone:</span>
+                  <span class="info-value">${patientPhone}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="medications-section">
+              ${medicationsToPrint.map((med, index) => {
+        // Handle both medicationOrders and medications format
+        const medication = med.medication || med.medicationCatalog || {};
+        const medName = medication.name || med.name || 'Unknown';
+        const medDosageForm = medication.dosageForm || med.dosageForm || '';
+        const medStrength = medication.strength || med.strength || '';
+        const medQuantity = med.quantity || med.quantityNumeric || '';
+        const medFrequency = med.frequency || '';
+        const medDuration = med.duration || '';
+        const medInstructions = med.instructions || med.additionalNotes || '';
+
+        const details = [];
+        if (medStrength) details.push(medStrength);
+        if (medDosageForm) details.push(medDosageForm);
+        if (medFrequency) details.push(medFrequency);
+        if (medDuration) details.push(medDuration);
+        if (medQuantity) details.push(`Qty: ${medQuantity}`);
+
+        return `
+                <div class="medication-item">
+                  <div class="medication-name">${index + 1}. ${medName}</div>
+                  <div class="medication-details">
+                    ${details.join(' • ')}
+                    ${medInstructions ? `<br>Note: ${medInstructions}` : ''}
+                  </div>
+                </div>
+              `;
+      }).join('')}
+            </div>
+
+            <div class="footer">
+              <div class="doctor-info">
+                Prescribed by:<br>
+                <span class="doctor-name">${doctorName}</span><br>
+                ${doctorSpecialty}
+              </div>
+              <div class="signature-area">
+                <div class="signature-line">Doctor's Signature & Stamp</div>
+              </div>
+            </div>
+
+            <div class="print-footer">
+              Selihom Medium Clinic - Generated on ${new Date().toLocaleString()}
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+      printWindow.document.write(prescriptionContent);
+      printWindow.document.close();
+
+      setTimeout(() => {
+        printWindow.print();
+      }, 250);
+
+      toast.success('Opening print dialog...');
+    } catch (error) {
+      console.error('Error printing prescription:', error);
+      toast.error('Failed to print prescription');
+    }
+  };
+
+  // Print lab results from patient history
+  const handlePrintLabResults = async () => {
+    // Check labResults, labOrders, and labTestOrders
+    const labResults = selectedVisit?.labResults || selectedVisit?.labOrders || selectedVisit?.labTestOrders || [];
+    if (!selectedVisit || !patientHistory || labResults.length === 0) {
+      toast.error('No lab results to print');
+      return;
+    }
+
+    try {
+      const patient = patientHistory.patient;
+
+      // Filter to only show completed results (not QUEUED, PENDING, or UNPAID)
+      // Only show results that have been completed and have actual result data
+      let allResults = [];
+      for (const result of labResults) {
+        // Skip if status is QUEUED, PENDING, or UNPAID
+        const status = result.status?.toUpperCase() || '';
+        if (['QUEUED', 'PENDING', 'UNPAID'].includes(status)) {
+          continue; // Skip pending/queued orders
+        }
+
+        // Include COMPLETED results even if they don't have detailed results yet
+        // For other statuses, require detailed results or result text
+        if (status === 'COMPLETED') {
+          // Always include COMPLETED results, even without detailed results
+          allResults.push({
+            testName: result.testType?.name || result.serviceName || 'Lab Test',
+            detailedResults: result.detailedResults || [],
+            resultText: result.resultText || null,
+            additionalNotes: result.additionalNotes || '',
+            createdAt: result.createdAt,
+            verifiedBy: result.verifiedBy,
+            verifiedByUser: result.verifiedByUser || null,
+            verifiedAt: result.verifiedAt,
+            status: status
+          });
+        } else if (result.detailedResults && result.detailedResults.length > 0) {
+          // Include if it has detailed results
+          allResults.push({
+            testName: result.testType?.name || result.serviceName || 'Lab Test',
+            detailedResults: result.detailedResults,
+            additionalNotes: result.additionalNotes || '',
+            createdAt: result.createdAt,
+            verifiedBy: result.verifiedBy,
+            verifiedByUser: result.verifiedByUser || null,
+            verifiedAt: result.verifiedAt,
+            status: status
+          });
+        } else if (result.resultText) {
+          // Include if it has result text
+          allResults.push({
+            testName: result.testType?.name || result.serviceName || 'Lab Test',
+            detailedResults: [],
+            resultText: result.resultText,
+            additionalNotes: result.additionalNotes || '',
+            createdAt: result.createdAt,
+            verifiedBy: result.verifiedBy,
+            verifiedByUser: result.verifiedByUser || null,
+            verifiedAt: result.verifiedAt,
+            status: status
+          });
+        }
+      }
+
+      if (allResults.length === 0) {
+        toast.error('No completed lab results found for this visit. Only completed results with actual data can be printed.');
+        return;
+      }
+
+      const printWindow = window.open('', '_blank');
+      const currentDate = new Date();
+      const formatDate = (date) => {
+        return date.toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        });
+      };
+      const formatDateTime = (date) => {
+        return date.toLocaleString('en-US');
+      };
+
+      // Get lab technician from first result's verifiedByUser
+      const firstResult = allResults[0];
+      const labTechnicianName = firstResult?.verifiedByUser?.fullname || firstResult?.verifiedByUser || currentUser?.fullname || 'Lab Technician';
+
+      printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Lab Results - ${patient.name || 'Patient'}</title>
+          <style>
+            @media print {
+              @page { 
+                size: A4;
+                margin: 10mm;
+              }
+              body { margin: 0; padding: 0; }
+              .no-print { display: none; }
+            }
+            body { 
+              font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+              margin: 0; 
+              padding: 10px;
+              color: #333;
+              line-height: 1.5;
+            }
+            .no-print {
+              text-align: center;
+              padding: 15px;
+              background: #f8f9fa;
+              margin-bottom: 15px;
+              border-bottom: 1px solid #dee2e6;
+            }
+            .no-print button {
+              background: #2563eb;
+              color: white;
+              border: none;
+              padding: 10px 24px;
+              border-radius: 5px;
+              cursor: pointer;
+              font-size: 16px;
+              font-weight: 600;
+            }
+            .header { 
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              padding-bottom: 10px; 
+              margin-bottom: 15px; 
+              border-bottom: 3px solid #2563eb;
+            }
+            .header-left {
+              display: flex;
+              align-items: center;
+              gap: 15px;
+            }
+            .logo {
+              width: 70px;
+              height: 70px;
+              object-fit: contain;
+            }
+            .clinic-info {
+              text-align: left;
+            }
+            .clinic-name { 
+              font-size: 26px; 
+              font-weight: 800; 
+              margin: 0;
+              color: #1e40af;
+              letter-spacing: -0.5px;
+            }
+            .clinic-tagline {
+              font-size: 13px;
+              color: #64748b;
+              margin: 0;
+              font-style: italic;
+            }
+            .header-right {
+              text-align: right;
+            }
+            .report-title { 
+              font-size: 22px; 
+              font-weight: 700; 
+              margin: 0;
+              color: #0f172a;
+              text-transform: uppercase;
+            }
+            .report-info {
+              font-size: 13px;
+              color: #64748b;
+              margin-top: 2px;
+            }
+            .patient-section {
+              margin: 15px 0;
+              padding: 12px;
+              background: #f8fafc;
+              border: 1px solid #e2e8f0;
+              border-radius: 6px;
+            }
+            .section-header {
+              font-size: 15px;
+              font-weight: 700;
+              margin-bottom: 10px;
+              color: #1e293b;
+              border-bottom: 1px solid #cbd5e1;
+              padding-bottom: 5px;
+            }
+            .patient-grid {
+              display: grid;
+              grid-template-columns: repeat(4, 1fr);
+              gap: 10px;
+              font-size: 14px;
+            }
+            .info-item {
+              display: flex;
+              flex-direction: column;
+            }
+            .info-label {
+              font-weight: 600;
+              color: #64748b;
+              font-size: 12px;
+              text-transform: uppercase;
+            }
+            .info-value {
+              color: #1e293b;
+              font-weight: 500;
+              font-size: 14px;
+            }
+            .results-section {
+              margin: 15px 0;
+            }
+            .test-card {
+              margin-bottom: 20px;
+              page-break-inside: avoid;
+            }
+            .test-header {
+              font-size: 17px;
+              font-weight: 700;
+              margin-bottom: 10px;
+              padding: 8px 12px;
+              background: #f1f5f9;
+              border-left: 4px solid #2563eb;
+              color: #1e293b;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin: 5px 0;
+            }
+            th {
+              text-align: left;
+              padding: 10px 12px;
+              background: #f8fafc;
+              color: #475569;
+              font-size: 13px;
+              font-weight: 600;
+              text-transform: uppercase;
+              border-bottom: 2px solid #e2e8f0;
+            }
+            td {
+              padding: 10px 12px;
+              border-bottom: 1px solid #f1f5f9;
+              font-size: 14px;
+              color: #334155;
+            }
+            .field-name {
+              font-weight: 600;
+              color: #1e293b;
+              width: 40%;
+            }
+            .field-value {
+              font-weight: 500;
+            }
+            .notes-box {
+              margin-top: 10px;
+              padding: 8px 12px;
+              background: #fffbeb;
+              border-left: 4px solid #f59e0b;
+              font-size: 14px;
+              color: #92400e;
+            }
+            .footer {
+              margin-top: 30px;
+              padding-top: 15px;
+              border-top: 1px solid #e2e8f0;
+              display: flex;
+              justify-content: space-between;
+              align-items: flex-start;
+            }
+            .signature-box {
+              text-align: center;
+              width: 180px;
+            }
+            .signature-line {
+              border-top: 1px solid #334155;
+              margin-top: 30px;
+              padding-top: 5px;
+              font-size: 13px;
+              font-weight: 600;
+              color: #475569;
+            }
+            .print-footer {
+              text-align: center;
+              font-size: 11px;
+              color: #94a3b8;
+              margin-top: 20px;
+              padding-top: 10px;
+              border-top: 1px solid #e2e8f0;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="no-print">
+            <button onclick="window.print()">Print Lab Results</button>
+          </div>
+
+          <div class="header">
+            <div class="header-left">
+              <img src="/clinic-logo.jpg" alt="Clinic Logo" class="logo" onerror="this.style.display='none'">
+              <div class="clinic-info">
+                <h1 class="clinic-name">Selihom Medium Clinic</h1>
+                <p class="clinic-tagline">Quality Healthcare You Can Trust</p>
+              </div>
+            </div>
+            <div class="header-right">
+              <h2 class="report-title">Laboratory Report</h2>
+              <div class="report-info">
+                Date: ${formatDate(currentDate)}<br>
+                Time: ${currentDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+              </div>
+            </div>
+          </div>
+
+          <div class="patient-section">
+            <div class="section-header">Patient Information</div>
+            <div class="patient-grid">
+              <div class="info-item">
+                <span class="info-label">Patient Name</span>
+                <span class="info-value">${patient.name || 'N/A'}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Patient ID</span>
+                <span class="info-value">${patient.id || 'N/A'}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Age / Gender</span>
+                <span class="info-value">${patient.age || 'N/A'} / ${patient.gender || 'N/A'}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Visit ID</span>
+                <span class="info-value">${selectedVisit.visitUid || 'N/A'}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="results-section">
+            ${allResults.map((result, idx) => `
+              <div class="test-card">
+                <div class="test-header">${result.testName}</div>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Test Name</th>
+                      <th>Result</th>
+                      <th>Unit</th>
+                      <th>Reference Range</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${result.detailedResults.map((test, testIdx) => `
+                      <tr>
+                        <td class="field-name">${test.testName || 'N/A'}</td>
+                        <td class="field-value">${test.result || 'N/A'}</td>
+                        <td>${test.unit || '-'}</td>
+                        <td>${test.referenceRange || 'N/A'}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+                ${result.additionalNotes ? `
+                  <div class="notes-box">
+                    <strong>Additional Notes:</strong> ${result.additionalNotes}
+                  </div>
+                ` : ''}
+              </div>
+            `).join('')}
+          </div>
+
+          <div class="footer">
+            <div class="signature-box">
+              <div class="signature-line">Lab Technician</div>
+              <div style="margin-top: 5px; font-size: 12px; color: #64748b;">${labTechnicianName}</div>
+            </div>
+            <div class="signature-box">
+              <div class="signature-line">Verified By</div>
+              ${allResults[0]?.verifiedBy ? `<div style="margin-top: 5px; font-size: 12px; color: #64748b;">${allResults[0].verifiedBy}</div>` : ''}
+            </div>
+            <div class="signature-box">
+              <div class="signature-line">Authorized Signature</div>
+            </div>
+          </div>
+
+          <div class="print-footer">
+            This is a computer-generated report. Selihom Medium Clinic. Generated on ${formatDateTime(currentDate)}
+          </div>
+        </body>
+      </html>
+      `);
+
+      printWindow.document.close();
+
+      setTimeout(() => {
+        printWindow.print();
+      }, 250);
+
+      toast.success('Opening print preview...');
+    } catch (error) {
+      console.error('Error printing lab results:', error);
+      toast.error('Failed to print lab results');
+    }
+  };
+
+  // Print radiology results from patient history
+  const handlePrintRadiologyResults = async () => {
+    if (!selectedVisit || !patientHistory || !selectedVisit.radiologyResults || selectedVisit.radiologyResults.length === 0) {
+      toast.error('No radiology results to print');
+      return;
+    }
+
+    try {
+      const patient = patientHistory.patient;
+      const radiologyResults = selectedVisit.radiologyResults || [];
+
+      if (radiologyResults.length === 0) {
+        toast.error('No radiology results found for this order. Please complete the tests first.');
+        return;
+      }
+
+      const printWindow = window.open('', '_blank');
+      const currentDate = new Date().toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+      const currentTime = new Date().toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+
+      // Get radiologist from first result's radiologistUser
+      const firstResult = radiologyResults[0];
+      const radiologistName = firstResult?.radiologistUser?.fullname || firstResult?.radiologistUser || 'Radiologist';
+
+      const receiptContent = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>Radiology Results Report</title>
+        <style>
+          @media print {
+            @page { 
+              size: A4;
+              margin: 10mm;
+            }
+            body { margin: 0; padding: 0; }
+            .no-print { display: none; }
+          }
+          body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            margin: 0; 
+            padding: 10px;
+            color: #333;
+            line-height: 1.6;
+            background: white;
+          }
+          .no-print {
+            text-align: center;
+            padding: 15px;
+            background: #f8f9fa;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #dee2e6;
+          }
+          .no-print button {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+          }
+          .header { 
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-bottom: 10px; 
+            margin-bottom: 15px; 
+            border-bottom: 3px solid #2563eb;
+          }
+          .header-left {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+          }
+          .logo {
+            width: 70px;
+            height: 70px;
+            object-fit: contain;
+          }
+          .clinic-info {
+            text-align: left;
+          }
+          .clinic-name { 
+            font-size: 26px; 
+            font-weight: 800; 
+            margin: 0;
+            color: #1e40af;
+            letter-spacing: -0.5px;
+          }
+          .clinic-tagline {
+            font-size: 13px;
+            color: #64748b;
+            margin: 0;
+            font-style: italic;
+          }
+          .header-right {
+            text-align: right;
+          }
+          .report-title { 
+            font-size: 22px; 
+            font-weight: 700; 
+            margin: 0;
+            color: #0f172a;
+            text-transform: uppercase;
+          }
+          .report-info {
+            font-size: 13px;
+            color: #64748b;
+            margin-top: 2px;
+          }
+          .patient-section {
+            margin: 15px 0;
+            padding: 12px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+          }
+          .section-header {
+            font-size: 15px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            color: #1e293b;
+            border-bottom: 1px solid #cbd5e1;
+            padding-bottom: 5px;
+          }
+          .patient-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            font-size: 14px;
+          }
+          .info-item {
+            display: flex;
+            flex-direction: column;
+          }
+          .info-label {
+            font-weight: 600;
+            color: #64748b;
+            font-size: 12px;
+            text-transform: uppercase;
+          }
+          .info-value {
+            color: #1e293b;
+            font-weight: 500;
+            font-size: 14px;
+          }
+          .results-section {
+            margin: 15px 0;
+          }
+          .test-result {
+            margin-bottom: 20px;
+            page-break-inside: avoid;
+          }
+          .test-title {
+            font-size: 17px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            padding: 8px 12px;
+            background: #f1f5f9;
+            border-left: 4px solid #2563eb;
+            color: #1e293b;
+          }
+          .findings-section, .conclusion-section {
+            margin: 10px 0;
+          }
+          .section-label {
+            font-size: 15px;
+            font-weight: 700;
+            margin-bottom: 5px;
+            color: #1e293b;
+          }
+          .section-content {
+            font-size: 14px;
+            line-height: 1.6;
+            color: #334155;
+            white-space: pre-wrap;
+            padding: 8px 12px;
+            background: #fff;
+            border-left: 3px solid #e2e8f0;
+            margin-left: 5px;
+          }
+          .signature-section {
+            margin-top: 30px;
+            padding-top: 15px;
+            border-top: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+          }
+          .signature-box {
+            text-align: center;
+            width: 180px;
+          }
+          .signature-line {
+            border-top: 1px solid #334155;
+            margin-top: 30px;
+            padding-top: 5px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #475569;
+          }
+          .stamp-area {
+            width: 100px;
+            height: 100px;
+            border: 2px dashed #cbd5e1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            color: #94a3b8;
+            margin: 0 auto;
+          }
+          .print-footer {
+            text-align: center;
+            font-size: 11px;
+            color: #94a3b8;
+            margin-top: 20px;
+            padding-top: 10px;
+            border-top: 1px solid #e2e8f0;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="no-print">
+          <button onclick="window.print()">Print Radiology Results</button>
+        </div>
+
+        <div class="header">
+          <div class="header-left">
+            <img src="/clinic-logo.jpg" alt="Clinic Logo" class="logo" onerror="this.style.display='none'">
+            <div class="clinic-info">
+              <h1 class="clinic-name">Selihom Medium Clinic</h1>
+              <p class="clinic-tagline">Quality Healthcare You Can Trust</p>
+            </div>
+          </div>
+          <div class="header-right">
+            <h2 class="report-title">Radiology Report</h2>
+            <div class="report-info">
+              Date: ${currentDate}<br>
+              Time: ${currentTime}
+            </div>
+          </div>
+        </div>
+
+        <div class="patient-section">
+          <div class="section-header">Patient Information</div>
+          <div class="patient-grid">
+            <div class="info-item">
+              <span class="info-label">Patient Name</span>
+              <span class="info-value">${patient.name || 'N/A'}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Patient ID</span>
+              <span class="info-value">${patient.id || 'N/A'}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Age / Gender</span>
+              <span class="info-value">${patient.age || 'N/A'} / ${patient.gender || 'N/A'}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Visit ID</span>
+              <span class="info-value">${selectedVisit.visitUid || 'N/A'}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="results-section">
+          ${radiologyResults.map(result => `
+            <div class="test-result">
+              <div class="test-title">${result.serviceName || result.testType?.name || 'Radiology Test'}</div>
+              
+              ${result.findings ? `
+                <div class="findings-section">
+                  <div class="section-label">Findings:</div>
+                  <div class="section-content">${result.findings}</div>
+                </div>
+              ` : ''}
+              
+              ${result.conclusion ? `
+                <div class="conclusion-section">
+                  <div class="section-label">Conclusion:</div>
+                  <div class="section-content">${result.conclusion}</div>
+                </div>
+              ` : ''}
+              
+              ${result.additionalNotes ? `
+                <div class="findings-section">
+                  <div class="section-label">Additional Notes:</div>
+                  <div class="section-content">${result.additionalNotes}</div>
+                </div>
+              ` : ''}
+            </div>
+          `).join('')}
+        </div>
+
+        <div class="signature-section">
+          <div class="signature-box">
+            <div class="signature-line">Radiologist Signature</div>
+            <div style="font-size: 13px; margin-top: 3px; font-weight: 600;">${radiologistName}</div>
+          </div>
+          <div class="stamp-area">Clinic Stamp</div>
+          <div class="signature-box">
+            <div class="signature-line">Authorized Signature</div>
+          </div>
+        </div>
+
+        <div class="print-footer">
+          This is a computer-generated report. Selihom Medium Clinic. Generated on ${currentDate} ${currentTime}
+        </div>
+      </body>
+    </html>
+    `;
+
+      printWindow.document.write(receiptContent);
+      printWindow.document.close();
+
+      setTimeout(() => {
+        printWindow.print();
+      }, 250);
+
+      toast.success('Opening print preview...');
+    } catch (error) {
+      console.error('Error printing radiology results:', error);
+      toast.error('Failed to print radiology results');
+    }
+  };
+
   const generatePrintHTML = (visit, history) => {
     const patient = history.patient;
-    
+
     return `
       <!DOCTYPE html>
       <html>
@@ -481,9 +1604,11 @@ const ComprehensivePatientHistory = () => {
     { id: 'vitals', label: 'Vitals & History', icon: Activity, show: true },
     { id: 'attachedImages', label: 'Attached Images', icon: Image, show: selectedVisit.attachedImages?.length > 0 },
     { id: 'gallery', label: 'Before & After Gallery', icon: Image, show: selectedVisit.galleryImages?.length > 0 },
-    { id: 'labResults', label: 'Lab Orders', icon: TestTube, show: selectedVisit.labResults?.length > 0 },
-    { id: 'radiologyResults', label: 'Radiology Orders', icon: Scan, show: selectedVisit.radiologyResults?.length > 0 },
-    { id: 'medications', label: 'Medications', icon: Pill, show: selectedVisit.medications?.length > 0 },
+    { id: 'labResults', label: 'Lab Orders', icon: TestTube, show: ((selectedVisit.labResults && selectedVisit.labResults.length > 0) || (selectedVisit.labOrders && selectedVisit.labOrders.length > 0) || (selectedVisit.batchOrders && selectedVisit.batchOrders.some(bo => bo.type === 'LAB')) || (selectedVisit.labTestOrders && selectedVisit.labTestOrders.length > 0)) },
+    { id: 'radiologyResults', label: 'Radiology Orders', icon: Scan, show: (selectedVisit.radiologyResults?.length > 0 || selectedVisit.radiologyOrders?.length > 0) },
+    { id: 'medications', label: 'Medications', icon: Pill, show: ((selectedVisit.medications?.length > 0) || (selectedVisit.medicationOrders?.length > 0)) },
+    { id: 'emergencyOrders', label: 'Emergency Orders', icon: AlertTriangle, show: (selectedVisit.emergencyOrders?.length > 0) },
+    { id: 'materialNeeds', label: 'Material Needs', icon: Package, show: (selectedVisit.materialNeeds?.length > 0) },
     { id: 'diagnosisNotes', label: 'Diagnosis & Notes', icon: FileText, show: selectedVisit.diagnosisNotes?.length > 0 },
     { id: 'nurseServices', label: 'Nurse Services', icon: UserCog, show: selectedVisit.nurseServices?.length > 0 },
     { id: 'dentalServices', label: 'Dental Services', icon: Smile, show: selectedVisit.dentalServices?.length > 0 },
@@ -493,7 +1618,7 @@ const ComprehensivePatientHistory = () => {
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#FFFFFF' }}>
-      
+
       {/* Search Section */}
       {!selectedPatient && (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -618,13 +1743,13 @@ const ComprehensivePatientHistory = () => {
                     key={visit.id}
                     onClick={() => {
                       setSelectedVisitId(visit.id);
+                      // After selecting a visit, default to vitals tab
                       setActiveTab('vitals');
                     }}
-                    className={`px-4 py-2 rounded-lg border transition whitespace-nowrap text-sm font-medium ${
-                      selectedVisitId === visit.id
-                        ? 'text-white'
-                        : 'bg-white hover:border-gray-400'
-                    }`}
+                    className={`px-4 py-2 rounded-lg border transition whitespace-nowrap text-sm font-medium ${selectedVisitId === visit.id
+                      ? 'text-white'
+                      : 'bg-white hover:border-gray-400'
+                      }`}
                     style={{
                       backgroundColor: selectedVisitId === visit.id ? '#2e13d1' : 'white',
                       borderColor: selectedVisitId === visit.id ? '#2e13d1' : '#E5E7EB',
@@ -647,26 +1772,25 @@ const ComprehensivePatientHistory = () => {
               <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="flex justify-between items-center mb-2">
                   <div className="flex space-x-1 overflow-x-auto flex-1">
-                  {tabs.map((tab) => {
-                    const Icon = tab.icon;
-                    const isActive = activeTab === tab.id;
-                    return (
-                      <button
-                        key={tab.id}
-                        onClick={() => setActiveTab(tab.id)}
-                        className={`flex items-center space-x-2 px-4 py-3 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
-                          isActive ? '' : 'hover:bg-gray-50'
-                        }`}
-                        style={{
-                          borderColor: isActive ? '#2e13d1' : 'transparent',
-                          color: isActive ? '#2e13d1' : '#6B7280'
-                        }}
-                      >
-                        <Icon className="h-4 w-4" />
-                        <span>{tab.label}</span>
-                      </button>
-                    );
-                  })}
+                    {tabs.map((tab) => {
+                      const Icon = tab.icon;
+                      const isActive = activeTab === tab.id;
+                      return (
+                        <button
+                          key={tab.id}
+                          onClick={() => setActiveTab(tab.id)}
+                          className={`flex items-center space-x-2 px-4 py-3 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${isActive ? '' : 'hover:bg-gray-50'
+                            }`}
+                          style={{
+                            borderColor: isActive ? '#2e13d1' : 'transparent',
+                            color: isActive ? '#2e13d1' : '#6B7280'
+                          }}
+                        >
+                          <Icon className="h-4 w-4" />
+                          <span>{tab.label}</span>
+                        </button>
+                      );
+                    })}
                   </div>
                   <div className="flex space-x-2 ml-4">
                     <button
@@ -694,7 +1818,7 @@ const ComprehensivePatientHistory = () => {
           {/* Content Area */}
           {selectedVisit && (
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-              
+
               {/* Vitals & History Tab */}
               {activeTab === 'vitals' && (
                 <div className="bg-white rounded-lg border shadow-sm p-6" style={{ borderColor: '#E5E7EB' }}>
@@ -805,9 +1929,8 @@ const ComprehensivePatientHistory = () => {
                           style={{ borderColor: '#E5E7EB' }}
                           onClick={() => openImageViewer([image], 0)}
                         />
-                        <div className={`absolute top-2 left-2 px-2 py-1 text-xs font-medium rounded shadow ${
-                          image.imageType === 'BEFORE' ? 'bg-orange-500 text-white' : 'bg-green-500 text-white'
-                        }`}>
+                        <div className={`absolute top-2 left-2 px-2 py-1 text-xs font-medium rounded shadow ${image.imageType === 'BEFORE' ? 'bg-orange-500 text-white' : 'bg-green-500 text-white'
+                          }`}>
                           {image.imageType}
                         </div>
                         <div className="mt-2">
@@ -826,78 +1949,96 @@ const ComprehensivePatientHistory = () => {
               {/* Lab Results Tab */}
               {activeTab === 'labResults' && (
                 <div className="bg-white rounded-lg border shadow-sm p-6" style={{ borderColor: '#E5E7EB' }}>
-                  <h3 className="text-lg font-semibold mb-4" style={{ color: '#0C0E0B' }}>Lab Results</h3>
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-semibold" style={{ color: '#0C0E0B' }}>Lab Results</h3>
+                    {((selectedVisit.labResults && selectedVisit.labResults.length > 0) || (selectedVisit.labOrders && selectedVisit.labOrders.length > 0) || (selectedVisit.labTestOrders && selectedVisit.labTestOrders.length > 0)) && (
+                      <button
+                        onClick={handlePrintLabResults}
+                        className="flex items-center space-x-2 px-4 py-2 rounded-lg transition text-sm font-medium text-white hover:opacity-90"
+                        style={{ backgroundColor: '#2e13d1' }}
+                      >
+                        <Printer className="h-4 w-4" />
+                        <span>Print Lab Results</span>
+                      </button>
+                    )}
+                  </div>
                   <div className="space-y-4">
-                    {selectedVisit.labResults.map((result, index) => (
-                      <div key={index} className="p-4 border rounded-lg" style={{ borderColor: '#E5E7EB', backgroundColor: '#F9FAFB' }}>
-                        <div className="flex justify-between items-start mb-3">
-                          <h4 className="font-medium text-lg" style={{ color: '#0C0E0B' }}>
-                            {result.testType?.name || result.serviceName || 'Lab Test'}
-                          </h4>
-                          <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(result.status)}`}>
-                            {result.status}
-                          </span>
-                        </div>
-                        
-                        {result.detailedResults && result.detailedResults.length > 0 ? (
-                          <div className="mt-3 overflow-x-auto">
-                            <table className="w-full text-sm border" style={{ borderColor: '#E5E7EB' }}>
-                              <thead style={{ backgroundColor: '#F3F4F6' }}>
-                                <tr>
-                                  <th className="px-3 py-2 text-left border" style={{ color: '#6B7280', borderColor: '#E5E7EB' }}>Test Name</th>
-                                  <th className="px-3 py-2 text-left border" style={{ color: '#6B7280', borderColor: '#E5E7EB' }}>Result</th>
-                                  <th className="px-3 py-2 text-left border" style={{ color: '#6B7280', borderColor: '#E5E7EB' }}>Unit</th>
-                                  <th className="px-3 py-2 text-left border" style={{ color: '#6B7280', borderColor: '#E5E7EB' }}>Reference Range</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {result.detailedResults.map((test, idx) => (
-                                  <tr key={idx} style={{ borderColor: '#E5E7EB' }}>
-                                    <td className="px-3 py-2 border" style={{ color: '#0C0E0B', borderColor: '#E5E7EB' }}>
-                                      {test.testName || 'Details not given'}
-                                    </td>
-                                    <td className="px-3 py-2 font-semibold border" style={{ color: '#0C0E0B', borderColor: '#E5E7EB' }}>
-                                      {test.result || 'Details not given'}
-                                    </td>
-                                    <td className="px-3 py-2 border" style={{ color: '#0C0E0B', borderColor: '#E5E7EB' }}>
-                                      {test.unit || '-'}
-                                    </td>
-                                    <td className="px-3 py-2 border" style={{ color: '#6B7280', borderColor: '#E5E7EB' }}>
-                                      {test.referenceRange || 'Details not given'}
-                                    </td>
+                    {([...(selectedVisit.labResults || []), ...(selectedVisit.labOrders || []), ...(selectedVisit.labTestOrders || [])].filter((v, i, a) => a.findIndex(t => (t.id === v.id)) === i)).map((result, index) => {
+                      // Handle labResults, labOrders, and labTestOrders format
+                      const testType = result.testType || result.type || result.labTest || {};
+                      const testName = testType.name || result.serviceName || result.labTest?.name || 'Lab Test';
+                      const status = result.status || 'PENDING';
+                      return (
+                        <div key={result.id || index} className="p-4 border rounded-lg" style={{ borderColor: '#E5E7EB', backgroundColor: '#F9FAFB' }}>
+                          <div className="flex justify-between items-start mb-3">
+                            <h4 className="font-medium text-lg" style={{ color: '#0C0E0B' }}>
+                              {testName}
+                            </h4>
+                            <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(status)}`}>
+                              {status}
+                            </span>
+                          </div>
+
+                          {result.detailedResults && result.detailedResults.length > 0 ? (
+                            <div className="mt-3 overflow-x-auto">
+                              <table className="w-full text-sm border" style={{ borderColor: '#E5E7EB' }}>
+                                <thead style={{ backgroundColor: '#F3F4F6' }}>
+                                  <tr>
+                                    <th className="px-3 py-2 text-left border" style={{ color: '#6B7280', borderColor: '#E5E7EB' }}>Test Name</th>
+                                    <th className="px-3 py-2 text-left border" style={{ color: '#6B7280', borderColor: '#E5E7EB' }}>Result</th>
+                                    <th className="px-3 py-2 text-left border" style={{ color: '#6B7280', borderColor: '#E5E7EB' }}>Unit</th>
+                                    <th className="px-3 py-2 text-left border" style={{ color: '#6B7280', borderColor: '#E5E7EB' }}>Reference Range</th>
                                   </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        ) : result.resultText ? (
-                          <div className="mt-3 p-3 rounded" style={{ backgroundColor: '#FFF3CD', color: '#856404' }}>
-                            <p className="text-sm font-medium">Result Summary:</p>
-                            <p className="text-sm mt-1">{result.resultText}</p>
-                          </div>
-                        ) : (
-                          <div className="mt-3 p-3 rounded" style={{ backgroundColor: '#FFF3CD', color: '#856404' }}>
-                            <p className="text-sm italic">📋 Lab test was ordered but detailed results have not been entered yet.</p>
-                          </div>
-                        )}
-                        
-                        {result.additionalNotes && (
-                          <div className="mt-3 pt-3 border-t" style={{ borderColor: '#E5E7EB' }}>
-                            <p style={{ color: '#6B7280' }} className="text-sm font-semibold">Additional Notes:</p>
-                            <p className="text-sm mt-1" style={{ color: '#0C0E0B' }}>{result.additionalNotes}</p>
-                          </div>
-                        )}
-                        
-                        <div className="mt-3 pt-3 border-t text-xs" style={{ borderColor: '#E5E7EB', color: '#6B7280' }}>
-                          <div className="flex justify-between">
-                            <span>Ordered: {result.createdAt ? new Date(result.createdAt).toLocaleString() : 'N/A'}</span>
-                            {result.verifiedBy && result.verifiedAt && (
-                              <span>Verified by: {result.verifiedBy} on {new Date(result.verifiedAt).toLocaleString()}</span>
-                            )}
+                                </thead>
+                                <tbody>
+                                  {result.detailedResults.map((test, idx) => (
+                                    <tr key={idx} style={{ borderColor: '#E5E7EB' }}>
+                                      <td className="px-3 py-2 border" style={{ color: '#0C0E0B', borderColor: '#E5E7EB' }}>
+                                        {test.testName || 'Details not given'}
+                                      </td>
+                                      <td className="px-3 py-2 font-semibold border" style={{ color: '#0C0E0B', borderColor: '#E5E7EB' }}>
+                                        {typeof test.result === 'object' ? JSON.stringify(test.result) : (test.result || 'Details not given')}
+                                      </td>
+                                      <td className="px-3 py-2 border" style={{ color: '#0C0E0B', borderColor: '#E5E7EB' }}>
+                                        {test.unit || '-'}
+                                      </td>
+                                      <td className="px-3 py-2 border" style={{ color: '#6B7280', borderColor: '#E5E7EB' }}>
+                                        {test.referenceRange || 'Details not given'}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          ) : result.resultText ? (
+                            <div className="mt-3 p-3 rounded" style={{ backgroundColor: '#FFF3CD', color: '#856404' }}>
+                              <p className="text-sm font-medium">Result Summary:</p>
+                              <p className="text-sm mt-1">{result.resultText}</p>
+                            </div>
+                          ) : (
+                            <div className="mt-3 p-3 rounded" style={{ backgroundColor: '#FFF3CD', color: '#856404' }}>
+                              <p className="text-sm italic">📋 Lab test was ordered but detailed results have not been entered yet.</p>
+                            </div>
+                          )}
+
+                          {result.additionalNotes && (
+                            <div className="mt-3 pt-3 border-t" style={{ borderColor: '#E5E7EB' }}>
+                              <p style={{ color: '#6B7280' }} className="text-sm font-semibold">Additional Notes:</p>
+                              <p className="text-sm mt-1" style={{ color: '#0C0E0B' }}>{result.additionalNotes}</p>
+                            </div>
+                          )}
+
+                          <div className="mt-3 pt-3 border-t text-xs" style={{ borderColor: '#E5E7EB', color: '#6B7280' }}>
+                            <div className="flex justify-between">
+                              <span>Ordered: {result.createdAt ? new Date(result.createdAt).toLocaleString() : 'N/A'}</span>
+                              {result.verifiedBy && result.verifiedAt && (
+                                <span>Verified by: {result.verifiedBy} on {new Date(result.verifiedAt).toLocaleString()}</span>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -905,51 +2046,68 @@ const ComprehensivePatientHistory = () => {
               {/* Radiology Results Tab */}
               {activeTab === 'radiologyResults' && (
                 <div className="bg-white rounded-lg border shadow-sm p-6" style={{ borderColor: '#E5E7EB' }}>
-                  <h3 className="text-lg font-semibold mb-4" style={{ color: '#0C0E0B' }}>Radiology Results</h3>
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-semibold" style={{ color: '#0C0E0B' }}>Radiology Results</h3>
+                    {((selectedVisit.radiologyResults && selectedVisit.radiologyResults.length > 0) || (selectedVisit.radiologyOrders && selectedVisit.radiologyOrders.length > 0)) && (
+                      <button
+                        onClick={handlePrintRadiologyResults}
+                        className="flex items-center space-x-2 px-4 py-2 rounded-lg transition text-sm font-medium text-white hover:opacity-90"
+                        style={{ backgroundColor: '#2e13d1' }}
+                      >
+                        <Printer className="h-4 w-4" />
+                        <span>Print Radiology Results</span>
+                      </button>
+                    )}
+                  </div>
                   <div className="space-y-4">
-                    {selectedVisit.radiologyResults.map((result, index) => (
-                      <div key={index} className="p-4 border rounded-lg" style={{ borderColor: '#E5E7EB', backgroundColor: '#F9FAFB' }}>
-                        <div className="flex justify-between items-start mb-3">
-                          <h4 className="font-medium" style={{ color: '#0C0E0B' }}>{result.serviceName}</h4>
-                          <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(result.status)}`}>
-                            {result.status}
-                          </span>
+                    {([...(selectedVisit.radiologyResults || []), ...(selectedVisit.radiologyOrders || [])].filter((v, i, a) => a.findIndex(t => (t.id === v.id)) === i)).map((result, index) => {
+                      // Handle both radiologyResults and radiologyOrders format
+                      const testType = result.testType || result.type || {};
+                      const serviceName = result.serviceName || testType.name || 'Radiology Test';
+                      return (
+                        <div key={result.id || index} className="p-4 border rounded-lg" style={{ borderColor: '#E5E7EB', backgroundColor: '#F9FAFB' }}>
+                          <div className="flex justify-between items-start mb-3">
+                            <h4 className="font-medium" style={{ color: '#0C0E0B' }}>{serviceName}</h4>
+                            <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(result.status)}`}>
+                              {result.status}
+                            </span>
+                          </div>
+                          {result.findings && (
+                            <div className="mt-3">
+                              <p style={{ color: '#6B7280' }} className="text-sm">Findings:</p>
+                              <p className="text-base" style={{ color: '#0C0E0B' }}>{result.findings}</p>
+                            </div>
+                          )}
+                          {result.conclusion && (
+                            <div className="mt-3">
+                              <p style={{ color: '#6B7280' }} className="text-sm">Conclusion:</p>
+                              <p className="text-base" style={{ color: '#0C0E0B' }}>{result.conclusion}</p>
+                            </div>
+                          )}
+                          {result.impression && (
+                            <div className="mt-2">
+                              <p style={{ color: '#6B7280' }} className="text-sm">Impression:</p>
+                              <p className="text-base" style={{ color: '#0C0E0B' }}>{result.impression}</p>
+                            </div>
+                          )}
+                          {result.attachments && result.attachments.length > 0 && (
+                            <div className="mt-3 grid grid-cols-3 gap-2">
+                              {result.attachments.map((attachment, idx) => (
+                                <div key={idx}>
+                                  <img
+                                    src={getImageUrl(attachment.fileUrl)}
+                                    alt={`Radiology ${idx + 1}`}
+                                    className="w-full h-24 object-cover rounded border cursor-pointer hover:opacity-80"
+                                    style={{ borderColor: '#E5E7EB' }}
+                                    onClick={() => openImageViewer(result.attachments, idx)}
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
-                        {result.findings && (
-                          <div className="mt-3">
-                            <p style={{ color: '#6B7280' }} className="text-sm">Findings:</p>
-                            <p className="text-base" style={{ color: '#0C0E0B' }}>{result.findings}</p>
-                          </div>
-                        )}
-                        {result.conclusion && (
-                          <div className="mt-3">
-                            <p style={{ color: '#6B7280' }} className="text-sm">Conclusion:</p>
-                            <p className="text-base" style={{ color: '#0C0E0B' }}>{result.conclusion}</p>
-                          </div>
-                        )}
-                        {result.impression && (
-                          <div className="mt-2">
-                            <p style={{ color: '#6B7280' }} className="text-sm">Impression:</p>
-                            <p className="text-base" style={{ color: '#0C0E0B' }}>{result.impression}</p>
-                          </div>
-                        )}
-                        {result.attachments && result.attachments.length > 0 && (
-                          <div className="mt-3 grid grid-cols-3 gap-2">
-                            {result.attachments.map((attachment, idx) => (
-                              <div key={idx}>
-                                <img
-                                  src={getImageUrl(attachment.fileUrl)}
-                                  alt={`Radiology ${idx + 1}`}
-                                  className="w-full h-24 object-cover rounded border cursor-pointer hover:opacity-80"
-                                  style={{ borderColor: '#E5E7EB' }}
-                                  onClick={() => openImageViewer(result.attachments, idx)}
-                                />
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -957,38 +2115,55 @@ const ComprehensivePatientHistory = () => {
               {/* Medications Tab */}
               {activeTab === 'medications' && (
                 <div className="bg-white rounded-lg border shadow-sm p-6" style={{ borderColor: '#E5E7EB' }}>
-                  <h3 className="text-lg font-semibold mb-4" style={{ color: '#0C0E0B' }}>Medications</h3>
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-semibold" style={{ color: '#0C0E0B' }}>Medications</h3>
+                    {((selectedVisit.medications && selectedVisit.medications.length > 0) || (selectedVisit.medicationOrders && selectedVisit.medicationOrders.length > 0)) && (
+                      <button
+                        onClick={handlePrintMedications}
+                        className="flex items-center space-x-2 px-4 py-2 rounded-lg transition text-sm font-medium text-white hover:opacity-90"
+                        style={{ backgroundColor: '#2e13d1' }}
+                      >
+                        <Printer className="h-4 w-4" />
+                        <span>Print Prescription</span>
+                      </button>
+                    )}
+                  </div>
                   <div className="space-y-3">
-                    {selectedVisit.medications.map((med) => (
-                      <div key={med.id} className="p-4 border rounded-lg" style={{ borderColor: '#E5E7EB', backgroundColor: '#F9FAFB' }}>
-                        <div className="flex justify-between items-start mb-2">
-                          <h4 className="font-medium" style={{ color: '#0C0E0B' }}>{med.medication.name}</h4>
-                          <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(med.status)}`}>
-                            {med.status}
-                          </span>
+                    {([...(selectedVisit.medications || []), ...(selectedVisit.medicationOrders || [])].filter((v, i, a) => a.findIndex(t => (t.id === v.id)) === i)).map((med) => {
+                      // Handle both medicationOrders and medications format
+                      const medication = med.medication || med.medicationCatalog || {};
+                      const medName = medication.name || med.name || 'Unknown';
+                      return (
+                        <div key={med.id} className="p-4 border rounded-lg" style={{ borderColor: '#E5E7EB', backgroundColor: '#F9FAFB' }}>
+                          <div className="flex justify-between items-start mb-2">
+                            <h4 className="font-medium" style={{ color: '#0C0E0B' }}>{medName}</h4>
+                            <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(med.status)}`}>
+                              {med.status}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-sm">
+                            <div>
+                              <span style={{ color: '#6B7280' }}>Dosage:</span> <span style={{ color: '#0C0E0B' }}>{med.dosage || 'N/A'}</span>
+                            </div>
+                            <div>
+                              <span style={{ color: '#6B7280' }}>Frequency:</span> <span style={{ color: '#0C0E0B' }}>{med.frequency || 'N/A'}</span>
+                            </div>
+                            <div>
+                              <span style={{ color: '#6B7280' }}>Duration:</span> <span style={{ color: '#0C0E0B' }}>{med.duration || 'N/A'}</span>
+                            </div>
+                            <div>
+                              <span style={{ color: '#6B7280' }}>Quantity:</span> <span style={{ color: '#0C0E0B' }}>{med.quantity || 'N/A'}</span>
+                            </div>
+                          </div>
+                          {med.instructions && (
+                            <div className="mt-2 pt-2 border-t" style={{ borderColor: '#E5E7EB' }}>
+                              <p style={{ color: '#6B7280' }} className="text-sm">Instructions:</p>
+                              <p className="text-sm" style={{ color: '#0C0E0B' }}>{med.instructions}</p>
+                            </div>
+                          )}
                         </div>
-                        <div className="grid grid-cols-2 gap-2 text-sm">
-                          <div>
-                            <span style={{ color: '#6B7280' }}>Dosage:</span> <span style={{ color: '#0C0E0B' }}>{med.dosage}</span>
-                          </div>
-                          <div>
-                            <span style={{ color: '#6B7280' }}>Frequency:</span> <span style={{ color: '#0C0E0B' }}>{med.frequency}</span>
-                          </div>
-                          <div>
-                            <span style={{ color: '#6B7280' }}>Duration:</span> <span style={{ color: '#0C0E0B' }}>{med.duration}</span>
-                          </div>
-                          <div>
-                            <span style={{ color: '#6B7280' }}>Quantity:</span> <span style={{ color: '#0C0E0B' }}>{med.quantity}</span>
-                          </div>
-                        </div>
-                        {med.instructions && (
-                          <div className="mt-2 pt-2 border-t" style={{ borderColor: '#E5E7EB' }}>
-                            <p style={{ color: '#6B7280' }} className="text-sm">Instructions:</p>
-                            <p className="text-sm" style={{ color: '#0C0E0B' }}>{med.instructions}</p>
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -1188,10 +2363,126 @@ const ComprehensivePatientHistory = () => {
               {activeTab === 'dentalChart' && (
                 <div className="bg-white rounded-lg border shadow-sm p-6" style={{ borderColor: '#E5E7EB' }}>
                   <h3 className="text-lg font-semibold mb-4" style={{ color: '#0C0E0B' }}>Dental Chart</h3>
-                  <DentalChartDisplay 
-                    patientId={patientHistory.patient.id} 
-                    visitId={selectedVisit.id} 
+                  <DentalChartDisplay
+                    patientId={patientHistory.patient.id}
+                    visitId={selectedVisit.id}
                   />
+                </div>
+              )}
+
+              {/* Emergency Orders Tab */}
+              {activeTab === 'emergencyOrders' && (
+                <div className="bg-white rounded-lg border shadow-sm p-6" style={{ borderColor: '#E5E7EB' }}>
+                  <h3 className="text-lg font-semibold mb-4" style={{ color: '#0C0E0B' }}>Emergency Drug Orders</h3>
+                  {selectedVisit.emergencyOrders && selectedVisit.emergencyOrders.length > 0 ? (
+                    <div className="space-y-4">
+                      {selectedVisit.emergencyOrders.map((order) => (
+                        <div key={order.id} className="p-4 border rounded-lg" style={{ borderColor: '#E5E7EB', backgroundColor: '#F9FAFB' }}>
+                          <div className="flex justify-between items-start mb-2">
+                            <div>
+                              <h4 className="font-medium" style={{ color: '#0C0E0B' }}>{order.serviceName}</h4>
+                              <p className="text-sm" style={{ color: '#6B7280' }}>{order.serviceCode}</p>
+                            </div>
+                            <div className="text-right">
+                              <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(order.status)}`}>
+                                {order.status}
+                              </span>
+                              <p className="font-semibold mt-1" style={{ color: '#2e13d1' }}>
+                                ETB {(order.servicePrice * order.quantity).toFixed(2)}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-sm mt-2">
+                            <div>
+                              <span style={{ color: '#6B7280' }}>Quantity:</span> <span style={{ color: '#0C0E0B' }}>{order.quantity}</span>
+                            </div>
+                            {order.doctor && (
+                              <div>
+                                <span style={{ color: '#6B7280' }}>Ordered by:</span> <span style={{ color: '#0C0E0B' }}>Dr. {order.doctor}</span>
+                              </div>
+                            )}
+                          </div>
+                          {order.instructions && (
+                            <div className="mt-2 pt-2 border-t" style={{ borderColor: '#E5E7EB' }}>
+                              <p style={{ color: '#6B7280' }} className="text-sm font-semibold">Instructions:</p>
+                              <p className="text-sm" style={{ color: '#0C0E0B' }}>{order.instructions}</p>
+                            </div>
+                          )}
+                          {order.notes && (
+                            <div className="mt-2 pt-2 border-t" style={{ borderColor: '#E5E7EB' }}>
+                              <p style={{ color: '#6B7280' }} className="text-sm font-semibold">Notes:</p>
+                              <p className="text-sm" style={{ color: '#0C0E0B' }}>{order.notes}</p>
+                            </div>
+                          )}
+                          {order.completedAt && (
+                            <div className="mt-2 pt-2 border-t text-xs" style={{ borderColor: '#E5E7EB', color: '#6B7280' }}>
+                              Completed: {formatDate(order.completedAt)}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm" style={{ color: '#6B7280' }}>No emergency drug orders for this visit.</p>
+                  )}
+                </div>
+              )}
+
+              {/* Material Needs Tab */}
+              {activeTab === 'materialNeeds' && (
+                <div className="bg-white rounded-lg border shadow-sm p-6" style={{ borderColor: '#E5E7EB' }}>
+                  <h3 className="text-lg font-semibold mb-4" style={{ color: '#0C0E0B' }}>Material Needs Orders</h3>
+                  {selectedVisit.materialNeeds && selectedVisit.materialNeeds.length > 0 ? (
+                    <div className="space-y-4">
+                      {selectedVisit.materialNeeds.map((order) => (
+                        <div key={order.id} className="p-4 border rounded-lg" style={{ borderColor: '#E5E7EB', backgroundColor: '#F9FAFB' }}>
+                          <div className="flex justify-between items-start mb-2">
+                            <div>
+                              <h4 className="font-medium" style={{ color: '#0C0E0B' }}>{order.serviceName}</h4>
+                              <p className="text-sm" style={{ color: '#6B7280' }}>{order.serviceCode}</p>
+                            </div>
+                            <div className="text-right">
+                              <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(order.status)}`}>
+                                {order.status}
+                              </span>
+                              <p className="font-semibold mt-1" style={{ color: '#2e13d1' }}>
+                                ETB {(order.servicePrice * order.quantity).toFixed(2)}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-sm mt-2">
+                            <div>
+                              <span style={{ color: '#6B7280' }}>Quantity:</span> <span style={{ color: '#0C0E0B' }}>{order.quantity}</span>
+                            </div>
+                            {order.nurse && (
+                              <div>
+                                <span style={{ color: '#6B7280' }}>Ordered by:</span> <span style={{ color: '#0C0E0B' }}>{order.nurse}</span>
+                              </div>
+                            )}
+                          </div>
+                          {order.instructions && (
+                            <div className="mt-2 pt-2 border-t" style={{ borderColor: '#E5E7EB' }}>
+                              <p style={{ color: '#6B7280' }} className="text-sm font-semibold">Instructions:</p>
+                              <p className="text-sm" style={{ color: '#0C0E0B' }}>{order.instructions}</p>
+                            </div>
+                          )}
+                          {order.notes && (
+                            <div className="mt-2 pt-2 border-t" style={{ borderColor: '#E5E7EB' }}>
+                              <p style={{ color: '#6B7280' }} className="text-sm font-semibold">Notes:</p>
+                              <p className="text-sm" style={{ color: '#0C0E0B' }}>{order.notes}</p>
+                            </div>
+                          )}
+                          {order.completedAt && (
+                            <div className="mt-2 pt-2 border-t text-xs" style={{ borderColor: '#E5E7EB', color: '#6B7280' }}>
+                              Completed: {formatDate(order.completedAt)}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm" style={{ color: '#6B7280' }}>No material needs orders for this visit.</p>
+                  )}
                 </div>
               )}
 

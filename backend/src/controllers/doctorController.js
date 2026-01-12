@@ -118,13 +118,13 @@ exports.getInvestigationTypes = async (req, res) => {
         { name: 'asc' }
       ]
     });
-    
+
     // Additional client-side filter to ensure we only return active services
     // This double-checks and filters out any investigation types with inactive services
-    const filteredTypes = investigationTypes.filter(inv => 
+    const filteredTypes = investigationTypes.filter(inv =>
       inv.service && inv.service.isActive === true
     );
-    
+
     res.json({ investigationTypes: filteredTypes });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -278,15 +278,15 @@ exports.getQueue = async (req, res) => {
         bill.services &&
         bill.services.some(bs => bs.service && bs.service.category === 'CONSULTATION')
       );
-      
+
       const isInDoctorQueue = visit.status === 'IN_DOCTOR_QUEUE';
-      
+
       // Check if doctor has waived consultation fee
       const doctorHasWaiver = visit.assignment?.doctor?.waiveConsultationFee || false;
-      
+
       // Include if: paid consultation OR in doctor queue OR doctor has waiver
       const shouldInclude = hasPaidConsultation || isInDoctorQueue || doctorHasWaiver;
-      
+
       if (!shouldInclude) {
         console.log(`🔍 Visit ${visit.id} (status: ${visit.status}, assignmentId: ${visit.assignmentId}) EXCLUDED - no paid consultation (${hasPaidConsultation}), not IN_DOCTOR_QUEUE (${isInDoctorQueue}), and no waiver (${doctorHasWaiver})`);
         if (visit.assignment) {
@@ -297,7 +297,7 @@ exports.getQueue = async (req, res) => {
       } else {
         console.log(`✅ Visit ${visit.id} (status: ${visit.status}) INCLUDED - paid: ${hasPaidConsultation}, IN_DOCTOR_QUEUE: ${isInDoctorQueue}, waiver: ${doctorHasWaiver}`);
       }
-      
+
       return shouldInclude;
     });
 
@@ -1163,7 +1163,7 @@ exports.getUnifiedQueue = async (req, res) => {
       console.log('🔍 Executing initial query with statusFilter:', JSON.stringify(statusFilter));
       console.log('🔍 Queue filter:', queueFilter);
       console.log('🔍 Assignment IDs:', assignmentIds);
-      
+
       visitsWithAssignments = await prisma.visit.findMany({
         where: {
           status: statusFilter,
@@ -1242,7 +1242,7 @@ exports.getUnifiedQueue = async (req, res) => {
           }
         });
         const patientIdsWithAssignments = [...new Set(patientsWithAssignments.map(a => a.patientId))];
-        
+
         const additionalINDoctorQueueVisits = await prisma.visit.findMany({
           where: {
             status: 'IN_DOCTOR_QUEUE',
@@ -1284,7 +1284,7 @@ exports.getUnifiedQueue = async (req, res) => {
 
         if (additionalINDoctorQueueVisits.length > 0) {
           console.log(`🔍 Found ${additionalINDoctorQueueVisits.length} additional IN_DOCTOR_QUEUE visits with assignments but no assignmentId link`);
-          
+
           // Fetch assignments for these visits
           const patientIds = additionalINDoctorQueueVisits.map(v => v.patientId);
           const additionalAssignments = await prisma.assignment.findMany({
@@ -1315,7 +1315,7 @@ exports.getUnifiedQueue = async (req, res) => {
           const visitsWithAdditionalAssignments = additionalINDoctorQueueVisits.map(visit => {
             const assignments = additionalAssignmentMap[visit.patientId] || [];
             const assignment = assignments[0] || null; // Use first assignment
-            
+
             return {
               ...visit,
               assignment: assignment
@@ -1390,7 +1390,7 @@ exports.getUnifiedQueue = async (req, res) => {
     }
 
     console.log('🔍 Visits with assignments found:', visitsWithAssignments.length);
-    
+
     // Debug: Check for all IN_DOCTOR_QUEUE visits in database for this doctor
     if (queueFilter === 'main') {
       const allINDoctorQueueVisits = await prisma.visit.findMany({
@@ -1416,7 +1416,7 @@ exports.getUnifiedQueue = async (req, res) => {
       allINDoctorQueueVisits.forEach(v => {
         console.log(`   Visit ${v.id} (${v.visitUid}): assignmentId=${v.assignmentId}, suggestedDoctorId=${v.suggestedDoctorId}, patient=${v.patient?.name}`);
       });
-      
+
       // Check which ones have assignments for this doctor
       const patientIds = allINDoctorQueueVisits.map(v => v.patientId);
       const allAssignmentsForPatients = await prisma.assignment.findMany({
@@ -1435,7 +1435,7 @@ exports.getUnifiedQueue = async (req, res) => {
         console.log(`   Assignment ${a.id}: patientId=${a.patientId}, doctorId=${a.doctorId}`);
       });
     }
-    
+
     if (visitsWithAssignments.length > 0) {
       console.log('🔍 Visit statuses from initial query:', visitsWithAssignments.map(v => ({ id: v.id, status: v.status, assignmentId: v.assignmentId })));
       // CRITICAL CHECK: If queueFilter is 'sent', verify all visits have sent statuses
@@ -2066,7 +2066,7 @@ exports.getUnifiedQueue = async (req, res) => {
     // Calculate stats for ALL queues - fetch all qualifying visits (regardless of status filter)
     // This ensures counts are accurate regardless of which filter is active
     // sentStatuses is already declared at the top of this function
-    
+
     // Fetch ALL visits that qualify (assignment/batch order + payment/waiver) for stats
     // This is separate from the filtered query to get accurate counts
     // Include IN_DOCTOR_QUEUE visits that are assigned to this doctor (via assignmentId or suggestedDoctorId)
@@ -2202,15 +2202,15 @@ exports.getUnifiedQueue = async (req, res) => {
       const doctorHasWaiver = visit.assignment?.doctor?.waiveConsultationFee || false;
       return hasPaidConsultation || doctorHasWaiver;
     });
-    
+
     // Main queue: all qualifying visits except sent statuses
-    const mainQueueVisits = qualifyingVisits.filter(v => 
+    const mainQueueVisits = qualifyingVisits.filter(v =>
       !sentStatuses.includes(v.status)
     );
-    
+
     // Sent queue: only qualifying visits with sent statuses
     const sentQueueVisits = qualifyingVisits.filter(v => sentStatuses.includes(v.status));
-    
+
     // Get triage queue count separately
     const triageQueueCount = await prisma.visit.count({
       where: {
@@ -3108,7 +3108,7 @@ exports.createMultipleLabOrders = async (req, res) => {
     const batchOrderController = require('./batchOrderController');
     req.body = batchOrderData;
     return await batchOrderController.createBatchOrder(req, res);
-    
+
     // NOTE: All code below this return is UNREACHABLE and has been removed
     // It was creating duplicate LabOrder records when BatchOrders were created
     // The batchOrderController.createBatchOrder handles all billing and status updates
@@ -3404,7 +3404,7 @@ exports.createMultipleRadiologyOrders = async (req, res) => {
     const batchOrderController = require('./batchOrderController');
     req.body = batchOrderData;
     return await batchOrderController.createBatchOrder(req, res);
-    
+
     // NOTE: All code below this return is UNREACHABLE and was removed
     // It was creating duplicate LabOrder records when BatchOrders were created
     // The old system created individual LabOrders, but we now use BatchOrders only
@@ -4266,7 +4266,7 @@ exports.getPatientHistory = async (req, res) => {
       const radiologyBatchOrderIds = visit.batchOrders
         .filter(bo => bo.type === 'RADIOLOGY')
         .map(bo => bo.id);
-      
+
       let radiologyResults = [];
       if (radiologyBatchOrderIds.length > 0) {
         const radiologyResultsRaw = await prisma.radiologyResult.findMany({
@@ -4332,80 +4332,83 @@ exports.getPatientHistory = async (req, res) => {
 
         // Convert detailed lab results to the expected format
         labResults = await Promise.all(detailedLabResults.map(async (result) => {
-        // Get template fields
-        const templateFields = result.template?.fields || {};
+          // Get template fields
+          const templateFields = result.template?.fields || {};
 
-        // Convert results object to array format
-        let detailedResultsArray = [];
-        if (result.results && typeof result.results === 'object') {
-          // If results is an object (key-value pairs), convert to array
-          detailedResultsArray = Object.entries(templateFields).map(([fieldName, fieldConfig]) => ({
-            testName: fieldName,
-            result: result.results[fieldName] || null,
-            unit: fieldConfig.unit || '',
-            referenceRange: fieldConfig.referenceRange || ''
-          }));
-        }
-
-        // Fetch verifiedBy user if exists
-        let verifiedByUser = null;
-        if (result.verifiedBy) {
-          try {
-            const verifiedById = result.verifiedBy;
-            // Only query if ID is valid (not null, not empty, looks like UUID)
-            if (verifiedById && typeof verifiedById === 'string' && verifiedById.length > 0) {
-              verifiedByUser = await prisma.user.findUnique({
-                where: { id: verifiedById },
-                select: { id: true, fullname: true, role: true }
-              }).catch(() => null); // Return null on error instead of throwing
-            }
-          } catch (err) {
-            console.error('Error fetching verifiedBy user:', err);
-            // Continue with null verifiedByUser
+          // Convert results object to array format
+          let detailedResultsArray = [];
+          if (result.results && typeof result.results === 'object') {
+            // If results is an object (key-value pairs), convert to array
+            detailedResultsArray = Object.entries(templateFields).map(([fieldName, fieldConfig]) => ({
+              testName: fieldName,
+              result: result.results[fieldName] || null,
+              unit: fieldConfig.unit || '',
+              referenceRange: fieldConfig.referenceRange || ''
+            }));
           }
-        }
 
-        return {
-          id: result.id,
-          testType: {
-            name: result.template?.name || 'Lab Test',
-            category: result.template?.category || 'GENERAL'
-          },
-          resultText: detailedResultsArray.length > 0 ? `Detailed results for ${result.template.name}` : null,
-          detailedResults: detailedResultsArray,
-          additionalNotes: result.additionalNotes || '',
-          status: result.status,
-          attachments: [], // Detailed lab results don't have separate attachments
-          createdAt: result.createdAt,
-          verifiedBy: result.verifiedBy,
-          verifiedByUser: verifiedByUser,
-          verifiedAt: result.verifiedAt
-        };
-      }));
+          // Fetch verifiedBy user if exists
+          let verifiedByUser = null;
+          if (result.verifiedBy) {
+            try {
+              const verifiedById = result.verifiedBy;
+              // Only query if ID is valid (not null, not empty, looks like UUID)
+              if (verifiedById && typeof verifiedById === 'string' && verifiedById.length > 0) {
+                verifiedByUser = await prisma.user.findUnique({
+                  where: { id: verifiedById },
+                  select: { id: true, fullname: true, role: true }
+                }).catch(() => null); // Return null on error instead of throwing
+              }
+            } catch (err) {
+              console.error('Error fetching verifiedBy user:', err);
+              // Continue with null verifiedByUser
+            }
+          }
+
+          return {
+            id: result.id,
+            testType: {
+              name: result.template?.name || 'Lab Test',
+              category: result.template?.category || 'GENERAL'
+            },
+            resultText: detailedResultsArray.length > 0 ? `Detailed results for ${result.template.name}` : null,
+            detailedResults: detailedResultsArray,
+            additionalNotes: result.additionalNotes || '',
+            status: result.status,
+            attachments: [], // Detailed lab results don't have separate attachments
+            createdAt: result.createdAt,
+            verifiedBy: result.verifiedBy,
+            verifiedByUser: verifiedByUser,
+            verifiedAt: result.verifiedAt
+          };
+        }));
       }
 
       // Also include direct labOrders from the visit
       // BUT: Only include if they're not duplicates of batch order services
       // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/02072a7c-232e-4783-a3a7-bf011c7b47c3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'doctorController.js:4419',message:'Processing labOrders for display',data:{visitId:visit.id,labOrdersCount:visit.labOrders?.length||0,batchOrdersCount:visit.batchOrders?.filter(bo=>bo.type==='LAB').length||0,labOrders:visit.labOrders?.map(lo=>({id:lo.id,typeId:lo.typeId,status:lo.status}))||[]},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+      fetch('http://127.0.0.1:7242/ingest/02072a7c-232e-4783-a3a7-bf011c7b47c3', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'doctorController.js:4419', message: 'Processing labOrders for display', data: { visitId: visit.id, labOrdersCount: visit.labOrders?.length || 0, batchOrdersCount: visit.batchOrders?.filter(bo => bo.type === 'LAB').length || 0, labOrders: visit.labOrders?.map(lo => ({ id: lo.id, typeId: lo.typeId, status: lo.status })) || [] }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'D' }) }).catch(() => { });
       // #endregion
       for (const labOrder of visit.labOrders || []) {
-        // Check if this labOrder is already represented in batch orders
-        const isInBatchOrder = visit.batchOrders?.some(bo => 
-          bo.type === 'LAB' && bo.services?.some(s => 
-            s.investigationTypeId === labOrder.typeId
-          )
+        // Check if this labOrder is already represented in batch orders or labResults
+        const isInLabResults = labResults.some(lr =>
+          lr.id === `laborder-${labOrder.id}` ||
+          lr.id === labOrder.id ||
+          (lr.testType?.id === labOrder.typeId && lr.createdAt === labOrder.createdAt)
         );
-        
-        // Skip if it's already in a batch order (to avoid duplicates)
-        if (isInBatchOrder) {
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/02072a7c-232e-4783-a3a7-bf011c7b47c3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'doctorController.js:4426',message:'Skipping duplicate LabOrder',data:{labOrderId:labOrder.id,typeId:labOrder.typeId,status:labOrder.status},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-          // #endregion
-          console.log(`🔍 Skipping LabOrder ${labOrder.id} - already in batch order`);
+
+        const isInBatchOrder = visit.batchOrders?.some(bo =>
+          bo.type === 'LAB' && bo.services?.some(s =>
+            s.investigationTypeId === labOrder.typeId
+          ) || bo.id === labOrder.id
+        );
+
+        // Skip if it's already in labResults or a batch order (to avoid duplicates)
+        if (isInLabResults || isInBatchOrder) {
+          console.log(`🔍 Skipping LabOrder ${labOrder.id} - already represented`);
           continue;
         }
-        
+
         // Check if we already have a detailed result for this lab order
         const hasDetailedResult = detailedLabResults.some(dr =>
           dr.labOrderId === labOrder.id
@@ -4414,7 +4417,7 @@ exports.getPatientHistory = async (req, res) => {
         // If no detailed result exists, still show the order
         if (!hasDetailedResult) {
           // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/02072a7c-232e-4783-a3a7-bf011c7b47c3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'doctorController.js:4427',message:'Adding LabOrder to labResults',data:{labOrderId:labOrder.id,typeId:labOrder.typeId,status:labOrder.status,typeName:labOrder.type?.name},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+          fetch('http://127.0.0.1:7242/ingest/02072a7c-232e-4783-a3a7-bf011c7b47c3', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'doctorController.js:4427', message: 'Adding LabOrder to labResults', data: { labOrderId: labOrder.id, typeId: labOrder.typeId, status: labOrder.status, typeName: labOrder.type?.name }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'E' }) }).catch(() => { });
           // #endregion
           labResults.push({
             id: `laborder-${labOrder.id}`,
@@ -4432,40 +4435,48 @@ exports.getPatientHistory = async (req, res) => {
       // Also include lab orders from batch order services (both filled and unfilled)
       // IMPORTANT: Always show batch order services, even if they don't have results yet
       // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/02072a7c-232e-4783-a3a7-bf011c7b47c3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'doctorController.js:4442',message:'Processing batchOrder services',data:{visitId:visit.id,labBatchOrdersCount:visit.batchOrders?.filter(bo=>bo.type==='LAB').length||0,labBatchOrders:visit.batchOrders?.filter(bo=>bo.type==='LAB').map(bo=>({id:bo.id,status:bo.status,servicesCount:bo.services?.length||0}))||[]},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+      fetch('http://127.0.0.1:7242/ingest/02072a7c-232e-4783-a3a7-bf011c7b47c3', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'doctorController.js:4442', message: 'Processing batchOrder services', data: { visitId: visit.id, labBatchOrdersCount: visit.batchOrders?.filter(bo => bo.type === 'LAB').length || 0, labBatchOrders: visit.batchOrders?.filter(bo => bo.type === 'LAB').map(bo => ({ id: bo.id, status: bo.status, servicesCount: bo.services?.length || 0 })) || [] }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'F' }) }).catch(() => { });
       // #endregion
       for (const batchOrder of visit.batchOrders || []) {
         if (batchOrder.type === 'LAB') {
           for (const service of batchOrder.services || []) {
             // Check if we already have a detailed result for this batch order
-            const hasDetailedResult = detailedLabResults.some(dr =>
+            const detailedResult = detailedLabResults.find(dr =>
               dr.labOrderId === batchOrder.id
             );
 
-            // Check if we already added this as a batch service
-            const alreadyAdded = labResults.some(lr => 
-              lr.id === `batch-${batchOrder.id}-${service.id}`
+            // Check if we already added this as a batch service or lab result
+            const alreadyAdded = labResults.some(lr =>
+              lr.id === `batch-${batchOrder.id}-${service.id}` ||
+              lr.id === batchOrder.id ||
+              (detailedResult && lr.id === detailedResult.id)
             );
 
             // Always show the order, even if no result exists yet
             if (!alreadyAdded) {
-              // #region agent log
-              fetch('http://127.0.0.1:7242/ingest/02072a7c-232e-4783-a3a7-bf011c7b47c3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'doctorController.js:4456',message:'Adding batchOrder service to labResults',data:{batchOrderId:batchOrder.id,serviceId:service.id,investigationTypeId:service.investigationTypeId,serviceName:service.service?.name,investigationTypeName:service.investigationType?.name,status:service.status||batchOrder.status},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
-              // #endregion
+              // Convert results object to array format if detailed result exists
+              let detailedResultsArray = [];
+              if (detailedResult && detailedResult.results && typeof detailedResult.results === 'object') {
+                const templateFields = detailedResult.template?.fields || {};
+                detailedResultsArray = Object.entries(templateFields).map(([fieldName, fieldConfig]) => ({
+                  testName: fieldName,
+                  result: detailedResult.results[fieldName] || null,
+                  unit: fieldConfig.unit || '',
+                  referenceRange: fieldConfig.referenceRange || ''
+                }));
+              }
+
               labResults.push({
                 id: `batch-${batchOrder.id}-${service.id}`,
                 testType: service.investigationType || service.service || { name: service.service?.name || 'Lab Test', category: 'GENERAL' },
-                resultText: service.result || null,
-                detailedResults: hasDetailedResult ? detailedLabResults.filter(dr => dr.labOrderId === batchOrder.id).map(dr => ({
-                  testName: dr.template?.name || 'Test',
-                  result: dr.results || null,
-                  unit: '',
-                  referenceRange: ''
-                })) : [],
+                resultText: service.result || (detailedResult ? `Detailed results for ${detailedResult.template?.name}` : null),
+                detailedResults: detailedResultsArray,
                 additionalNotes: service.additionalNotes || batchOrder.additionalNotes || '',
                 status: service.status || batchOrder.status || 'PENDING',
                 attachments: [],
-                createdAt: batchOrder.createdAt || service.createdAt
+                createdAt: batchOrder.createdAt || service.createdAt,
+                verifiedBy: detailedResult?.verifiedBy,
+                verifiedAt: detailedResult?.verifiedAt
               });
             }
           }
@@ -4475,14 +4486,14 @@ exports.getPatientHistory = async (req, res) => {
       // Also include LabTestOrders (new system) with their results
       for (const labTestOrder of visit.labTestOrders || []) {
         // Check if already added
-        const alreadyAdded = labResults.some(lr => 
+        const alreadyAdded = labResults.some(lr =>
           lr.id === `labtestorder-${labTestOrder.id}`
         );
 
         if (!alreadyAdded) {
           // Get the result for this order (if exists)
-          const orderResult = labTestOrder.results && labTestOrder.results.length > 0 
-            ? labTestOrder.results[0] 
+          const orderResult = labTestOrder.results && labTestOrder.results.length > 0
+            ? labTestOrder.results[0]
             : null;
 
           // Convert resultFields to detailedResults format
@@ -6382,7 +6393,7 @@ exports.deleteVisit = async (req, res) => {
     // Start a transaction to delete all related records
     await prisma.$transaction(async (tx) => {
       // Delete related records in correct order (respecting foreign key constraints)
-      
+
       // 1. Delete patient attached images
       if (visit.attachedImages.length > 0) {
         await tx.patientAttachedImage.deleteMany({
@@ -6453,12 +6464,12 @@ exports.deleteVisit = async (req, res) => {
           await tx.billPayment.deleteMany({
             where: { billingId: bill.id }
           });
-          
+
           await tx.billingService.deleteMany({
             where: { billingId: bill.id }
           });
         }
-        
+
         await tx.billing.deleteMany({
           where: { visitId: parseInt(visitId) }
         });

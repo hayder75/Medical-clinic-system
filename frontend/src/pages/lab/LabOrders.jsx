@@ -570,7 +570,8 @@ const LabOrders = () => {
                   results: resultsObj,
                   additionalNotes: result.additionalNotes || '',
                   serviceName: result.service?.name || result.labTest?.name || 'Lab Test',
-                  template: result.template || {}
+                  template: result.template || {},
+                  verifiedByUser: result.verifiedByUser || null
                 };
               }
             });
@@ -605,9 +606,26 @@ const LabOrders = () => {
         return date.toLocaleString('en-US');
       };
 
-      // Get lab technician name from current user
-      const labTechnicianName = user?.fullname || 'Lab Technician';
+      // Get lab technician from first result's verifiedByUser
+      const firstResult = Object.values(resultsToPrint)[0];
+      const labTechnicianName = firstResult?.verifiedByUser?.fullname || firstResult?.verifiedByUser || user?.fullname || 'Lab Technician';
       const patient = orderData.patient || {};
+      
+      // Calculate age from date of birth
+      const calculateAge = (dob) => {
+        if (!dob) return 'N/A';
+        const birthDate = new Date(dob);
+        const today = new Date();
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const monthDiff = today.getMonth() - birthDate.getMonth();
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+          age--;
+        }
+        return age;
+      };
+      
+      const patientAge = patient.dob ? calculateAge(patient.dob) : (patient.age || 'N/A');
+      const patientBloodType = patient.bloodType || 'N/A';
 
       printWindow.document.write(`
       <!DOCTYPE html>
@@ -669,14 +687,14 @@ const LabOrders = () => {
               text-align: left;
             }
             .clinic-name { 
-              font-size: 24px; 
+              font-size: 26px; 
               font-weight: 800; 
               margin: 0;
               color: #1e40af;
               letter-spacing: -0.5px;
             }
             .clinic-tagline {
-              font-size: 12px;
+              font-size: 13px;
               color: #64748b;
               margin: 0;
               font-style: italic;
@@ -685,14 +703,14 @@ const LabOrders = () => {
               text-align: right;
             }
             .report-title { 
-              font-size: 20px; 
+              font-size: 22px; 
               font-weight: 700; 
               margin: 0;
               color: #0f172a;
               text-transform: uppercase;
             }
             .report-info {
-              font-size: 12px;
+              font-size: 13px;
               color: #64748b;
               margin-top: 2px;
             }
@@ -704,7 +722,7 @@ const LabOrders = () => {
               border-radius: 6px;
             }
             .section-header {
-              font-size: 14px;
+              font-size: 15px;
               font-weight: 700;
               margin-bottom: 10px;
               color: #1e293b;
@@ -715,7 +733,7 @@ const LabOrders = () => {
               display: grid;
               grid-template-columns: repeat(4, 1fr);
               gap: 10px;
-              font-size: 13px;
+              font-size: 14px;
             }
             .info-item {
               display: flex;
@@ -724,12 +742,13 @@ const LabOrders = () => {
             .info-label {
               font-weight: 600;
               color: #64748b;
-              font-size: 11px;
+              font-size: 12px;
               text-transform: uppercase;
             }
             .info-value {
               color: #1e293b;
               font-weight: 500;
+              font-size: 14px;
             }
             .results-section {
               margin: 15px 0;
@@ -739,7 +758,7 @@ const LabOrders = () => {
               page-break-inside: avoid;
             }
             .test-header {
-              font-size: 16px;
+              font-size: 17px;
               font-weight: 700;
               margin-bottom: 10px;
               padding: 8px 12px;
@@ -754,18 +773,18 @@ const LabOrders = () => {
             }
             th {
               text-align: left;
-              padding: 8px 12px;
+              padding: 10px 12px;
               background: #f8fafc;
               color: #475569;
-              font-size: 12px;
+              font-size: 13px;
               font-weight: 600;
               text-transform: uppercase;
               border-bottom: 2px solid #e2e8f0;
             }
             td {
-              padding: 8px 12px;
+              padding: 10px 12px;
               border-bottom: 1px solid #f1f5f9;
-              font-size: 13px;
+              font-size: 14px;
               color: #334155;
             }
             .field-name {
@@ -781,7 +800,7 @@ const LabOrders = () => {
               padding: 8px 12px;
               background: #fffbeb;
               border-left: 4px solid #f59e0b;
-              font-size: 13px;
+              font-size: 14px;
               color: #92400e;
             }
             .footer {
@@ -864,11 +883,11 @@ const LabOrders = () => {
               </div>
               <div class="info-item">
                 <span class="info-label">Age</span>
-                <span class="info-value">${patient.age || 'N/A'}</span>
+                <span class="info-value">${patientAge}</span>
               </div>
               <div class="info-item">
                 <span class="info-label">Blood Type</span>
-                <span class="info-value">${patient.bloodType || 'N/A'}</span>
+                <span class="info-value">${patientBloodType}</span>
               </div>
               <div class="info-item">
                 <span class="info-label">Contact</span>

@@ -277,9 +277,13 @@ const MedicationOrdering = ({ visitId, patientId, patient, doctor, onOrdersPlace
       const patientName = patientData?.name || 'N/A';
       const patientAddress = patientData?.address || 'N/A';
       const patientPhone = patientData?.mobile || 'N/A';
-      const doctorName = doctorData?.fullname || currentUser?.fullname || 'Dr. Unknown';
-      const doctorSpecialty = doctorData?.specialties?.join(', ') || currentUser?.specialties?.join(', ') || 'General Practitioner';
-      const doctorLicense = doctorData?.licenseNumber || 'N/A';
+      
+      // Get doctor from first medication order (all should be from same doctor)
+      const firstMed = medicationsToPrint[0];
+      const prescribingDoctor = firstMed?.doctor || firstMed?.medicationOrder?.doctor || doctorData || currentUser;
+      const doctorName = prescribingDoctor?.fullname || currentUser?.fullname || 'Dr. Unknown';
+      const doctorSpecialty = prescribingDoctor?.specialties?.join(', ') || currentUser?.specialties?.join(', ') || 'General Practitioner';
+      const doctorLicense = prescribingDoctor?.licenseNumber || 'N/A';
       const currentDate = new Date().toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'long',
@@ -399,14 +403,14 @@ const MedicationOrdering = ({ visitId, patientId, patient, doctor, onOrdersPlace
               text-align: left;
             }
             .clinic-name { 
-              font-size: 16px; 
+              font-size: 18px; 
               font-weight: 800; 
               margin: 0;
               color: #1e40af;
               letter-spacing: -0.3px;
             }
             .clinic-tagline {
-              font-size: 9px;
+              font-size: 10px;
               color: #64748b;
               margin: 0;
               font-style: italic;
@@ -415,14 +419,14 @@ const MedicationOrdering = ({ visitId, patientId, patient, doctor, onOrdersPlace
               text-align: right;
             }
             .report-title { 
-              font-size: 14px; 
+              font-size: 16px; 
               font-weight: 700; 
               margin: 0;
               color: #0f172a;
               text-transform: uppercase;
             }
             .report-info {
-              font-size: 9px;
+              font-size: 10px;
               color: #64748b;
               margin-top: 1px;
             }
@@ -437,7 +441,7 @@ const MedicationOrdering = ({ visitId, patientId, patient, doctor, onOrdersPlace
               display: grid;
               grid-template-columns: repeat(2, 1fr);
               gap: 4px 8px;
-              font-size: 11px;
+              font-size: 12px;
             }
             .info-item {
               display: flex;
@@ -447,17 +451,12 @@ const MedicationOrdering = ({ visitId, patientId, patient, doctor, onOrdersPlace
               font-weight: 700;
               color: #64748b;
               min-width: 60px;
+              font-size: 11px;
             }
             .info-value {
               color: #1e293b;
               font-weight: 500;
-            }
-            .rx-symbol {
-              font-size: 24px;
-              font-weight: 700;
-              color: #1e40af;
-              margin: 5px 0;
-              font-family: serif;
+              font-size: 12px;
             }
             .medications-section {
               margin: 5px 0;
@@ -473,11 +472,11 @@ const MedicationOrdering = ({ visitId, patientId, patient, doctor, onOrdersPlace
             }
             .medication-name {
               font-weight: 700;
-              font-size: 12px;
+              font-size: 13px;
               color: #0f172a;
             }
             .medication-details {
-              font-size: 11px;
+              font-size: 12px;
               color: #475569;
               margin-top: 1px;
               font-style: italic;
@@ -491,13 +490,13 @@ const MedicationOrdering = ({ visitId, patientId, patient, doctor, onOrdersPlace
               align-items: flex-end;
             }
             .doctor-info {
-              font-size: 10px;
+              font-size: 11px;
               color: #475569;
             }
             .doctor-name {
               font-weight: 700;
               color: #1e293b;
-              font-size: 11px;
+              font-size: 12px;
             }
             .signature-area {
               text-align: center;
@@ -507,13 +506,13 @@ const MedicationOrdering = ({ visitId, patientId, patient, doctor, onOrdersPlace
               border-top: 1px solid #334155;
               margin-top: 25px;
               padding-top: 3px;
-              font-size: 9px;
+              font-size: 10px;
               font-weight: 600;
               color: #64748b;
             }
             .print-footer {
               text-align: center;
-              font-size: 8px;
+              font-size: 9px;
               color: #94a3b8;
               margin-top: 10px;
             }
@@ -562,8 +561,6 @@ const MedicationOrdering = ({ visitId, patientId, patient, doctor, onOrdersPlace
                 </div>
               </div>
             </div>
-
-            <div class="rx-symbol">Rx</div>
 
             <div class="medications-section">
               ${medicationsToPrint.map((med, index) => {
