@@ -5,3 +5,5 @@ dist/
 
 
 
+backend/uploads/*.pdf
+backend/uploads/*.jpg
