@@ -283,7 +283,7 @@ exports.processVirtualQueue = async (req, res) => {
             notes: `Patient processed from Pre-Registration queue. Original notes: ${virtualQueueItem.notes || 'None'}`
           }
         });
-      });
+      }, prisma);
 
       // Mark as completed
       await prisma.virtualQueue.update({

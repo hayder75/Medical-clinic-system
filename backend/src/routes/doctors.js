@@ -16,7 +16,7 @@ router.get('/recent-activity', auth, roleGuard(['DOCTOR']), doctorController.get
 router.get('/patient-assignments', auth, roleGuard(['ADMIN', 'NURSE', 'BILLING_OFFICER', 'RECEPTIONIST']), doctorController.getPatientAssignments);
 router.get('/visits/:visitId', doctorController.getVisitDetails);
 router.get('/visits/:visitId/medication-check', doctorController.checkMedicationOrdering);
-router.get('/patient-history/:patientId', doctorController.getPatientHistory);
+router.get('/patient-history/:patientId', auth, roleGuard(['DOCTOR', 'BILLING_OFFICER', 'ADMIN']), doctorController.getPatientHistory);
 router.get('/patient-history/:patientId/visit/:visitId/pdf', doctorController.generateVisitHistoryPDF);
 router.get('/vitals/:visitId', doctorController.getPatientVitals);
 router.get('/order-status/:visitId', doctorController.getVisitOrderStatus);

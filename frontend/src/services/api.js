@@ -9,6 +9,14 @@ function getApiBaseUrl() {
     // Local development - backend runs on port 3000
     return 'http://localhost:3000/api';
   }
+  
+  // Check if we're being served from a subdirectory (e.g., /d)
+  const pathname = window.location.pathname;
+  if (pathname.startsWith('/d')) {
+    // If served from /d, API calls should go to /d/api
+    return '/d/api';
+  }
+  
   // Production - use relative URL (Nginx will proxy)
   return '/api';
 }

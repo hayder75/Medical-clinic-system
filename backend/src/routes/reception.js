@@ -11,6 +11,7 @@ router.use(authMiddleware);
 router.get('/patients', roleGuard(['RECEPTIONIST', 'BILLING_OFFICER', 'ADMIN', 'NURSE']), receptionController.getPatients);
 router.get('/patients/:patientId/history', roleGuard(['RECEPTIONIST', 'BILLING_OFFICER', 'ADMIN', 'NURSE']), receptionController.getPatientHistory);
 router.post('/patients', roleGuard(['RECEPTIONIST', 'BILLING_OFFICER', 'ADMIN']), receptionController.createPatient);
+router.put('/patients/:patientId', roleGuard(['RECEPTIONIST', 'BILLING_OFFICER', 'ADMIN']), receptionController.updatePatient);
 
 // Card management - Reception, billing, and admin
 router.post('/activate-card', roleGuard(['RECEPTIONIST', 'BILLING_OFFICER', 'ADMIN']), receptionController.activateCard);

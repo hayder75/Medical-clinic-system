@@ -58,7 +58,7 @@ exports.createVisit = async (req, res) => {
           }
         }
       });
-    });
+    }, prisma);
 
     res.status(201).json({
       message: 'Visit created successfully',

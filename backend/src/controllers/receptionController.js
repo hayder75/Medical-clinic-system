@@ -29,6 +29,18 @@ const createVisitSchema = z.object({
   isEmergency: z.boolean().optional().default(false)
 });
 
+const updatePatientSchema = z.object({
+  name: z.string().min(1, 'Name is required').optional(),
+  mobile: z.string().optional().nullable(),
+  email: z.string().email().optional().nullable(),
+  address: z.string().optional().nullable(),
+  emergencyContact: z.string().optional().nullable(),
+  dob: z.string().optional().nullable(),
+  gender: z.enum(['MALE', 'FEMALE', 'OTHER']).optional().nullable(),
+  bloodType: z.enum(['A_PLUS', 'A_MINUS', 'B_PLUS', 'B_MINUS', 'AB_PLUS', 'AB_MINUS', 'O_PLUS', 'O_MINUS', 'UNKNOWN']).optional().nullable(),
+  maritalStatus: z.enum(['SINGLE', 'MARRIED', 'DIVORCED', 'WIDOWED', 'UNKNOWN']).optional().nullable()
+});
+
 // Get all patients with card status
 exports.getPatients = async (req, res) => {
   try {
@@ -187,56 +199,29 @@ exports.createPatient = async (req, res) => {
     const validatedData = createPatientSchema.parse(req.body);
     const receptionistId = req.user.id;
     
-    // Generate unique patient ID with retry logic to handle race conditions
-    let patientId;
-    let retries = 0;
-    const maxRetries = 5;
-    const year = new Date().getFullYear();
+    // Generate unique patient ID with sequential numbering
+    const { generateUniquePatientId } = require('../utils/patientIdGenerator');
+    const isEmergency = validatedData.type === 'EMERGENCY';
     
-    let patient;
-    while (retries < maxRetries) {
-      try {
-        // Use timestamp + random for better uniqueness
-        const timestamp = Date.now().toString().slice(-6); // Last 6 digits
-        const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-        patientId = `PAT-${year}-${timestamp}-${random}`;
-        
-        // Create patient without billing - billing removed from registration
-        patient = await prisma.patient.create({
-          data: {
-            id: patientId,
-            name: validatedData.name,
-            dob: validatedData.dob ? new Date(validatedData.dob) : null,
-            gender: validatedData.gender || null,
-            type: validatedData.type,
-            mobile: validatedData.mobile || null,
-            email: validatedData.email || null,
-            address: validatedData.address || null,
-            emergencyContact: validatedData.emergencyContact || null,
-            bloodType: validatedData.bloodType || null,
-            maritalStatus: validatedData.maritalStatus || null,
-            insuranceId: validatedData.insuranceId || null
-            // Removed: cardStatus: 'INACTIVE' - no card status check required
-          }
-        });
-        
-        break; // Success - patient created
-      } catch (error) {
-        // If it's a unique constraint error, retry with a new ID
-        if (error.code === 'P2002' && error.meta?.target?.includes('id')) {
-          retries++;
-          if (retries >= maxRetries) {
-            console.error('Failed to generate unique patientId after', maxRetries, 'attempts');
-            throw new Error('Unable to generate unique patient ID. Please try again.');
-          }
-          // Wait a tiny bit before retrying (adds more randomness)
-          await new Promise(resolve => setTimeout(resolve, 10));
-        } else {
-          // Different error - throw it
-          throw error;
+    const patient = await generateUniquePatientId(async (patientId) => {
+      return await prisma.patient.create({
+        data: {
+          id: patientId,
+          name: validatedData.name,
+          dob: validatedData.dob ? new Date(validatedData.dob) : null,
+          gender: validatedData.gender || null,
+          type: validatedData.type,
+          mobile: validatedData.mobile || null,
+          email: validatedData.email || null,
+          address: validatedData.address || null,
+          emergencyContact: validatedData.emergencyContact || null,
+          bloodType: validatedData.bloodType || null,
+          maritalStatus: validatedData.maritalStatus || null,
+          insuranceId: validatedData.insuranceId || null
+          // Removed: cardStatus: 'INACTIVE' - no card status check required
         }
-      }
-    }
+      });
+    }, prisma, isEmergency);
     
     // Create card registration billing for non-emergency patients
     // Note: Visit is NOT created automatically - must be created manually after payment
@@ -472,7 +457,7 @@ exports.createVisit = async (req, res) => {
           status: validatedData.isEmergency ? 'WAITING_FOR_TRIAGE' : 'WAITING_FOR_TRIAGE'
         }
       });
-    });
+    }, prisma);
     
     // For emergency visits, create emergency billing (no consultation fee upfront)
     let billing = null;
@@ -546,6 +531,89 @@ exports.getDoctors = async (req, res) => {
     res.json({ doctors });
   } catch (error) {
     console.error('Error fetching doctors:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Update patient details (Billing Officer, Receptionist, Admin)
+exports.updatePatient = async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const updatedById = req.user.id;
+    
+    // Preprocess: convert empty strings to null for optional fields
+    const preprocessedData = { ...req.body };
+    if (preprocessedData.mobile === '') preprocessedData.mobile = null;
+    if (preprocessedData.email === '') preprocessedData.email = null;
+    if (preprocessedData.address === '') preprocessedData.address = null;
+    if (preprocessedData.emergencyContact === '') preprocessedData.emergencyContact = null;
+    if (preprocessedData.dob === '') preprocessedData.dob = null;
+    if (preprocessedData.gender === '') preprocessedData.gender = null;
+    if (preprocessedData.bloodType === '') preprocessedData.bloodType = null;
+    if (preprocessedData.maritalStatus === '') preprocessedData.maritalStatus = null;
+    
+    const validatedData = updatePatientSchema.parse(preprocessedData);
+    
+    // Check if patient exists
+    const existingPatient = await prisma.patient.findUnique({
+      where: { id: patientId }
+    });
+    
+    if (!existingPatient) {
+      return res.status(404).json({ error: 'Patient not found' });
+    }
+    
+    // Prepare update data (only include fields that are provided)
+    const updateData = {};
+    if (validatedData.name !== undefined) updateData.name = validatedData.name;
+    if (validatedData.mobile !== undefined) updateData.mobile = validatedData.mobile || null;
+    if (validatedData.email !== undefined) updateData.email = validatedData.email || null;
+    if (validatedData.address !== undefined) updateData.address = validatedData.address || null;
+    if (validatedData.emergencyContact !== undefined) updateData.emergencyContact = validatedData.emergencyContact || null;
+    if (validatedData.dob !== undefined) {
+      updateData.dob = validatedData.dob ? new Date(validatedData.dob) : null;
+    }
+    if (validatedData.gender !== undefined) updateData.gender = validatedData.gender || null;
+    if (validatedData.bloodType !== undefined) updateData.bloodType = validatedData.bloodType || null;
+    if (validatedData.maritalStatus !== undefined) updateData.maritalStatus = validatedData.maritalStatus || null;
+    
+    // Update patient in database
+    const updatedPatient = await prisma.patient.update({
+      where: { id: patientId },
+      data: updateData
+    });
+    
+    // Log the update action
+    try {
+      await prisma.auditLog.create({
+        data: {
+          action: 'PATIENT_UPDATE',
+          entity: 'Patient',
+          entityId: parseInt(patientId.split('-').pop()) || 0,
+          userId: updatedById,
+          details: `Patient ${patientId} updated by ${req.user.username} (${req.user.role}). Fields updated: ${Object.keys(updateData).join(', ')}`
+        }
+      });
+    } catch (auditError) {
+      console.error('Error creating audit log:', auditError);
+      // Don't fail the request if audit log fails
+    }
+    
+    console.log(`✅ Patient ${patientId} updated by ${req.user.username} (${req.user.role})`);
+    
+    res.json({
+      success: true,
+      message: 'Patient updated successfully',
+      patient: updatedPatient
+    });
+  } catch (error) {
+    console.error('Error updating patient:', error);
+    if (error.name === 'ZodError') {
+      return res.status(400).json({ 
+        error: 'Validation error',
+        details: error.errors 
+      });
+    }
     res.status(500).json({ error: error.message });
   }
 };

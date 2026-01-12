@@ -21,6 +21,9 @@ const createBatchOrderSchema = z.object({
 // Create a batch order
 exports.createBatchOrder = async (req, res) => {
   try {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/02072a7c-232e-4783-a3a7-bf011c7b47c3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'batchOrderController.js:22',message:'createBatchOrder called',data:{visitId:req.body.visitId,patientId:req.body.patientId,type:req.body.type,servicesCount:req.body.services?.length||0,services:req.body.services},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
     // Batch order request
     const { visitId, patientId, type, instructions, services, assignedNurseId } = createBatchOrderSchema.parse(req.body);
     const doctorId = req.user.id;
@@ -268,6 +271,9 @@ exports.createBatchOrder = async (req, res) => {
       
       // Unique services after aggregation
       
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/02072a7c-232e-4783-a3a7-bf011c7b47c3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'batchOrderController.js:271',message:'Creating new BatchOrder',data:{visitId,patientId,type,uniqueServicesCount:uniqueServices.length,uniqueServices:uniqueServices.map(s=>({serviceId:s.serviceId,investigationTypeId:s.investigationTypeId}))},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+      // #endregion
       batchOrder = await prisma.batchOrder.create({
         data: {
           visitId,
@@ -312,7 +318,9 @@ exports.createBatchOrder = async (req, res) => {
           }
         }
       });
-      
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/02072a7c-232e-4783-a3a7-bf011c7b47c3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'batchOrderController.js:314',message:'BatchOrder created',data:{batchOrderId:batchOrder.id,servicesCount:batchOrder.services.length,services:batchOrder.services.map(s=>({id:s.id,serviceId:s.serviceId,investigationTypeId:s.investigationTypeId}))},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+      // #endregion
       // For new batch orders, we need to expand unique services back to include quantities for billing
       // The batchOrder.services only has unique entries, but billing needs quantity information
       newServicesAdded = [];

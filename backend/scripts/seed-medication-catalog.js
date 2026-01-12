@@ -7,7 +7,7 @@ async function seedMedicationCatalog() {
     console.log('🚀 Seeding medication catalog...');
 
     const medications = [
-      // Common medications
+      // Pain Relief & Anti-inflammatory
       {
         name: 'Paracetamol',
         genericName: 'Acetaminophen',
@@ -18,17 +18,6 @@ async function seedMedicationCatalog() {
         availableQuantity: 1000,
         minimumStock: 100,
         manufacturer: 'Ethio Pharma'
-      },
-      {
-        name: 'Amoxicillin',
-        genericName: 'Amoxicillin',
-        dosageForm: 'Capsule',
-        strength: '500mg',
-        category: 'CAPSULES',
-        unitPrice: 5.00,
-        availableQuantity: 500,
-        minimumStock: 50,
-        manufacturer: 'Cadila Pharmaceuticals'
       },
       {
         name: 'Ibuprofen',
@@ -42,16 +31,108 @@ async function seedMedicationCatalog() {
         manufacturer: 'Ethio Pharma'
       },
       {
-        name: 'Metformin',
-        genericName: 'Metformin HCl',
+        name: 'Diclofenac',
+        genericName: 'Diclofenac Sodium',
+        dosageForm: 'Tablet',
+        strength: '50mg',
+        category: 'TABLETS',
+        unitPrice: 4.00,
+        availableQuantity: 600,
+        minimumStock: 60,
+        manufacturer: 'Sun Pharma'
+      },
+      {
+        name: 'Aspirin',
+        genericName: 'Acetylsalicylic Acid',
+        dosageForm: 'Tablet',
+        strength: '100mg',
+        category: 'TABLETS',
+        unitPrice: 1.50,
+        availableQuantity: 1200,
+        minimumStock: 120,
+        manufacturer: 'Ethio Pharma'
+      },
+      {
+        name: 'Tramadol',
+        genericName: 'Tramadol HCl',
+        dosageForm: 'Capsule',
+        strength: '50mg',
+        category: 'CAPSULES',
+        unitPrice: 8.00,
+        availableQuantity: 200,
+        minimumStock: 20,
+        manufacturer: 'Cadila Pharmaceuticals'
+      },
+      
+      // Antibiotics
+      {
+        name: 'Amoxicillin',
+        genericName: 'Amoxicillin',
+        dosageForm: 'Capsule',
+        strength: '500mg',
+        category: 'CAPSULES',
+        unitPrice: 5.00,
+        availableQuantity: 500,
+        minimumStock: 50,
+        manufacturer: 'Cadila Pharmaceuticals'
+      },
+      {
+        name: 'Amoxicillin',
+        genericName: 'Amoxicillin',
+        dosageForm: 'Capsule',
+        strength: '250mg',
+        category: 'CAPSULES',
+        unitPrice: 3.50,
+        availableQuantity: 400,
+        minimumStock: 40,
+        manufacturer: 'Cadila Pharmaceuticals'
+      },
+      {
+        name: 'Ciprofloxacin',
+        genericName: 'Ciprofloxacin HCl',
         dosageForm: 'Tablet',
         strength: '500mg',
         category: 'TABLETS',
-        unitPrice: 4.50,
+        unitPrice: 7.00,
         availableQuantity: 300,
         minimumStock: 30,
         manufacturer: 'Sun Pharma'
       },
+      {
+        name: 'Azithromycin',
+        genericName: 'Azithromycin',
+        dosageForm: 'Tablet',
+        strength: '500mg',
+        category: 'TABLETS',
+        unitPrice: 15.00,
+        availableQuantity: 150,
+        minimumStock: 15,
+        manufacturer: 'Cadila Pharmaceuticals'
+      },
+      {
+        name: 'Ceftriaxone',
+        genericName: 'Ceftriaxone Sodium',
+        dosageForm: 'Injection',
+        strength: '1g',
+        category: 'INJECTIONS',
+        unitPrice: 35.00,
+        availableQuantity: 40,
+        minimumStock: 4,
+        manufacturer: 'Sun Pharma'
+      },
+      {
+        name: 'Metronidazole',
+        genericName: 'Metronidazole',
+        dosageForm: 'Tablet',
+        strength: '400mg',
+        category: 'TABLETS',
+        unitPrice: 4.50,
+        availableQuantity: 350,
+        minimumStock: 35,
+        manufacturer: 'Ethio Pharma'
+      },
+      
+      // Cardiovascular
       {
         name: 'Lisinopril',
         genericName: 'Lisinopril',
@@ -64,14 +145,14 @@ async function seedMedicationCatalog() {
         manufacturer: 'Cadila Pharmaceuticals'
       },
       {
-        name: 'Omeprazole',
-        genericName: 'Omeprazole',
-        dosageForm: 'Capsule',
-        strength: '20mg',
-        category: 'CAPSULES',
-        unitPrice: 8.00,
-        availableQuantity: 150,
-        minimumStock: 15,
+        name: 'Amlodipine',
+        genericName: 'Amlodipine Besylate',
+        dosageForm: 'Tablet',
+        strength: '5mg',
+        category: 'TABLETS',
+        unitPrice: 5.50,
+        availableQuantity: 250,
+        minimumStock: 25,
         manufacturer: 'Sun Pharma'
       },
       {
@@ -86,15 +167,39 @@ async function seedMedicationCatalog() {
         manufacturer: 'Ethio Pharma'
       },
       {
-        name: 'Salbutamol',
-        genericName: 'Salbutamol Sulfate',
-        dosageForm: 'Inhaler',
-        strength: '100mcg',
-        category: 'INHALERS',
-        unitPrice: 25.00,
-        availableQuantity: 50,
-        minimumStock: 5,
+        name: 'Atenolol',
+        genericName: 'Atenolol',
+        dosageForm: 'Tablet',
+        strength: '50mg',
+        category: 'TABLETS',
+        unitPrice: 4.00,
+        availableQuantity: 180,
+        minimumStock: 18,
         manufacturer: 'Cadila Pharmaceuticals'
+      },
+      
+      // Diabetes
+      {
+        name: 'Metformin',
+        genericName: 'Metformin HCl',
+        dosageForm: 'Tablet',
+        strength: '500mg',
+        category: 'TABLETS',
+        unitPrice: 4.50,
+        availableQuantity: 300,
+        minimumStock: 30,
+        manufacturer: 'Sun Pharma'
+      },
+      {
+        name: 'Glibenclamide',
+        genericName: 'Glibenclamide',
+        dosageForm: 'Tablet',
+        strength: '5mg',
+        category: 'TABLETS',
+        unitPrice: 3.00,
+        availableQuantity: 250,
+        minimumStock: 25,
+        manufacturer: 'Ethio Pharma'
       },
       {
         name: 'Insulin',
@@ -107,16 +212,193 @@ async function seedMedicationCatalog() {
         minimumStock: 3,
         manufacturer: 'Novo Nordisk'
       },
+      
+      // Gastrointestinal
       {
-        name: 'Ceftriaxone',
-        genericName: 'Ceftriaxone Sodium',
-        dosageForm: 'Injection',
-        strength: '1g',
-        category: 'INJECTIONS',
-        unitPrice: 35.00,
+        name: 'Omeprazole',
+        genericName: 'Omeprazole',
+        dosageForm: 'Capsule',
+        strength: '20mg',
+        category: 'CAPSULES',
+        unitPrice: 8.00,
+        availableQuantity: 150,
+        minimumStock: 15,
+        manufacturer: 'Sun Pharma'
+      },
+      {
+        name: 'Ranitidine',
+        genericName: 'Ranitidine HCl',
+        dosageForm: 'Tablet',
+        strength: '150mg',
+        category: 'TABLETS',
+        unitPrice: 3.50,
+        availableQuantity: 200,
+        minimumStock: 20,
+        manufacturer: 'Ethio Pharma'
+      },
+      {
+        name: 'Domperidone',
+        genericName: 'Domperidone',
+        dosageForm: 'Tablet',
+        strength: '10mg',
+        category: 'TABLETS',
+        unitPrice: 2.00,
+        availableQuantity: 300,
+        minimumStock: 30,
+        manufacturer: 'Cadila Pharmaceuticals'
+      },
+      
+      // Respiratory
+      {
+        name: 'Salbutamol',
+        genericName: 'Salbutamol Sulfate',
+        dosageForm: 'Inhaler',
+        strength: '100mcg',
+        category: 'INHALERS',
+        unitPrice: 25.00,
+        availableQuantity: 50,
+        minimumStock: 5,
+        manufacturer: 'Cadila Pharmaceuticals'
+      },
+      {
+        name: 'Beclomethasone',
+        genericName: 'Beclomethasone Dipropionate',
+        dosageForm: 'Inhaler',
+        strength: '100mcg',
+        category: 'INHALERS',
+        unitPrice: 30.00,
         availableQuantity: 40,
         minimumStock: 4,
         manufacturer: 'Sun Pharma'
+      },
+      {
+        name: 'Ambroxol',
+        genericName: 'Ambroxol HCl',
+        dosageForm: 'Syrup',
+        strength: '15mg/5ml',
+        category: 'SYRUPS',
+        unitPrice: 12.00,
+        availableQuantity: 80,
+        minimumStock: 8,
+        manufacturer: 'Ethio Pharma'
+      },
+      
+      // Antihistamines & Allergy
+      {
+        name: 'Cetirizine',
+        genericName: 'Cetirizine HCl',
+        dosageForm: 'Tablet',
+        strength: '10mg',
+        category: 'TABLETS',
+        unitPrice: 3.00,
+        availableQuantity: 400,
+        minimumStock: 40,
+        manufacturer: 'Cadila Pharmaceuticals'
+      },
+      {
+        name: 'Loratadine',
+        genericName: 'Loratadine',
+        dosageForm: 'Tablet',
+        strength: '10mg',
+        category: 'TABLETS',
+        unitPrice: 4.00,
+        availableQuantity: 350,
+        minimumStock: 35,
+        manufacturer: 'Sun Pharma'
+      },
+      
+      // Antifungal
+      {
+        name: 'Fluconazole',
+        genericName: 'Fluconazole',
+        dosageForm: 'Capsule',
+        strength: '150mg',
+        category: 'CAPSULES',
+        unitPrice: 20.00,
+        availableQuantity: 60,
+        minimumStock: 6,
+        manufacturer: 'Cadila Pharmaceuticals'
+      },
+      {
+        name: 'Clotrimazole',
+        genericName: 'Clotrimazole',
+        dosageForm: 'Cream',
+        strength: '1%',
+        category: 'OINTMENTS',
+        unitPrice: 8.00,
+        availableQuantity: 100,
+        minimumStock: 10,
+        manufacturer: 'Ethio Pharma'
+      },
+      
+      // Vitamins & Supplements
+      {
+        name: 'Multivitamin',
+        genericName: 'Multivitamin Complex',
+        dosageForm: 'Tablet',
+        strength: '1 tablet',
+        category: 'TABLETS',
+        unitPrice: 5.00,
+        availableQuantity: 500,
+        minimumStock: 50,
+        manufacturer: 'Ethio Pharma'
+      },
+      {
+        name: 'Vitamin C',
+        genericName: 'Ascorbic Acid',
+        dosageForm: 'Tablet',
+        strength: '1000mg',
+        category: 'TABLETS',
+        unitPrice: 3.00,
+        availableQuantity: 600,
+        minimumStock: 60,
+        manufacturer: 'Sun Pharma'
+      },
+      {
+        name: 'Calcium',
+        genericName: 'Calcium Carbonate',
+        dosageForm: 'Tablet',
+        strength: '500mg',
+        category: 'TABLETS',
+        unitPrice: 2.50,
+        availableQuantity: 400,
+        minimumStock: 40,
+        manufacturer: 'Ethio Pharma'
+      },
+      {
+        name: 'Iron',
+        genericName: 'Ferrous Sulfate',
+        dosageForm: 'Tablet',
+        strength: '200mg',
+        category: 'TABLETS',
+        unitPrice: 3.50,
+        availableQuantity: 300,
+        minimumStock: 30,
+        manufacturer: 'Cadila Pharmaceuticals'
+      },
+      
+      // Antimalarial
+      {
+        name: 'Artemether-Lumefantrine',
+        genericName: 'Artemether-Lumefantrine',
+        dosageForm: 'Tablet',
+        strength: '20/120mg',
+        category: 'TABLETS',
+        unitPrice: 25.00,
+        availableQuantity: 100,
+        minimumStock: 10,
+        manufacturer: 'Sun Pharma'
+      },
+      {
+        name: 'Chloroquine',
+        genericName: 'Chloroquine Phosphate',
+        dosageForm: 'Tablet',
+        strength: '250mg',
+        category: 'TABLETS',
+        unitPrice: 4.00,
+        availableQuantity: 200,
+        minimumStock: 20,
+        manufacturer: 'Ethio Pharma'
       }
     ];
 

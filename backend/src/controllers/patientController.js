@@ -57,8 +57,7 @@ exports.searchPatients = async (req, res) => {
       };
     } else {
       // Default to name search or general search
-      // Search with multiple patterns to catch similar names
-      // Also search for common variations (e.g., "test" should find "tets")
+      // Search with multiple patterns to catch similar names and handle typos
       const searchPatterns = [
         { name: { contains: searchTerm, mode: 'insensitive' } },
         { name: { startsWith: searchTerm, mode: 'insensitive' } },
@@ -67,7 +66,7 @@ exports.searchPatients = async (req, res) => {
       ];
       
       // If search term is 3+ characters, also try searching for similar patterns
-      // This helps with typos (e.g., "test" vs "tets")
+      // This helps with typos and similar spellings (e.g., "hayd" vs "hady", "test" vs "tets")
       if (searchTerm.length >= 3) {
         // Try searching with first 3 characters to catch similar names
         const firstThree = searchTerm.substring(0, 3).toLowerCase();
@@ -84,25 +83,47 @@ exports.searchPatients = async (req, res) => {
           }
         });
         
-        // For 4-character searches like "test", also try "tet" to match "Tets"
-        // "test" -> "tes" (first 3) but "Tets" starts with "Tet" (different!)
-        // So we need to try both "tes" and "tet" variations
-        if (searchTerm.length === 4) {
-          // Try "tet" pattern - if search is "test", try "tet" (common variation)
-          // This helps "test" match "Tets" by searching for "tet"
-          const tetPattern = 'tet'; // Direct pattern for "Tets"
-          searchPatterns.push({
-            name: {
-              contains: tetPattern,
-              mode: 'insensitive'
-            }
-          });
-          searchPatterns.push({
-            name: {
-              startsWith: tetPattern,
-              mode: 'insensitive'
-            }
-          });
+        // For 4+ character searches, try common character variations
+        // This handles cases like "hayd" vs "hady" or "test" vs "tets"
+        if (searchTerm.length >= 4) {
+          // Try variations by swapping last two characters or similar patterns
+          // For "hayd" (4 chars), also try "hady" (swapped last two)
+          const lastTwo = searchTerm.slice(-2).toLowerCase();
+          const swappedLastTwo = lastTwo.split('').reverse().join('');
+          const firstPart = searchTerm.substring(0, searchTerm.length - 2).toLowerCase();
+          const variation1 = firstPart + swappedLastTwo;
+          
+          if (variation1 !== searchTerm.toLowerCase()) {
+            searchPatterns.push({
+              name: {
+                contains: variation1,
+                mode: 'insensitive'
+              }
+            });
+            searchPatterns.push({
+              name: {
+                startsWith: variation1,
+                mode: 'insensitive'
+              }
+            });
+          }
+          
+          // Also try without the last character (for cases like "hayd" -> "hay")
+          if (searchTerm.length > 4) {
+            const withoutLast = searchTerm.substring(0, searchTerm.length - 1).toLowerCase();
+            searchPatterns.push({
+              name: {
+                contains: withoutLast,
+                mode: 'insensitive'
+              }
+            });
+            searchPatterns.push({
+              name: {
+                startsWith: withoutLast,
+                mode: 'insensitive'
+              }
+            });
+          }
         }
       }
       
@@ -140,7 +161,7 @@ exports.searchPatients = async (req, res) => {
     });
     
     // If no results and we're searching by name, try raw SQL with trimmed names
-    // This handles trailing spaces in patient names (e.g., "Tets " should match "test")
+    // This handles trailing spaces in patient names and similar spellings
     if (patients.length === 0 && searchTerm.length >= 2) {
       console.log('🔍 No results with Prisma, trying raw SQL with trimmed names...');
       try {
@@ -169,12 +190,20 @@ exports.searchPatients = async (req, res) => {
           rawQuery += ` OR LOWER(TRIM(name)) LIKE LOWER($${params.length + 1})`;
           params.push(firstThreeStart);
         }
-        // For "test" searches, also try "tet" to match "Tets"
-        if (searchTerm.length === 4 && searchTerm.toLowerCase() === 'test') {
-          rawQuery += ` OR LOWER(TRIM(name)) LIKE LOWER($${params.length + 1})`;
-          params.push('%tet%');
-          rawQuery += ` OR LOWER(TRIM(name)) LIKE LOWER($${params.length + 1})`;
-          params.push('tet%');
+        
+        // For 4+ character searches, try variations (e.g., "hayd" vs "hady", "test" vs "tets")
+        if (searchTerm.length >= 4) {
+          const lastTwo = searchTerm.slice(-2).toLowerCase();
+          const swappedLastTwo = lastTwo.split('').reverse().join('');
+          const firstPart = searchTerm.substring(0, searchTerm.length - 2).toLowerCase();
+          const variation1 = firstPart + swappedLastTwo;
+          
+          if (variation1 !== searchTerm.toLowerCase()) {
+            rawQuery += ` OR LOWER(TRIM(name)) LIKE LOWER($${params.length + 1})`;
+            params.push(`%${variation1}%`);
+            rawQuery += ` OR LOWER(TRIM(name)) LIKE LOWER($${params.length + 1})`;
+            params.push(`${variation1}%`);
+          }
         }
         
         rawQuery += ` ORDER BY name ASC LIMIT 20`;

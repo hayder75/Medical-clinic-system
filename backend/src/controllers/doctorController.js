@@ -2395,6 +2395,24 @@ exports.getVisitDetails = async (req, res) => {
         },
         medicationOrders: {
           include: {
+            medicationCatalog: {
+              select: {
+                id: true,
+                name: true,
+                genericName: true,
+                dosageForm: true,
+                strength: true,
+                unitPrice: true
+              }
+            },
+            doctor: {
+              select: {
+                id: true,
+                fullname: true,
+                specialties: true,
+                licenseNumber: true
+              }
+            },
             continuousInfusion: true
           }
         },
@@ -3086,156 +3104,15 @@ exports.createMultipleLabOrders = async (req, res) => {
     };
 
     // Create batch order using the batch order controller
+    // This will create a BatchOrder with services, NOT individual LabOrder records
     const batchOrderController = require('./batchOrderController');
     req.body = batchOrderData;
     return await batchOrderController.createBatchOrder(req, res);
-
-    // Validate all investigation types
-    const investigationIds = orders.map(order => order.typeId);
-    const investigations = await prisma.investigationType.findMany({
-      where: {
-        id: { in: investigationIds },
-        category: 'LAB'
-      },
-      include: { service: true }
-    });
-
-    if (investigations.length !== investigationIds.length) {
-      return res.status(404).json({ error: 'One or more lab investigation types not found' });
-    }
-
-    // Check all investigations have services
-    const missingServices = investigations.filter(inv => !inv.service);
-    if (missingServices.length > 0) {
-      return res.status(400).json({ error: 'One or more investigation types are not linked to services' });
-    }
-
-    // Create all lab orders
-    const createdOrders = [];
-    for (const orderData of orders) {
-      const investigation = investigations.find(inv => inv.id === orderData.typeId);
-
-      const order = await prisma.labOrder.create({
-        data: {
-          visitId,
-          doctorId,
-          patientId,
-          typeId: orderData.typeId,
-          instructions: orderData.instructions,
-          status: 'UNPAID'
-        },
-        include: {
-          type: {
-            include: {
-              service: true
-            }
-          },
-          visit: {
-            select: {
-              id: true,
-              visitUid: true
-            }
-          }
-        }
-      });
-      createdOrders.push(order);
-    }
-
-    // Check if diagnostics billing already exists for this visit
-    let billing = await prisma.billing.findFirst({
-      where: {
-        visitId: visitId,
-        notes: {
-          contains: 'diagnostics'
-        },
-        status: 'PENDING'
-      }
-    });
-
-    const totalAmount = investigations.reduce((sum, inv) => sum + inv.service.price, 0);
-
-    if (!billing) {
-      // Create combined diagnostics billing
-      billing = await prisma.billing.create({
-        data: {
-          patientId,
-          visitId,
-          totalAmount,
-          status: 'PENDING',
-          notes: 'Combined diagnostics billing - lab and radiology'
-        }
-      });
-    } else {
-      // Update existing diagnostics billing
-      await prisma.billing.update({
-        where: { id: billing.id },
-        data: {
-          totalAmount: billing.totalAmount + totalAmount
-        }
-      });
-    }
-
-    // Add services to billing (handle duplicates)
-    for (const investigation of investigations) {
-      // Check if service already exists in billing
-      const existingService = await prisma.billingService.findFirst({
-        where: {
-          billingId: billing.id,
-          serviceId: investigation.service.id
-        }
-      });
-
-      if (existingService) {
-        // Update quantity if service already exists
-        await prisma.billingService.update({
-          where: { id: existingService.id },
-          data: {
-            quantity: existingService.quantity + 1,
-            totalPrice: (existingService.quantity + 1) * investigation.service.price
-          }
-        });
-      } else {
-        // Create new service entry
-        await prisma.billingService.create({
-          data: {
-            billingId: billing.id,
-            serviceId: investigation.service.id,
-            quantity: 1,
-            unitPrice: investigation.service.price,
-            totalPrice: investigation.service.price
-          }
-        });
-      }
-    }
-
-    // Update visit status based on existing orders
-    const visitWithOrders = await prisma.visit.findUnique({
-      where: { id: visitId },
-      include: {
-        labOrders: true,
-        radiologyOrders: true
-      }
-    });
-
-    let newStatus = 'SENT_TO_LAB';
-    if (visitWithOrders.radiologyOrders.length > 0) {
-      newStatus = 'SENT_TO_BOTH';
-    }
-
-    await prisma.visit.update({
-      where: { id: visitId },
-      data: { status: newStatus }
-    });
-
-    res.json({
-      message: 'Multiple lab orders created successfully',
-      orders: createdOrders,
-      billing: {
-        id: billing.id,
-        totalAmount: billing.totalAmount
-      },
-      visitStatus: newStatus
-    });
+    
+    // NOTE: All code below this return is UNREACHABLE and has been removed
+    // It was creating duplicate LabOrder records when BatchOrders were created
+    // The batchOrderController.createBatchOrder handles all billing and status updates
+    // This prevents the automatic creation of duplicate LabOrders
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: 'Validation error', details: error.errors });
@@ -3522,9 +3399,15 @@ exports.createMultipleRadiologyOrders = async (req, res) => {
     };
 
     // Create batch order using the batch order controller
+    // This creates a BatchOrder with services - NOT individual LabOrder records
+    // This prevents duplicate orders
     const batchOrderController = require('./batchOrderController');
     req.body = batchOrderData;
     return await batchOrderController.createBatchOrder(req, res);
+    
+    // NOTE: All code below this return is UNREACHABLE and was removed
+    // It was creating duplicate LabOrder records when BatchOrders were created
+    // The old system created individual LabOrders, but we now use BatchOrders only
 
     // Validate all investigation types
     const investigationIds = orders.map(order => order.typeId);
@@ -4175,6 +4058,24 @@ exports.getPatientHistory = async (req, res) => {
         },
         medicationOrders: {
           include: {
+            medicationCatalog: {
+              select: {
+                id: true,
+                name: true,
+                genericName: true,
+                dosageForm: true,
+                strength: true,
+                unitPrice: true
+              }
+            },
+            doctor: {
+              select: {
+                id: true,
+                fullname: true,
+                specialties: true,
+                licenseNumber: true
+              }
+            },
             continuousInfusion: {
               include: {
                 nurseTasks: {
@@ -4215,7 +4116,41 @@ exports.getPatientHistory = async (req, res) => {
           include: {
             services: {
               include: {
-                investigationType: true
+                investigationType: true,
+                service: true
+              }
+            }
+          },
+          orderBy: { createdAt: 'desc' }
+        },
+        labTestOrders: {
+          include: {
+            labTest: {
+              include: {
+                resultFields: {
+                  orderBy: { displayOrder: 'asc' }
+                }
+              }
+            },
+            results: {
+              include: {
+                test: {
+                  include: {
+                    resultFields: {
+                      orderBy: { displayOrder: 'asc' }
+                    }
+                  }
+                },
+                attachments: true
+                // Note: verifiedByUser is not a relation, we fetch it separately below
+              },
+              orderBy: { createdAt: 'desc' }
+            },
+            doctor: {
+              select: {
+                id: true,
+                fullname: true,
+                specialties: true
               }
             }
           },
@@ -4281,6 +4216,32 @@ exports.getPatientHistory = async (req, res) => {
             }
           },
           orderBy: { completedAt: 'desc' }
+        },
+        emergencyDrugOrders: {
+          include: {
+            service: true,
+            doctor: {
+              select: {
+                id: true,
+                fullname: true,
+                username: true
+              }
+            }
+          },
+          orderBy: { createdAt: 'desc' }
+        },
+        materialNeedsOrders: {
+          include: {
+            service: true,
+            nurse: {
+              select: {
+                id: true,
+                fullname: true,
+                username: true
+              }
+            }
+          },
+          orderBy: { createdAt: 'desc' }
         }
       },
       orderBy: { createdAt: 'desc' }
@@ -4294,43 +4255,85 @@ exports.getPatientHistory = async (req, res) => {
 
     // Add radiology and lab results to each visit
     const visitsWithResults = await Promise.all(visits.map(async (visit) => {
+      // Debug: Log batch orders for this visit
+      console.log(`🔍 Visit ${visit.id}: batchOrders count = ${visit.batchOrders?.length || 0}`);
+      if (visit.batchOrders && visit.batchOrders.length > 0) {
+        visit.batchOrders.forEach(bo => {
+          console.log(`  - BatchOrder ${bo.id}: type=${bo.type}, services count=${bo.services?.length || 0}`);
+        });
+      }
       // Get radiology results for batch orders
-      const radiologyResults = await prisma.radiologyResult.findMany({
-        where: {
-          batchOrderId: {
-            in: visit.batchOrders
-              .filter(bo => bo.type === 'RADIOLOGY')
-              .map(bo => bo.id)
+      const radiologyBatchOrderIds = visit.batchOrders
+        .filter(bo => bo.type === 'RADIOLOGY')
+        .map(bo => bo.id);
+      
+      let radiologyResults = [];
+      if (radiologyBatchOrderIds.length > 0) {
+        const radiologyResultsRaw = await prisma.radiologyResult.findMany({
+          where: {
+            batchOrderId: {
+              in: radiologyBatchOrderIds
+            }
+          },
+          include: {
+            testType: true,
+            attachments: {
+              orderBy: { uploadedAt: 'desc' },
+              take: 1 // Get first attachment to find radiologist
+            }
+          },
+          orderBy: { createdAt: 'desc' }
+        });
+
+        // Fetch radiologist info from attachments
+        radiologyResults = await Promise.all(radiologyResultsRaw.map(async (result) => {
+          let radiologistUser = null;
+          try {
+            if (result.attachments && result.attachments.length > 0 && result.attachments[0]?.uploadedBy) {
+              const uploadedById = result.attachments[0].uploadedBy;
+              // Only query if ID is valid (not null, not empty, looks like UUID)
+              if (uploadedById && typeof uploadedById === 'string' && uploadedById.length > 0) {
+                radiologistUser = await prisma.user.findUnique({
+                  where: { id: uploadedById },
+                  select: { id: true, fullname: true, role: true }
+                }).catch(() => null); // Return null on error instead of throwing
+              }
+            }
+          } catch (err) {
+            console.error('Error fetching radiologist user:', err);
+            // Continue with null radiologistUser
           }
-        },
-        include: {
-          testType: true,
-          attachments: true
-        },
-        orderBy: { createdAt: 'desc' }
-      });
+          return {
+            ...result,
+            radiologistUser: radiologistUser || null
+          };
+        }));
+      }
 
       // Get detailed lab results from DetailedLabResult table
       const batchOrderIds = visit.batchOrders
         .filter(bo => bo.type === 'LAB')
         .map(bo => bo.id);
 
-      const detailedLabResults = await prisma.detailedLabResult.findMany({
-        where: {
-          labOrderId: {
-            in: batchOrderIds
-          }
-        },
-        include: {
-          template: true
-        },
-        orderBy: { createdAt: 'desc' }
-      });
+      let labResults = [];
+      let detailedLabResults = [];
+      if (batchOrderIds.length > 0) {
+        detailedLabResults = await prisma.detailedLabResult.findMany({
+          where: {
+            labOrderId: {
+              in: batchOrderIds
+            }
+          },
+          include: {
+            template: true
+          },
+          orderBy: { createdAt: 'desc' }
+        });
 
-      // Convert detailed lab results to the expected format
-      const labResults = detailedLabResults.map(result => {
+        // Convert detailed lab results to the expected format
+        labResults = await Promise.all(detailedLabResults.map(async (result) => {
         // Get template fields
-        const templateFields = result.template.fields || {};
+        const templateFields = result.template?.fields || {};
 
         // Convert results object to array format
         let detailedResultsArray = [];
@@ -4344,11 +4347,29 @@ exports.getPatientHistory = async (req, res) => {
           }));
         }
 
+        // Fetch verifiedBy user if exists
+        let verifiedByUser = null;
+        if (result.verifiedBy) {
+          try {
+            const verifiedById = result.verifiedBy;
+            // Only query if ID is valid (not null, not empty, looks like UUID)
+            if (verifiedById && typeof verifiedById === 'string' && verifiedById.length > 0) {
+              verifiedByUser = await prisma.user.findUnique({
+                where: { id: verifiedById },
+                select: { id: true, fullname: true, role: true }
+              }).catch(() => null); // Return null on error instead of throwing
+            }
+          } catch (err) {
+            console.error('Error fetching verifiedBy user:', err);
+            // Continue with null verifiedByUser
+          }
+        }
+
         return {
           id: result.id,
           testType: {
-            name: result.template.name,
-            category: result.template.category
+            name: result.template?.name || 'Lab Test',
+            category: result.template?.category || 'GENERAL'
           },
           resultText: detailedResultsArray.length > 0 ? `Detailed results for ${result.template.name}` : null,
           detailedResults: detailedResultsArray,
@@ -4357,35 +4378,183 @@ exports.getPatientHistory = async (req, res) => {
           attachments: [], // Detailed lab results don't have separate attachments
           createdAt: result.createdAt,
           verifiedBy: result.verifiedBy,
+          verifiedByUser: verifiedByUser,
           verifiedAt: result.verifiedAt
         };
-      });
+      }));
+      }
+
+      // Also include direct labOrders from the visit
+      // BUT: Only include if they're not duplicates of batch order services
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/02072a7c-232e-4783-a3a7-bf011c7b47c3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'doctorController.js:4419',message:'Processing labOrders for display',data:{visitId:visit.id,labOrdersCount:visit.labOrders?.length||0,batchOrdersCount:visit.batchOrders?.filter(bo=>bo.type==='LAB').length||0,labOrders:visit.labOrders?.map(lo=>({id:lo.id,typeId:lo.typeId,status:lo.status}))||[]},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+      // #endregion
+      for (const labOrder of visit.labOrders || []) {
+        // Check if this labOrder is already represented in batch orders
+        const isInBatchOrder = visit.batchOrders?.some(bo => 
+          bo.type === 'LAB' && bo.services?.some(s => 
+            s.investigationTypeId === labOrder.typeId
+          )
+        );
+        
+        // Skip if it's already in a batch order (to avoid duplicates)
+        if (isInBatchOrder) {
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/02072a7c-232e-4783-a3a7-bf011c7b47c3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'doctorController.js:4426',message:'Skipping duplicate LabOrder',data:{labOrderId:labOrder.id,typeId:labOrder.typeId,status:labOrder.status},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+          // #endregion
+          console.log(`🔍 Skipping LabOrder ${labOrder.id} - already in batch order`);
+          continue;
+        }
+        
+        // Check if we already have a detailed result for this lab order
+        const hasDetailedResult = detailedLabResults.some(dr =>
+          dr.labOrderId === labOrder.id
+        );
+
+        // If no detailed result exists, still show the order
+        if (!hasDetailedResult) {
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/02072a7c-232e-4783-a3a7-bf011c7b47c3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'doctorController.js:4427',message:'Adding LabOrder to labResults',data:{labOrderId:labOrder.id,typeId:labOrder.typeId,status:labOrder.status,typeName:labOrder.type?.name},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+          // #endregion
+          labResults.push({
+            id: `laborder-${labOrder.id}`,
+            testType: labOrder.type || { name: 'Lab Test', category: 'GENERAL' },
+            resultText: labOrder.result || null,
+            detailedResults: [],
+            additionalNotes: labOrder.notes || labOrder.additionalNotes || '',
+            status: labOrder.status,
+            attachments: labOrder.attachments || [],
+            createdAt: labOrder.createdAt
+          });
+        }
+      }
 
       // Also include lab orders from batch order services (both filled and unfilled)
-      for (const batchOrder of visit.batchOrders) {
+      // IMPORTANT: Always show batch order services, even if they don't have results yet
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/02072a7c-232e-4783-a3a7-bf011c7b47c3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'doctorController.js:4442',message:'Processing batchOrder services',data:{visitId:visit.id,labBatchOrdersCount:visit.batchOrders?.filter(bo=>bo.type==='LAB').length||0,labBatchOrders:visit.batchOrders?.filter(bo=>bo.type==='LAB').map(bo=>({id:bo.id,status:bo.status,servicesCount:bo.services?.length||0}))||[]},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+      // #endregion
+      for (const batchOrder of visit.batchOrders || []) {
         if (batchOrder.type === 'LAB') {
-          for (const service of batchOrder.services) {
-            // Check if we already have a detailed result for this service
+          for (const service of batchOrder.services || []) {
+            // Check if we already have a detailed result for this batch order
             const hasDetailedResult = detailedLabResults.some(dr =>
               dr.labOrderId === batchOrder.id
             );
 
-            // If no detailed result exists, still show the order
-            if (!hasDetailedResult) {
+            // Check if we already added this as a batch service
+            const alreadyAdded = labResults.some(lr => 
+              lr.id === `batch-${batchOrder.id}-${service.id}`
+            );
+
+            // Always show the order, even if no result exists yet
+            if (!alreadyAdded) {
+              // #region agent log
+              fetch('http://127.0.0.1:7242/ingest/02072a7c-232e-4783-a3a7-bf011c7b47c3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'doctorController.js:4456',message:'Adding batchOrder service to labResults',data:{batchOrderId:batchOrder.id,serviceId:service.id,investigationTypeId:service.investigationTypeId,serviceName:service.service?.name,investigationTypeName:service.investigationType?.name,status:service.status||batchOrder.status},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+              // #endregion
               labResults.push({
                 id: `batch-${batchOrder.id}-${service.id}`,
-                testType: service.investigationType || { name: 'Lab Test', category: 'GENERAL' },
+                testType: service.investigationType || service.service || { name: service.service?.name || 'Lab Test', category: 'GENERAL' },
                 resultText: service.result || null,
-                detailedResults: [],
-                additionalNotes: service.additionalNotes || '',
-                status: service.status,
+                detailedResults: hasDetailedResult ? detailedLabResults.filter(dr => dr.labOrderId === batchOrder.id).map(dr => ({
+                  testName: dr.template?.name || 'Test',
+                  result: dr.results || null,
+                  unit: '',
+                  referenceRange: ''
+                })) : [],
+                additionalNotes: service.additionalNotes || batchOrder.additionalNotes || '',
+                status: service.status || batchOrder.status || 'PENDING',
                 attachments: [],
-                createdAt: batchOrder.createdAt
+                createdAt: batchOrder.createdAt || service.createdAt
               });
             }
           }
         }
       }
+
+      // Also include LabTestOrders (new system) with their results
+      for (const labTestOrder of visit.labTestOrders || []) {
+        // Check if already added
+        const alreadyAdded = labResults.some(lr => 
+          lr.id === `labtestorder-${labTestOrder.id}`
+        );
+
+        if (!alreadyAdded) {
+          // Get the result for this order (if exists)
+          const orderResult = labTestOrder.results && labTestOrder.results.length > 0 
+            ? labTestOrder.results[0] 
+            : null;
+
+          // Convert resultFields to detailedResults format
+          let detailedResults = [];
+          if (orderResult && orderResult.results && typeof orderResult.results === 'object') {
+            const resultFields = labTestOrder.labTest?.resultFields || [];
+            detailedResults = resultFields.map(field => {
+              const fieldValue = orderResult.results[field.fieldName] || null;
+              return {
+                testName: field.label || field.fieldName,
+                result: fieldValue,
+                unit: field.unit || '',
+                referenceRange: field.referenceRange || ''
+              };
+            }).filter(item => item.result !== null); // Only include fields with values
+          }
+
+          // Fetch verifiedBy user if exists
+          let verifiedByUser = null;
+          if (orderResult?.verifiedBy) {
+            try {
+              const verifiedById = orderResult.verifiedBy;
+              // Only query if ID is valid (not null, not empty, looks like UUID)
+              if (verifiedById && typeof verifiedById === 'string' && verifiedById.length > 0) {
+                verifiedByUser = await prisma.user.findUnique({
+                  where: { id: verifiedById },
+                  select: { id: true, fullname: true, role: true }
+                }).catch(() => null); // Return null on error instead of throwing
+              }
+            } catch (err) {
+              console.error('Error fetching verifiedBy user:', err);
+              // Continue with null verifiedByUser
+            }
+          }
+
+          labResults.push({
+            id: `labtestorder-${labTestOrder.id}`,
+            testType: labTestOrder.labTest || { name: 'Lab Test', category: 'GENERAL' },
+            resultText: orderResult?.additionalNotes || null,
+            detailedResults: detailedResults,
+            additionalNotes: labTestOrder.instructions || orderResult?.additionalNotes || '',
+            status: labTestOrder.status || 'PENDING',
+            attachments: orderResult?.attachments || [],
+            createdAt: labTestOrder.createdAt,
+            verifiedBy: orderResult?.verifiedBy || null,
+            verifiedByUser: verifiedByUser,
+            verifiedAt: orderResult?.verifiedAt || null
+          });
+        }
+      }
+
+      // Format medications for frontend (map medicationOrders to medications)
+      const medications = visit.medicationOrders?.map(order => ({
+        id: order.id,
+        medication: order.medicationCatalog || {
+          id: null,
+          name: order.name,
+          genericName: order.genericName,
+          dosageForm: order.dosageForm,
+          strength: order.strength
+        },
+        medicationCatalog: order.medicationCatalog,
+        name: order.medicationCatalog?.name || order.name,
+        dosage: order.dosage || null,
+        frequency: order.frequency || null,
+        duration: order.duration || null,
+        quantity: order.quantity || order.quantityNumeric || null,
+        instructions: order.instructions || order.additionalNotes || null,
+        status: order.status,
+        createdAt: order.createdAt,
+        doctor: order.doctor || null // Include doctor who prescribed
+      })) || [];
 
       // Format dental services for frontend
       const dentalServices = visit.dentalProcedureCompletions?.map(completion => ({
@@ -4414,13 +4583,56 @@ exports.getPatientHistory = async (req, res) => {
         createdAt: assignment.createdAt
       })) || [];
 
+      // Format emergency drug orders for frontend
+      const emergencyOrders = visit.emergencyDrugOrders?.map(order => ({
+        id: order.id,
+        serviceName: order.service?.name || 'Unknown Service',
+        serviceCode: order.service?.code || '',
+        servicePrice: order.service?.price || 0,
+        quantity: order.quantity || 1,
+        instructions: order.instructions || '',
+        notes: order.notes || '',
+        status: order.status,
+        doctor: order.doctor?.fullname || null,
+        completedAt: order.completedAt,
+        createdAt: order.createdAt
+      })) || [];
+
+      // Format material needs orders for frontend
+      const materialNeeds = visit.materialNeedsOrders?.map(order => ({
+        id: order.id,
+        serviceName: order.service?.name || 'Unknown Service',
+        serviceCode: order.service?.code || '',
+        servicePrice: order.service?.price || 0,
+        quantity: order.quantity || 1,
+        instructions: order.instructions || '',
+        notes: order.notes || '',
+        status: order.status,
+        nurse: order.nurse?.fullname || null,
+        completedAt: order.completedAt,
+        createdAt: order.createdAt
+      })) || [];
+
+      // Debug: Log final labResults count
+      console.log(`🔍 Visit ${visit.id}: Final labResults count = ${labResults.length}`);
+      if (labResults.length > 0) {
+        labResults.forEach(lr => {
+          console.log(`  - LabResult: id=${lr.id}, testType=${lr.testType?.name || 'N/A'}, status=${lr.status}`);
+        });
+      }
+
       return {
         ...visit,
         medicationOrders: visit.medicationOrders || [], // Explicitly include medication orders
+        medications: medications, // Also map to medications for frontend compatibility
         radiologyResults,
-        labResults,
+        labResults: labResults, // Include formatted lab results (includes LabTestOrders formatted)
+        labOrders: visit.labOrders || [], // Also include raw labOrders for compatibility
+        labTestOrders: visit.labTestOrders || [], // Also include raw labTestOrders for frontend checks
         dentalServices,
-        nurseServices
+        nurseServices,
+        emergencyOrders,
+        materialNeeds
       };
     }));
 
@@ -4430,7 +4642,9 @@ exports.getPatientHistory = async (req, res) => {
       medicalHistory
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('❌ [getPatientHistory] Error:', error);
+    console.error('❌ [getPatientHistory] Stack:', error.stack);
+    res.status(500).json({ error: error.message || 'Failed to fetch patient history' });
   }
 };
 

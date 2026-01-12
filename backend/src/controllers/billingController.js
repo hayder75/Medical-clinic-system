@@ -116,63 +116,29 @@ exports.registerPatient = async (req, res) => {
       }
     }
     
-    // Generate unique patient ID with retry logic to handle race conditions
-    const year = new Date().getFullYear();
-    let id;
-    let retries = 0;
-    const maxRetries = 5;
+    // Generate unique patient ID with sequential numbering
+    const { generateUniquePatientId } = require('../utils/patientIdGenerator');
+    const isEmergency = type === 'EMERGENCY';
     
-    let patient;
-    while (retries < maxRetries) {
-      try {
-        if (type === 'EMERGENCY') {
-          // Emergency patients use timestamp + random for uniqueness
-          const timestamp = Date.now().toString().slice(-6);
-          const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-          id = `PAT-${year}-TEMP-${timestamp}-${random}`;
-        } else {
-          // Regular patients use timestamp + random for uniqueness
-          const timestamp = Date.now().toString().slice(-6);
-          const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-          id = `PAT-${year}-${timestamp}-${random}`;
-        }
-        
-        // Create patient - if unique constraint error, retry with new ID
-        patient = await prisma.patient.create({
-          data: { 
-            id, 
-            name,
-            type,
-            dob: dob ? new Date(dob) : null,
-            gender,
-            mobile,
-            email,
-            address,
-            emergencyContact,
-            bloodType,
-            maritalStatus,
-            insuranceId,
-            status: 'Active' 
-          } 
-        });
-        
-        break; // Success - patient created
-      } catch (error) {
-        // If it's a unique constraint error, retry with a new ID
-        if (error.code === 'P2002' && error.meta?.target?.includes('id')) {
-          retries++;
-          if (retries >= maxRetries) {
-            console.error('Failed to generate unique patient ID after', maxRetries, 'attempts');
-            throw new Error('Unable to generate unique patient ID. Please try again.');
-          }
-          // Wait a tiny bit before retrying (adds more randomness)
-          await new Promise(resolve => setTimeout(resolve, 10));
-        } else {
-          // Different error - throw it
-          throw error;
-        }
-      }
-    }
+    const patient = await generateUniquePatientId(async (patientId) => {
+      return await prisma.patient.create({
+        data: { 
+          id: patientId, 
+          name,
+          type,
+          dob: dob ? new Date(dob) : null,
+          gender,
+          mobile,
+          email,
+          address,
+          emergencyContact,
+          bloodType,
+          maritalStatus,
+          insuranceId,
+          status: 'Active' 
+        } 
+      });
+    }, prisma, isEmergency);
 
     // Create card registration billing for non-emergency patients
     // Note: Visit is NOT created automatically - must be created manually after payment
@@ -354,7 +320,7 @@ exports.createVisitForExistingPatient = async (req, res) => {
           notes: notes || `Returning patient visit - ${type || 'regular'}`
         }
       });
-    });
+    }, prisma);
 
     // Create entry fee billing for non-emergency patients
     let billing = null;
@@ -1069,7 +1035,7 @@ exports.processPayment = async (req, res) => {
                 notes: 'Automatic visit creation after card registration payment'
               }
             });
-          });
+          }, prisma);
 
           // Update billing to link the visit
           await prisma.billing.update({
@@ -2001,17 +1967,16 @@ exports.addServiceToBilling = async (req, res) => {
 exports.updateEmergencyPatientId = async (req, res) => {
   try {
     const { tempId } = req.body;
-    const year = new Date().getFullYear();
-    const lastPatient = await prisma.patient.findFirst({
-      where: { id: { startsWith: `PAT-${year}-` } },
-      orderBy: { id: 'desc' },
+    const { generatePatientId } = require('../utils/patientIdGenerator');
+    
+    // Generate new sequential ID (not emergency, since we're converting from TEMP)
+    const newId = await generatePatientId(prisma, false);
+    
+    const patient = await prisma.patient.update({ 
+      where: { id: tempId }, 
+      data: { id: newId } 
     });
-    let nn = 1;
-    if (lastPatient && !lastPatient.id.includes('TEMP')) {
-      nn = parseInt(lastPatient.id.split('-')[2]) + 1;
-    }
-    const newId = `PAT-${year}-${nn.toString().padStart(2, '0')}`;
-    const patient = await prisma.patient.update({ where: { id: tempId }, data: { id: newId } });
+    
     res.json({
       message: 'Patient ID updated successfully',
       patient

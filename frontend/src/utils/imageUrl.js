@@ -26,8 +26,15 @@ function getBaseUrl() {
       // Local development - backend runs on port 3000
       apiUrl = `${protocol}//${hostname}:3000/api`;
     } else {
-      // Production - Nginx proxies /uploads, so use same hostname (no port needed)
-      apiUrl = `${protocol}//${hostname}/api`;
+      // Check if we're being served from a subdirectory (e.g., /d)
+      const pathname = window.location.pathname;
+      if (pathname.startsWith('/d')) {
+        // If served from /d, use /d/api
+        apiUrl = `${protocol}//${hostname}/d/api`;
+      } else {
+        // Production - Nginx proxies /uploads, so use same hostname (no port needed)
+        apiUrl = `${protocol}//${hostname}/api`;
+      }
     }
   }
   
@@ -63,9 +70,18 @@ export function getImageUrl(filePath) {
       const path = url.pathname;
       
       // Reconstruct URL with current hostname (no port for production, use Nginx)
-      const baseUrl = (hostname === 'localhost' || hostname === '127.0.0.1') 
-        ? `${protocol}//${hostname}:3000`
-        : `${protocol}//${hostname}`;
+      let baseUrl;
+      if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        baseUrl = `${protocol}//${hostname}:3000`;
+      } else {
+        // Check if we're being served from /d subdirectory
+        const pathname = window.location.pathname;
+        if (pathname.startsWith('/d')) {
+          baseUrl = `${protocol}//${hostname}/d`;
+        } else {
+          baseUrl = `${protocol}//${hostname}`;
+        }
+      }
       
       const finalUrl = `${baseUrl}${path}`;
       console.debug('[getImageUrl] Fixed localhost URL:', { original: filePath, finalUrl });
@@ -110,7 +126,20 @@ export function getApiUrl() {
   // Backend runs on port 3000
   const protocol = window.location.protocol;
   const hostname = window.location.hostname;
-  return `${protocol}//${hostname}:3000/api`;
+  
+  // Check if we're being served from a subdirectory (e.g., /d)
+  const pathname = window.location.pathname;
+  if (hostname !== 'localhost' && hostname !== '127.0.0.1' && pathname.startsWith('/d')) {
+    // If served from /d, use /d/api
+    return `${protocol}//${hostname}/d/api`;
+  }
+  
+  // Local development or root path
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return `${protocol}//${hostname}:3000/api`;
+  }
+  
+  return `${protocol}//${hostname}/api`;
 }
 
 /**

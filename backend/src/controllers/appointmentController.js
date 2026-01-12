@@ -683,7 +683,7 @@ const sendAppointmentToDoctor = async (req, res) => {
           isEmergency: false
         }
       });
-    });
+    }, prisma);
 
     // 5. Create consultation billing ONLY for CONSULTATION type appointments
     let billing = null;

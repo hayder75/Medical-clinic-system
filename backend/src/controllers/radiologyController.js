@@ -994,19 +994,39 @@ exports.getBatchRadiologyResults = async (req, res) => {
     }
 
     // Get radiology results for this batch order
-    const radiologyResults = await prisma.radiologyResult.findMany({
+    const radiologyResultsRaw = await prisma.radiologyResult.findMany({
       where: {
         batchOrderId: parseInt(batchOrderId)
       },
       include: {
         testType: true,
         attachments: {
-          orderBy: { uploadedAt: 'asc' }
+          orderBy: { uploadedAt: 'asc' },
+          take: 1 // Get first attachment to find radiologist
         },
         batchOrder: true
       },
       orderBy: { createdAt: 'asc' }
     });
+
+    // Fetch radiologist info from attachments
+    const radiologyResults = await Promise.all(radiologyResultsRaw.map(async (result) => {
+      let radiologistUser = null;
+      if (result.attachments && result.attachments.length > 0 && result.attachments[0].uploadedBy) {
+        try {
+          radiologistUser = await prisma.user.findUnique({
+            where: { id: result.attachments[0].uploadedBy },
+            select: { id: true, fullname: true, role: true }
+          });
+        } catch (err) {
+          console.error('Error fetching radiologist user:', err);
+        }
+      }
+      return {
+        ...result,
+        radiologistUser: radiologistUser
+      };
+    }));
 
     // Debug logging
     console.log(`📋 [getBatchRadiologyResults] Found ${radiologyResults.length} radiology results for batch order ${batchOrderId}`);

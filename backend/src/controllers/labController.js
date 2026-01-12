@@ -545,7 +545,7 @@ exports.getDetailedResults = async (req, res) => {
 
     console.log('📋 Fetching detailed results for orderId:', orderId);
 
-    const detailedResults = await prisma.detailedLabResult.findMany({
+    const detailedResultsRaw = await prisma.detailedLabResult.findMany({
       where: {
         labOrderId: parseInt(orderId)
       },
@@ -554,6 +554,25 @@ exports.getDetailedResults = async (req, res) => {
       },
       orderBy: { createdAt: 'desc' }
     });
+
+    // Fetch verifiedBy user for each result
+    const detailedResults = await Promise.all(detailedResultsRaw.map(async (result) => {
+      let verifiedByUser = null;
+      if (result.verifiedBy) {
+        try {
+          verifiedByUser = await prisma.user.findUnique({
+            where: { id: result.verifiedBy },
+            select: { id: true, fullname: true, role: true }
+          });
+        } catch (err) {
+          console.error('Error fetching verifiedBy user:', err);
+        }
+      }
+      return {
+        ...result,
+        verifiedByUser: verifiedByUser
+      };
+    }));
 
     console.log('📋 Found', detailedResults.length, 'detailed results');
     detailedResults.forEach(result => {
