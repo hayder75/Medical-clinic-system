@@ -3540,6 +3540,7 @@ exports.getLabTestsForOrdering = async (req, res) => {
       'HCG002', // HCG (Quantitative)
       'RTD001', // RTD (Rapid Test Device)
       'HPYLORIAB001', // H. pylori Antibody (Serology) - standalone
+      'AFB001', // AFB Sputum (Spot–Morning–Spot) - standalone
       ...hematologyTestCodes // Include hematology tests in independent list for backward compatibility
     ];
     
@@ -3633,7 +3634,8 @@ exports.getLabTestsForOrdering = async (req, res) => {
       'HCG002': 'HCG (Quantitative)',
       'RTD001': 'RTD (Rapid Test Device)',
       'PICT001': 'BF (Blood Film)',
-      'HPYLORIAB001': 'H. pylori Antibody (Serology)'
+      'HPYLORIAB001': 'H. pylori Antibody (Serology)',
+      'AFB001': 'AFB Sputum (Spot–Morning–Spot)'
     };
 
     // Separate hematology tests from other independent tests
