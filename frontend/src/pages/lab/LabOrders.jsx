@@ -571,6 +571,8 @@ const LabOrders = () => {
                   additionalNotes: result.additionalNotes || '',
                   serviceName: result.service?.name || result.labTest?.name || 'Lab Test',
                   template: result.template || {},
+                  resultFields: result.labTest?.resultFields || result.resultFields || [], // Include resultFields for new system
+                  labTest: result.labTest || null, // Include labTest for resultFields access
                   verifiedByUser: result.verifiedByUser || null
                 };
               }
@@ -902,17 +904,48 @@ const LabOrders = () => {
 
           <div class="results-section">
             ${Object.entries(resultsToPrint).map(([serviceId, result], index) => {
-        const resultRows = Object.entries(result.results || {}).map(([field, value]) => {
-          const fieldConfig = result.template?.fields?.[field] || {};
-          const unit = fieldConfig.unit ? ` (${fieldConfig.unit})` : '';
-          const displayValue = (value === null || value === undefined || value === '' || String(value).trim() === '') ? '-' : value;
-          return `
+        // Use resultFields (new system) if available, otherwise use template fields (old system)
+        const resultRows = (() => {
+          if (result.resultFields && result.resultFields.length > 0) {
+            // NEW SYSTEM: Use resultFields with labels
+            return result.resultFields.map((field) => {
+              // Handle backward compatibility: check both new and old field names
+              let value = result.results?.[field.fieldName];
+              // Special case: if fieldName is 'wbc' but results have 'pus_cells', use that
+              if (value === undefined && field.fieldName === 'wbc') {
+                value = result.results?.['pus_cells'];
+              }
+              if (value === undefined || value === null || value === '') return '';
+              const displayValue = String(value).trim() === '' ? '-' : value;
+              const unit = field.unit ? ` (${field.unit})` : '';
+              return `
                   <tr>
-                    <td class="field-name">${field}${unit}</td>
+                    <td class="field-name">${field.label}${unit}</td>
                     <td class="field-value">${displayValue}</td>
                   </tr>
                 `;
-        }).join('');
+            }).filter(row => row !== '').join('');
+          } else {
+            // OLD SYSTEM: Use template fields or field names
+            return Object.entries(result.results || {}).map(([field, value]) => {
+              // Map old field names to new labels for display
+              const fieldLabelMap = {
+                'pus_cells': 'WBC',
+                'wbc': 'WBC'
+              };
+              const displayFieldName = fieldLabelMap[field] || field;
+              const fieldConfig = result.template?.fields?.[field] || {};
+              const unit = fieldConfig.unit ? ` (${fieldConfig.unit})` : '';
+              const displayValue = (value === null || value === undefined || value === '' || String(value).trim() === '') ? '-' : value;
+              return `
+                  <tr>
+                    <td class="field-name">${displayFieldName}${unit}</td>
+                    <td class="field-value">${displayValue}</td>
+                  </tr>
+                `;
+            }).join('');
+          }
+        })();
 
         return `
                 <div class="test-card">
