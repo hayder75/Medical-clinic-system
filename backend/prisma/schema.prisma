@@ -473,15 +473,15 @@ model MedicationOrder {
   genericName         String?
   dosageForm          String
   strength            String
-  quantity            String
+  quantity            String? // Optional - doctor can skip
   quantityNumeric     Float? // Parsed numeric quantity for calculations
   unit                String? // Unit type (e.g., "tablets", "ml", "bottle", "unit")
-  frequency           String?
+  frequency           String? // Optional
   frequencyPeriod     String? // "per day", "per week", "per month"
-  duration            String?
+  duration            String? // Optional
   durationPeriod      String? // "days", "weeks", "months"
   route               String? // Medication route: PO, IV, IM, S/C
-  instructions        String?
+  instructions        String? // Optional
   additionalNotes     String?
   category            MedicineCategory?
   type                String?

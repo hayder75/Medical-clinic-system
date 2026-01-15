@@ -68,13 +68,13 @@ const medicationOrderSchema = z.object({
   name: z.string(),
   dosageForm: z.string(),
   strength: z.string(),
-  quantity: z.string(), // Changed to string to accept any input
-  frequency: z.string(),
+  quantity: z.string().optional(), // Optional - doctor can skip
+  frequency: z.string().optional(), // Optional - doctor can skip
   frequencyPeriod: z.string().optional(), // "per day", "per week", "per month"
-  duration: z.string(),
+  duration: z.string().optional(), // Optional - doctor can skip
   durationPeriod: z.string().optional(), // "days", "weeks", "months"
   route: z.enum(['PO', 'IV', 'IM', 'S/C']).optional(),
-  instructions: z.string(),
+  instructions: z.string().optional(), // Optional
   additionalNotes: z.string().optional(),
   category: z.enum(['TABLETS', 'CAPSULES', 'INJECTIONS', 'SYRUPS', 'OINTMENTS', 'DROPS', 'INHALERS', 'PATCHES', 'INFUSIONS']).optional(),
   isContinuousInfusion: z.boolean().optional(),
@@ -3545,13 +3545,13 @@ exports.createMedicationOrder = async (req, res) => {
         name: data.name,
         dosageForm: data.dosageForm,
         strength: data.strength,
-        quantity: data.quantity,
-        frequency: data.frequency,
+        quantity: data.quantity || null,
+        frequency: data.frequency || null,
         frequencyPeriod: data.frequencyPeriod || null,
-        duration: data.duration,
+        duration: data.duration || null,
         durationPeriod: data.durationPeriod || null,
         route: data.route || null,
-        instructions: data.instructions,
+        instructions: data.instructions || null,
         additionalNotes: data.additionalNotes,
         category: data.category,
         status: 'UNPAID'
@@ -5940,7 +5940,7 @@ exports.createBatchPrescription = async (req, res) => {
       genericName: z.string().nullable().optional(),
       dosageForm: z.string().min(1, 'Dosage form is required'),
       strength: z.string().min(1, 'Strength is required'),
-      quantity: z.number().min(1, 'Quantity must be at least 1'),
+      quantity: z.number().nullable().optional(), // Optional - no minimum required
       frequency: z.string().nullable().optional(),
       frequencyPeriod: z.string().nullable().optional(),
       duration: z.string().nullable().optional(),
@@ -6055,12 +6055,12 @@ exports.createBatchPrescription = async (req, res) => {
       genericName: medication.genericName || null,
       dosageForm: medication.dosageForm,
       strength: medication.strength,
-      quantity: medication.quantity,
-      frequency: medication.frequency || null,
-      frequencyPeriod: medication.frequencyPeriod || null,
-      duration: medication.duration || null,
-      durationPeriod: medication.durationPeriod || null,
-      instructions: medication.instructions || null,
+        quantity: medication.quantity || null, // Optional
+        frequency: medication.frequency || null, // Optional
+        frequencyPeriod: medication.frequencyPeriod || null,
+        duration: medication.duration || null, // Optional
+        durationPeriod: medication.durationPeriod || null,
+        instructions: medication.instructions || null, // Optional
       additionalNotes: medication.additionalNotes || null,
       category: medication.category || null,
       type: medication.type || 'Prescription',

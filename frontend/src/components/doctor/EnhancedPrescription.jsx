@@ -167,10 +167,10 @@ const EnhancedPrescription = ({ visitId, patientId, onPrescriptionSubmit, onCanc
       return;
     }
 
-    // Validate all medications
+    // Validate only essential fields - quantity and duration are optional
     for (const med of selectedMedications) {
-      if (!med.name || !med.dosageForm || !med.strength || med.quantity < 1) {
-        toast.error('Please fill in all required fields for all medications');
+      if (!med.name || !med.dosageForm || !med.strength) {
+        toast.error('Please fill in medication name, dosage form, and strength');
         return;
       }
     }
@@ -404,7 +404,7 @@ const EnhancedPrescription = ({ visitId, patientId, onPrescriptionSubmit, onCanc
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Quantity *
+                  Quantity
                 </label>
                 <input
                   type="number"

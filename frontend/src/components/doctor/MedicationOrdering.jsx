@@ -160,7 +160,7 @@ const MedicationOrdering = ({ visitId, patientId, patient, doctor, onOrdersPlace
     return () => clearTimeout(timeoutId);
   };
 
-  // Select custom medication from search (don't save, just fill form)
+  // Select custom medication from search (don't save, just fill form with ALL fields)
   const selectCustomMedication = (customMed) => {
     setCustomMedication({
       name: customMed.name,
@@ -178,6 +178,7 @@ const MedicationOrdering = ({ visitId, patientId, patient, doctor, onOrdersPlace
     setCustomMedSearchResults([]);
     setShowCustomMedSuggestions(false);
     // Don't save when selected from search - only save when typed manually
+    // Doctor can now edit all fields before adding
   };
 
   // Add custom medication (save to database if typed, not if selected)
@@ -202,13 +203,14 @@ const MedicationOrdering = ({ visitId, patientId, patient, doctor, onOrdersPlace
           genericName: customMedication.name,
           dosageForm: customMedication.dosageForm,
           strength: customMedication.strength,
-          quantity: customMedication.quantity,
-          frequency: customMedication.frequency,
-          duration: customMedication.duration,
-          route: customMedication.route,
-          instructions: customMedication.instructions,
-          frequencyPeriod: customMedication.frequencyPeriod,
-          durationPeriod: customMedication.durationPeriod
+          quantity: customMedication.quantity || null, // Save all fields, even if empty
+          frequency: customMedication.frequency || null,
+          duration: customMedication.duration || null,
+          route: customMedication.route || null,
+          instructions: customMedication.instructions || null,
+          frequencyPeriod: customMedication.frequencyPeriod || null,
+          durationPeriod: customMedication.durationPeriod || null,
+          category: null // Can add category later if needed
         });
 
         if (response.data.exists) {
@@ -292,15 +294,7 @@ const MedicationOrdering = ({ visitId, patientId, patient, doctor, onOrdersPlace
       return;
     }
 
-    // Validate all medications have required fields
-    const incomplete = selectedMedications.some(med =>
-      !med.quantity || !med.frequency || !med.duration
-    );
-
-    if (incomplete) {
-      toast.error('Please fill in quantity, frequency, and duration for all medications');
-      return;
-    }
+    // No validation - all fields are optional, doctor can submit with any fields filled
 
     try {
       // Create individual medication orders
@@ -926,7 +920,7 @@ const MedicationOrdering = ({ visitId, patientId, patient, doctor, onOrdersPlace
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Duration *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Duration</label>
                 <div className="flex gap-2">
                   <input
                     type="text"
@@ -1118,7 +1112,7 @@ const MedicationOrdering = ({ visitId, patientId, patient, doctor, onOrdersPlace
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Quantity *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
                     <input
                       type="number"
                       value={medication.quantity}
@@ -1150,7 +1144,7 @@ const MedicationOrdering = ({ visitId, patientId, patient, doctor, onOrdersPlace
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Duration *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Duration</label>
                     <div className="flex gap-2">
                       <input
                         type="text"
