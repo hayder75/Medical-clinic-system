@@ -48,6 +48,7 @@ model User {
   cashSessionsReset   DailyCashSession[]       @relation("CashSessionReset")
   cashTransactions    CashTransaction[]
   bankDeposits        BankDeposit[]
+  customMedications   CustomMedication[]       @relation("CustomMedications")
   cashExpenses        CashExpense[]
   medicalHistories    MedicalHistory[]         @relation("DoctorHistory")
   nurseAssignments    NurseServiceAssignment[] @relation("NurseAssignments")
@@ -476,7 +477,9 @@ model MedicationOrder {
   quantityNumeric     Float? // Parsed numeric quantity for calculations
   unit                String? // Unit type (e.g., "tablets", "ml", "bottle", "unit")
   frequency           String?
+  frequencyPeriod     String? // "per day", "per week", "per month"
   duration            String?
+  durationPeriod      String? // "days", "weeks", "months"
   route               String? // Medication route: PO, IV, IM, S/C
   instructions        String?
   additionalNotes     String?
@@ -2068,4 +2071,29 @@ model SystemSettings {
   createdAt   DateTime @default(now())
 
   @@index([key])
+}
+
+// Custom Medications saved by doctors for easy access
+model CustomMedication {
+  id           String   @id @default(uuid())
+  doctorId     String
+  doctor       User     @relation("CustomMedications", fields: [doctorId], references: [id], onDelete: Cascade)
+  name         String
+  genericName  String?
+  dosageForm   String
+  strength     String
+  quantity     String?
+  frequency    String?
+  duration     String?
+  route        String?
+  instructions String?
+  frequencyPeriod String? // "per day", "per week", "per month"
+  durationPeriod   String? // "days", "weeks", "months"
+  category     String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([doctorId])
+  @@index([name])
+  @@unique([doctorId, name, strength]) // Prevent exact duplicates (same doctor, name, and strength)
 }

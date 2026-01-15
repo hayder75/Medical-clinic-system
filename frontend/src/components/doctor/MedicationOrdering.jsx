@@ -20,9 +20,16 @@ const MedicationOrdering = ({ visitId, patientId, patient, doctor, onOrdersPlace
     frequency: '',
     duration: '',
     route: '',
-    instructions: ''
+    instructions: '',
+    frequencyPeriod: '', // "per day", "per week", "per month"
+    durationPeriod: ''   // "days", "weeks", "months"
   });
   const [showCustomForm, setShowCustomForm] = useState(false);
+  const [customMedSearchQuery, setCustomMedSearchQuery] = useState('');
+  const [customMedSearchResults, setCustomMedSearchResults] = useState([]);
+  const [isSearchingCustomMeds, setIsSearchingCustomMeds] = useState(false);
+  const [showCustomMedSuggestions, setShowCustomMedSuggestions] = useState(false);
+  const [isSavingCustomMed, setIsSavingCustomMed] = useState(false);
   // REMOVED: medicationCheck and isChecking - no longer needed since ordering is always allowed
   const [showContinuousInfusion, setShowContinuousInfusion] = useState(false);
   const [continuousInfusion, setContinuousInfusion] = useState({
@@ -117,13 +124,111 @@ const MedicationOrdering = ({ visitId, patientId, patient, doctor, onOrdersPlace
     toast.success(`${medication.name} added to prescription`);
   };
 
-  // Add custom medication
-  const addCustomMedication = () => {
+  // Search custom medications
+  const searchCustomMedications = async (query) => {
+    if (!query.trim() || query.trim().length < 2) {
+      setCustomMedSearchResults([]);
+      setShowCustomMedSuggestions(false);
+      return;
+    }
+
+    try {
+      setIsSearchingCustomMeds(true);
+      const response = await api.get(`/doctors/custom-medications/search?query=${encodeURIComponent(query)}`);
+      setCustomMedSearchResults(response.data.customMedications || []);
+      setShowCustomMedSuggestions(response.data.customMedications?.length > 0);
+    } catch (error) {
+      console.error('Error searching custom medications:', error);
+      setCustomMedSearchResults([]);
+      setShowCustomMedSuggestions(false);
+    } finally {
+      setIsSearchingCustomMeds(false);
+    }
+  };
+
+  // Handle custom medication search input
+  const handleCustomMedSearchChange = (e) => {
+    const query = e.target.value;
+    setCustomMedSearchQuery(query);
+    setCustomMedication({ ...customMedication, name: query });
+    
+    // Debounce search
+    const timeoutId = setTimeout(() => {
+      searchCustomMedications(query);
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  };
+
+  // Select custom medication from search (don't save, just fill form)
+  const selectCustomMedication = (customMed) => {
+    setCustomMedication({
+      name: customMed.name,
+      dosageForm: customMed.dosageForm || '',
+      strength: customMed.strength || '',
+      quantity: customMed.quantity || '',
+      frequency: customMed.frequency || '',
+      duration: customMed.duration || '',
+      route: customMed.route || '',
+      instructions: customMed.instructions || '',
+      frequencyPeriod: customMed.frequencyPeriod || '',
+      durationPeriod: customMed.durationPeriod || ''
+    });
+    setCustomMedSearchQuery('');
+    setCustomMedSearchResults([]);
+    setShowCustomMedSuggestions(false);
+    // Don't save when selected from search - only save when typed manually
+  };
+
+  // Add custom medication (save to database if typed, not if selected)
+  const addCustomMedication = async () => {
     if (!customMedication.name.trim()) {
       toast.error('Please enter medication name');
       return;
     }
 
+    // Check if this was selected from search (don't save if it was)
+    const wasSelectedFromSearch = customMedSearchResults.some(
+      med => med.name.toLowerCase() === customMedication.name.toLowerCase() &&
+             med.strength.toLowerCase() === customMedication.strength.toLowerCase()
+    );
+
+    // Only save if it was typed manually (not selected from search)
+    if (!wasSelectedFromSearch && customMedication.name.trim() && customMedication.dosageForm && customMedication.strength) {
+      try {
+        setIsSavingCustomMed(true);
+        const response = await api.post('/doctors/custom-medications', {
+          name: customMedication.name,
+          genericName: customMedication.name,
+          dosageForm: customMedication.dosageForm,
+          strength: customMedication.strength,
+          quantity: customMedication.quantity,
+          frequency: customMedication.frequency,
+          duration: customMedication.duration,
+          route: customMedication.route,
+          instructions: customMedication.instructions,
+          frequencyPeriod: customMedication.frequencyPeriod,
+          durationPeriod: customMedication.durationPeriod
+        });
+
+        if (response.data.exists) {
+          toast.success('Custom medication already exists in your saved list');
+        } else {
+          toast.success('Custom medication saved for future use');
+        }
+      } catch (error) {
+        console.error('Error saving custom medication:', error);
+        if (error.response?.data?.exists) {
+          toast.success('Custom medication already exists in your saved list');
+        } else {
+          toast.error('Failed to save custom medication, but it will still be added to prescription');
+        }
+      } finally {
+        setIsSavingCustomMed(false);
+      }
+    }
+
+    // Add to prescription regardless
     const newMedication = {
       id: `custom-${Date.now()}`,
       name: customMedication.name,
@@ -139,6 +244,8 @@ const MedicationOrdering = ({ visitId, patientId, patient, doctor, onOrdersPlace
       duration: customMedication.duration,
       route: customMedication.route,
       instructions: customMedication.instructions,
+      frequencyPeriod: customMedication.frequencyPeriod,
+      durationPeriod: customMedication.durationPeriod,
       isCustom: true,
       isContinuousInfusion: continuousInfusion.isContinuousInfusion,
       continuousInfusionDays: continuousInfusion.continuousInfusionDays,
@@ -154,8 +261,13 @@ const MedicationOrdering = ({ visitId, patientId, patient, doctor, onOrdersPlace
       frequency: '',
       duration: '',
       route: '',
-      instructions: ''
+      instructions: '',
+      frequencyPeriod: '',
+      durationPeriod: ''
     });
+    setCustomMedSearchQuery('');
+    setCustomMedSearchResults([]);
+    setShowCustomMedSuggestions(false);
     setShowCustomForm(false);
     toast.success('Custom medication added to prescription');
   };
@@ -207,7 +319,9 @@ const MedicationOrdering = ({ visitId, patientId, patient, doctor, onOrdersPlace
         category: med.category || 'TABLETS', // Use actual category or default to TABLETS
         isContinuousInfusion: med.isContinuousInfusion || false,
         continuousInfusionDays: med.continuousInfusionDays || 1,
-        dailyDose: med.dailyDose || ''
+        dailyDose: med.dailyDose || '',
+        frequencyPeriod: med.frequencyPeriod || '', // "per day", "per week", "per month"
+        durationPeriod: med.durationPeriod || ''    // "days", "weeks", "months"
       }));
 
       // Submit each order
@@ -569,14 +683,28 @@ const MedicationOrdering = ({ visitId, patientId, patient, doctor, onOrdersPlace
         const medStrength = med.strength || '';
         const medQuantity = med.quantity || '';
         const medFrequency = med.frequency || '';
+        const medFrequencyPeriod = med.frequencyPeriod || '';
         const medDuration = med.duration || '';
+        const medDurationPeriod = med.durationPeriod || '';
         const medInstructions = med.instructions || med.additionalNotes || '';
+
+        // Build frequency string with period
+        let frequencyDisplay = medFrequency;
+        if (medFrequencyPeriod) {
+          frequencyDisplay = `${medFrequency} ${medFrequencyPeriod}`;
+        }
+
+        // Build duration string with period
+        let durationDisplay = medDuration;
+        if (medDurationPeriod) {
+          durationDisplay = `${medDuration} ${medDurationPeriod}`;
+        }
 
         const details = [];
         if (medStrength) details.push(medStrength);
         if (medDosageForm) details.push(medDosageForm);
-        if (medFrequency) details.push(medFrequency);
-        if (medDuration) details.push(medDuration);
+        if (frequencyDisplay) details.push(`Freq: ${frequencyDisplay}`);
+        if (durationDisplay) details.push(`Dur: ${durationDisplay}`);
         if (medQuantity) details.push(`Qty: ${medQuantity}`);
 
         return `
@@ -692,15 +820,52 @@ const MedicationOrdering = ({ visitId, patientId, patient, doctor, onOrdersPlace
         {showCustomForm && (
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
+              <div className="relative">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Medication Name *</label>
-                <input
-                  type="text"
-                  value={customMedication.name}
-                  onChange={(e) => setCustomMedication({ ...customMedication, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  placeholder="e.g., Aspirin"
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={customMedication.name}
+                    onChange={handleCustomMedSearchChange}
+                    onFocus={() => {
+                      if (customMedSearchResults.length > 0) {
+                        setShowCustomMedSuggestions(true);
+                      }
+                    }}
+                    onBlur={() => {
+                      // Delay hiding to allow click on suggestion
+                      setTimeout(() => setShowCustomMedSuggestions(false), 200);
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    placeholder="Type to search saved meds or enter new..."
+                  />
+                  {isSearchingCustomMeds && (
+                    <div className="absolute right-3 top-2.5">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                    </div>
+                  )}
+                </div>
+                {/* Autocomplete dropdown */}
+                {showCustomMedSuggestions && customMedSearchResults.length > 0 && (
+                  <div 
+                    className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto"
+                    onMouseDown={(e) => e.preventDefault()} // Prevent blur when clicking
+                  >
+                    {customMedSearchResults.map((med) => (
+                      <div
+                        key={med.id}
+                        onClick={() => selectCustomMedication(med)}
+                        className="px-4 py-2 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                      >
+                        <div className="font-medium text-gray-900">{med.name}</div>
+                        <div className="text-sm text-gray-600">
+                          {med.dosageForm} - {med.strength}
+                          {med.frequency && ` • ${med.frequency}`}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Dosage Form</label>
@@ -739,24 +904,48 @@ const MedicationOrdering = ({ visitId, patientId, patient, doctor, onOrdersPlace
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Frequency</label>
-                <input
-                  type="text"
-                  value={customMedication.frequency}
-                  onChange={(e) => setCustomMedication({ ...customMedication, frequency: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  placeholder="e.g., 3 times daily"
-                />
+                <label className="block text-sm font-medium text-gray-700 mb-1">Frequency *</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={customMedication.frequency}
+                    onChange={(e) => setCustomMedication({ ...customMedication, frequency: e.target.value })}
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    placeholder="e.g., 3 times"
+                  />
+                  <select
+                    value={customMedication.frequencyPeriod}
+                    onChange={(e) => setCustomMedication({ ...customMedication, frequencyPeriod: e.target.value })}
+                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Select</option>
+                    <option value="per day">per day</option>
+                    <option value="per week">per week</option>
+                    <option value="per month">per month</option>
+                  </select>
+                </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Duration</label>
-                <input
-                  type="text"
-                  value={customMedication.duration}
-                  onChange={(e) => setCustomMedication({ ...customMedication, duration: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  placeholder="e.g., 7 days"
-                />
+                <label className="block text-sm font-medium text-gray-700 mb-1">Duration *</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={customMedication.duration}
+                    onChange={(e) => setCustomMedication({ ...customMedication, duration: e.target.value })}
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    placeholder="e.g., 7"
+                  />
+                  <select
+                    value={customMedication.durationPeriod}
+                    onChange={(e) => setCustomMedication({ ...customMedication, durationPeriod: e.target.value })}
+                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Select</option>
+                    <option value="days">days</option>
+                    <option value="weeks">weeks</option>
+                    <option value="months">months</option>
+                  </select>
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Route</label>
@@ -785,9 +974,10 @@ const MedicationOrdering = ({ visitId, patientId, patient, doctor, onOrdersPlace
             </div>
             <button
               onClick={addCustomMedication}
-              className="w-full bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700"
+              disabled={isSavingCustomMed}
+              className="w-full bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Add Custom Medication
+              {isSavingCustomMed ? 'Saving...' : 'Add Custom Medication'}
             </button>
           </div>
         )}
@@ -939,23 +1129,47 @@ const MedicationOrdering = ({ visitId, patientId, patient, doctor, onOrdersPlace
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Frequency *</label>
-                    <input
-                      type="text"
-                      value={medication.frequency}
-                      onChange={(e) => updateMedication(index, 'frequency', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                      placeholder="e.g., 3 times daily"
-                    />
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={medication.frequency || ''}
+                        onChange={(e) => updateMedication(index, 'frequency', e.target.value)}
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                        placeholder="e.g., 3 times"
+                      />
+                      <select
+                        value={medication.frequencyPeriod || ''}
+                        onChange={(e) => updateMedication(index, 'frequencyPeriod', e.target.value)}
+                        className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">Select</option>
+                        <option value="per day">per day</option>
+                        <option value="per week">per week</option>
+                        <option value="per month">per month</option>
+                      </select>
+                    </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Duration *</label>
-                    <input
-                      type="text"
-                      value={medication.duration}
-                      onChange={(e) => updateMedication(index, 'duration', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                      placeholder="e.g., 7 days"
-                    />
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={medication.duration || ''}
+                        onChange={(e) => updateMedication(index, 'duration', e.target.value)}
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                        placeholder="e.g., 7"
+                      />
+                      <select
+                        value={medication.durationPeriod || ''}
+                        onChange={(e) => updateMedication(index, 'durationPeriod', e.target.value)}
+                        className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">Select</option>
+                        <option value="days">days</option>
+                        <option value="weeks">weeks</option>
+                        <option value="months">months</option>
+                      </select>
+                    </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Route</label>
@@ -1046,11 +1260,17 @@ const MedicationOrdering = ({ visitId, patientId, patient, doctor, onOrdersPlace
                         </div>
                         <div>
                           <span className="text-gray-500">Frequency:</span>
-                          <span className="ml-2 font-medium">{medication.frequency || 'N/A'}</span>
+                          <span className="ml-2 font-medium">
+                            {medication.frequency || ''} {medication.frequencyPeriod || ''}
+                            {!medication.frequency && !medication.frequencyPeriod && 'N/A'}
+                          </span>
                         </div>
                         <div>
                           <span className="text-gray-500">Duration:</span>
-                          <span className="ml-2 font-medium">{medication.duration || 'N/A'}</span>
+                          <span className="ml-2 font-medium">
+                            {medication.duration || ''} {medication.durationPeriod || ''}
+                            {!medication.duration && !medication.durationPeriod && 'N/A'}
+                          </span>
                         </div>
                       </div>
                       {medication.category && (

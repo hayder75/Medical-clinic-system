@@ -32,6 +32,8 @@ router.post('/radiology-orders/multiple', doctorController.createMultipleRadiolo
 router.post('/service-orders', doctorController.createDoctorServiceOrder);
 router.post('/medication-orders', doctorController.createMedicationOrder);
 router.post('/prescriptions/batch', doctorController.createBatchPrescription);
+router.post('/custom-medications', auth, roleGuard(['DOCTOR']), doctorController.saveCustomMedication);
+router.get('/custom-medications/search', auth, roleGuard(['DOCTOR']), doctorController.searchCustomMedications);
 router.get('/prescriptions/:visitId', doctorController.getPrescriptionHistory);
 router.post('/visits/:visitId/diagnosis-notes', doctorController.saveDiagnosisNotes);
 router.get('/visits/:visitId/diagnosis-notes', doctorController.getDiagnosisNotes);

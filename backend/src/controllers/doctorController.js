@@ -70,7 +70,9 @@ const medicationOrderSchema = z.object({
   strength: z.string(),
   quantity: z.string(), // Changed to string to accept any input
   frequency: z.string(),
+  frequencyPeriod: z.string().optional(), // "per day", "per week", "per month"
   duration: z.string(),
+  durationPeriod: z.string().optional(), // "days", "weeks", "months"
   route: z.enum(['PO', 'IV', 'IM', 'S/C']).optional(),
   instructions: z.string(),
   additionalNotes: z.string().optional(),
@@ -3545,7 +3547,9 @@ exports.createMedicationOrder = async (req, res) => {
         strength: data.strength,
         quantity: data.quantity,
         frequency: data.frequency,
+        frequencyPeriod: data.frequencyPeriod || null,
         duration: data.duration,
+        durationPeriod: data.durationPeriod || null,
         route: data.route || null,
         instructions: data.instructions,
         additionalNotes: data.additionalNotes,
@@ -3776,6 +3780,123 @@ exports.checkMedicationOrdering = async (req, res) => {
       allowed: true,
       reason: 'Medication ordering is always allowed'
     });
+  }
+};
+
+// ============================================
+// CUSTOM MEDICATIONS - Save and Search
+// ============================================
+
+// Save custom medication (only when typed, not when selected from search)
+exports.saveCustomMedication = async (req, res) => {
+  try {
+    const doctorId = req.user.id;
+    const {
+      name,
+      genericName,
+      dosageForm,
+      strength,
+      quantity,
+      frequency,
+      duration,
+      route,
+      instructions,
+      frequencyPeriod, // "per day", "per week", "per month"
+      durationPeriod,  // "days", "weeks", "months"
+      category
+    } = req.body;
+
+    if (!name || !dosageForm || !strength) {
+      return res.status(400).json({ error: 'Name, dosage form, and strength are required' });
+    }
+
+    // Check if exact duplicate exists (same doctor, name, and strength)
+    const existing = await prisma.customMedication.findUnique({
+      where: {
+        doctorId_name_strength: {
+          doctorId: doctorId,
+          name: name.trim(),
+          strength: strength.trim()
+        }
+      }
+    });
+
+    if (existing) {
+      return res.status(200).json({
+        message: 'Custom medication with this name and strength already exists',
+        exists: true,
+        customMedication: existing
+      });
+    }
+
+    // Save the custom medication
+    const customMed = await prisma.customMedication.create({
+      data: {
+        doctorId,
+        name: name.trim(),
+        genericName: genericName?.trim() || null,
+        dosageForm: dosageForm.trim(),
+        strength: strength.trim(),
+        quantity: quantity || null,
+        frequency: frequency || null,
+        duration: duration || null,
+        route: route || null,
+        instructions: instructions || null,
+        frequencyPeriod: frequencyPeriod || null,
+        durationPeriod: durationPeriod || null,
+        category: category || null
+      }
+    });
+
+    res.status(201).json({
+      message: 'Custom medication saved successfully',
+      exists: false,
+      customMedication: customMed
+    });
+  } catch (error) {
+    console.error('Error saving custom medication:', error);
+    if (error.code === 'P2002') {
+      // Unique constraint violation
+      return res.status(200).json({
+        message: 'Custom medication with this name and strength already exists',
+        exists: true
+      });
+    }
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Search custom medications (for autocomplete)
+exports.searchCustomMedications = async (req, res) => {
+  try {
+    const doctorId = req.user.id;
+    const { query } = req.query;
+
+    if (!query || query.trim().length < 2) {
+      return res.json({ customMedications: [] });
+    }
+
+    const searchQuery = query.trim().toLowerCase();
+
+    const customMeds = await prisma.customMedication.findMany({
+      where: {
+        doctorId: doctorId,
+        OR: [
+          { name: { contains: searchQuery, mode: 'insensitive' } },
+          { genericName: { contains: searchQuery, mode: 'insensitive' } }
+        ]
+      },
+      orderBy: [
+        { name: 'asc' },
+        { updatedAt: 'desc' }
+      ],
+      take: 20 // Limit to 20 results
+    });
+
+    res.json({ customMedications: customMeds });
+  } catch (error) {
+    console.error('Error searching custom medications:', error);
+    res.status(500).json({ error: error.message });
   }
 };
 
@@ -5821,7 +5942,9 @@ exports.createBatchPrescription = async (req, res) => {
       strength: z.string().min(1, 'Strength is required'),
       quantity: z.number().min(1, 'Quantity must be at least 1'),
       frequency: z.string().nullable().optional(),
+      frequencyPeriod: z.string().nullable().optional(),
       duration: z.string().nullable().optional(),
+      durationPeriod: z.string().nullable().optional(),
       instructions: z.string().nullable().optional(),
       additionalNotes: z.string().nullable().optional(),
       category: z.string().nullable().optional(),
@@ -5934,7 +6057,9 @@ exports.createBatchPrescription = async (req, res) => {
       strength: medication.strength,
       quantity: medication.quantity,
       frequency: medication.frequency || null,
+      frequencyPeriod: medication.frequencyPeriod || null,
       duration: medication.duration || null,
+      durationPeriod: medication.durationPeriod || null,
       instructions: medication.instructions || null,
       additionalNotes: medication.additionalNotes || null,
       category: medication.category || null,
